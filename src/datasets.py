@@ -3,6 +3,9 @@ import json
 from transformers import BertTokenizer
 import torch
 import numpy as np
+import os
+from PIL import Image
+from torchvision import transforms
 
 from constants import MAX_WIDTH, MAX_HEIGHT
 
@@ -13,7 +16,7 @@ class ScenesDataset(Dataset):
     ):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = json.load(open(visual2index_path))
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        self.tokenizer = BertTokenizer.from_pretrained("bert-large-uncased")
         self.mask_token = self.tokenizer.convert_tokens_to_ids("[MASK]")
         self.sep_token = self.tokenizer.convert_tokens_to_ids("[SEP]")
         self.mask_probability = mask_probability
@@ -70,3 +73,38 @@ class ScenesDataset(Dataset):
         ]
 
         return input_ids, masked_lm_labels, positions
+
+
+class ClipartsDataset(Dataset):
+    def __init__(self, cliparts_path: str, visual2index_path: str):
+        tokenizer = BertTokenizer.from_pretrained("bert-large-uncased")
+        visual2index = json.load(open(visual2index_path))
+        current_num_tokens = len(tokenizer)
+        new_num_tokens = max([token_index for token_index in visual2index.values()])
+        self.file_paths_indices = []
+        for (key, value), index in zip(
+            visual2index.items(), range(current_num_tokens, new_num_tokens)
+        ):
+            name, extension = key.split(".")
+            file_name = name[:-4] + "." + extension
+            file_path = os.path.join(cliparts_path, file_name)
+            self.file_paths_indices.append((file_path, index))
+        self.transforms = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
+
+    def __getitem__(self, idx: int):
+        file_path, index = self.file_paths_indices[idx]
+        image = Image.open(file_path).convert("RGB")
+        image_transformed = self.transforms(image)
+
+        return image_transformed, index
+
+    def __len__(self):
+        return len(self.file_paths_indices)
