@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import sys
 import logging
+from transformers import BertConfig
 
 from datasets import ScenesDatasetTrain, ScenesDatasetVal, collate_pad_batch
 from modeling import SceneModel
@@ -15,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def train(
+def pretrain(
     train_dataset_path: str,
     val_dataset_path: str,
     visual2index_path: str,
@@ -45,7 +46,8 @@ def train(
     val_loader = DataLoader(
         val_dataset, batch_size=batch_size, num_workers=4, collate_fn=collate_pad_batch
     )
-    model = nn.DataParallel(SceneModel(load_embeddings_path)).to(device)
+    config = BertConfig()
+    model = nn.DataParallel(SceneModel(load_embeddings_path, config)).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     best_val_loss = sys.maxsize
@@ -182,7 +184,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    train(
+    pretrain(
         args.train_dataset_path,
         args.val_dataset_path,
         args.visual2index_path,
