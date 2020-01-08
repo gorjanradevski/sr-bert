@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -16,7 +16,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def pretrain(
+def train(
+    finetune: bool,
+    checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
     visual2index_path: str,
@@ -28,33 +30,47 @@ def pretrain(
     clip_val: float,
     save_model_path: str,
 ):
+    # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Create datasets
     train_dataset = ScenesDatasetTrain(
         train_dataset_path, visual2index_path, mask_probability=0.3
     )
     val_dataset = ScenesDatasetVal(
         val_dataset_path, visual2index_path, mask_probability=0.3
     )
+    # Create samplers
+    train_sampler = RandomSampler(train_dataset)
+    val_sampler = SequentialSampler(val_dataset)
+    # Create loaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        sampler=train_sampler,
         num_workers=4,
         collate_fn=collate_pad_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, num_workers=4, collate_fn=collate_pad_batch
+        val_dataset,
+        batch_size=batch_size,
+        num_workers=4,
+        collate_fn=collate_pad_batch,
+        sampler=val_sampler,
     )
+    # Define training specifics
     config = BertConfig()
     model = nn.DataParallel(SceneModel(load_embeddings_path, config)).to(device)
+    if finetune:
+        logger.info(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     best_val_loss = sys.maxsize
     for epoch in range(epochs):
-        print(f"Starting epoch {epoch + 1}...")
+        logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
-        model.train(True)
+        model.train(True, finetune)
         with tqdm(total=len(train_loader)) as pbar:
             for (
                 input_ids,
@@ -91,7 +107,7 @@ def pretrain(
                 pbar.set_postfix({"Batch loss": loss.item()})
 
         # Set model in evaluation mode
-        model.train(False)
+        model.train(False, finetune)
         with torch.no_grad():
             # Reset current loss
             cur_val_loss = 0
@@ -137,6 +153,13 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a Scene model.")
+    parser.add_argument("--finetune", action="store_true", help="Whether to fine-tune.")
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        default="models/pretrained.pt",
+        help="Checkpoint to a pretrained model.",
+    )
     parser.add_argument(
         "--train_dataset_path",
         type=str,
@@ -175,7 +198,7 @@ def parse_args():
     parser.add_argument(
         "--save_model_path",
         type=str,
-        default="models/best_model.pt",
+        default="models/best.pt",
         help="Where to save the model.",
     )
 
@@ -184,7 +207,9 @@ def parse_args():
 
 def main():
     args = parse_args()
-    pretrain(
+    train(
+        args.finetune,
+        args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,
         args.visual2index_path,

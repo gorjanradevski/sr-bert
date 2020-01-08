@@ -5,6 +5,8 @@ from torchvision.models import resnet152
 from transformers import BertConfig
 import math
 
+# https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_bert.py
+
 
 class MlmHead(nn.Module):
     def __init__(self, config: BertConfig, vocab_size: int):
@@ -27,7 +29,7 @@ class MlmHead(nn.Module):
 
 
 class SceneModel(nn.Module):
-    def __init__(self, embeddings_path: str, config: BertConfig):
+    def __init__(self, embeddings_path: str, config: BertConfig, finetune: bool):
         super(SceneModel, self).__init__()
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         embeddings = torch.load(embeddings_path)
@@ -39,6 +41,7 @@ class SceneModel(nn.Module):
         self.mlm_head = MlmHead(
             config, self.bert.embeddings.word_embeddings.num_embeddings
         )
+        self.finetune = finetune
 
     def forward(self, input_ids, text_positions, visual_positions, token_type_ids):
         text_pos_embeddings = self.text_position_projector(text_positions)
@@ -55,6 +58,16 @@ class SceneModel(nn.Module):
         prediction_scores = self.mlm_head(sequence_output)
 
         return prediction_scores
+
+    def train(self, mode: bool):
+        if self.finetune and mode:
+            self.bert.train(True)
+            self.mlm_head.train(True)
+        elif self.mode:
+            self.mlm_head.train(True)
+        else:
+            self.bert.train(False)
+            self.mlm_head.train(False)
 
 
 class ImageEmbeddingsGenerator(nn.Module):
