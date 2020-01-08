@@ -1,6 +1,6 @@
 import argparse
 import torch
-from transformers import BertForMaskedLM
+from transformers import BertModel
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 import logging
@@ -18,7 +18,7 @@ def dump_word_embeddings(
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Loading BERT...")
-    bert_model = BertForMaskedLM.from_pretrained("bert-large-uncased")
+    bert_model = BertModel.from_pretrained("bert-base-uncased")
     print("Loading ResNet152...")
     resnet_model = ImageEmbeddingsGenerator().to(device)
     current_num_embeds = bert_model.bert.embeddings.word_embeddings.num_embeddings
