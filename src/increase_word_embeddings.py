@@ -18,7 +18,7 @@ def dump_word_embeddings(
     # Check for CUDA
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logger.info("Loading BERT...")
-    bert_model = BertModel.from_pretrained("bert-base-uncased")
+    bert_model = BertModel.from_pretrained("bert-base-uncased").to(device)
     logger.info("Loading ResNet152...")
     resnet_model = ImageEmbeddingsGenerator().to(device)
     current_num_embeds = bert_model.embeddings.word_embeddings.num_embeddings
