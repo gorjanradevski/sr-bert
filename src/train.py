@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def train(
+    use_cuda: bool,
     finetune: bool,
     checkpoint_path: str,
     train_dataset_path: str,
@@ -32,7 +33,7 @@ def train(
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
     # Create datasets
     train_dataset = ScenesDatasetTrain(
         train_dataset_path, visual2index_path, mask_probability=0.3
@@ -156,6 +157,7 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a Scene model.")
+    parser.add_argument("--use_cuda", action="store_true", help="Whether to use cuda.")
     parser.add_argument("--finetune", action="store_true", help="Whether to fine-tune.")
     parser.add_argument(
         "--checkpoint_path",
@@ -211,6 +213,7 @@ def parse_args():
 def main():
     args = parse_args()
     train(
+        args.use_cuda,
         args.finetune,
         args.checkpoint_path,
         args.train_dataset_path,
