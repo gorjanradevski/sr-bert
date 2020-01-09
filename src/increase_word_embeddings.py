@@ -16,17 +16,17 @@ def dump_word_embeddings(
     cliparts_path: str, visual2index_path: str, save_embeddings_path: str
 ):
     # Check for CUDA
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Loading BERT...")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    logger.info("Loading BERT...")
     bert_model = BertModel.from_pretrained("bert-base-uncased")
-    print("Loading ResNet152...")
+    logger.info("Loading ResNet152...")
     resnet_model = ImageEmbeddingsGenerator().to(device)
-    current_num_embeds = bert_model.bert.embeddings.word_embeddings.num_embeddings
-    print(f"Current size of the word embeddings matrix {current_num_embeds}")
+    current_num_embeds = bert_model.embeddings.word_embeddings.num_embeddings
+    logger.info(f"Current size of the word embeddings matrix {current_num_embeds}")
     dataset = ClipartsDataset(cliparts_path, visual2index_path)
     bert_model.resize_token_embeddings(current_num_embeds + len(dataset))
-    print(
-        f"Updated size of the word embedding matrix {bert_model.bert.embeddings.word_embeddings.num_embeddings}"
+    logger.info(
+        f"Updated size of the word embedding matrix {bert_model.embeddings.word_embeddings.num_embeddings}"
     )
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
     with torch.no_grad():
@@ -34,12 +34,8 @@ def dump_word_embeddings(
             # https://github.com/huggingface/transformers/issues/1413
             image = image.to(device)
             image_embedding = resnet_model(image)
-            bert_model.bert.embeddings.word_embeddings.weight[
-                index, :
-            ] = image_embedding
-    torch.save(
-        bert_model.bert.embeddings.word_embeddings.state_dict(), save_embeddings_path
-    )
+            bert_model.embeddings.word_embeddings.weight[index, :] = image_embedding
+    torch.save(bert_model.embeddings.word_embeddings.state_dict(), save_embeddings_path)
 
 
 def parse_args():
