@@ -63,18 +63,18 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_siz
     }
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     visual2index = {}
-    index = 0
+    index = len(tokenizer)
     pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
     for filename in os.listdir(pngs_file_path):
         if filename in excluded:
             continue
         filename, extension = filename.split(".")
-        visual2index[filename + "_0_0" + "." + extension] = len(tokenizer) + index
-        visual2index[filename + "_0_1" + "." + extension] = len(tokenizer) + index + 1
-        visual2index[filename + "_1_0" + "." + extension] = len(tokenizer) + index + 2
-        visual2index[filename + "_1_1" + "." + extension] = len(tokenizer) + index + 3
-        visual2index[filename + "_2_0" + "." + extension] = len(tokenizer) + index + 4
-        visual2index[filename + "_2_1" + "." + extension] = len(tokenizer) + index + 5
+        visual2index[filename + "_0_0" + "." + extension] = index
+        visual2index[filename + "_0_1" + "." + extension] = index + 1
+        visual2index[filename + "_1_0" + "." + extension] = index + 2
+        visual2index[filename + "_1_1" + "." + extension] = index + 3
+        visual2index[filename + "_2_0" + "." + extension] = index + 4
+        visual2index[filename + "_2_1" + "." + extension] = index + 5
         index += 6
     json.dump(
         visual2index, open(os.path.join(dump_datasets_path, "visual2index.json"), "w")

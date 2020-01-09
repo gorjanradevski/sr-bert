@@ -97,10 +97,10 @@ def train(
                     input_ids, text_positions, visual_positions, token_type_ids
                 )
                 # TODO: Change to a variable instead of hardcoding the value
-                predictions = predictions.view(-1, 31277)
+                predictions = predictions.view(-1, 31278)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 # Add a small number in case everything is masked
-                loss = criterion(predictions, masked_lm_labels) + 0.000_000_1
+                loss = criterion(predictions, masked_lm_labels)
                 # backward
                 loss.backward()
                 # clip the gradients
@@ -134,7 +134,7 @@ def train(
                     input_ids, text_positions, visual_positions, token_type_ids
                 )
                 # TODO: Change to a variable instead of hardcoding the value
-                predictions = predictions.view(-1, 31277)
+                predictions = predictions.view(-1, 31278)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 loss = criterion(predictions, masked_lm_labels)
                 cur_val_loss += loss.item()
@@ -143,7 +143,7 @@ def train(
                 best_val_loss = cur_val_loss
                 print("======================")
                 print(
-                    f"Found new best with loss{best_val_loss} on epoch "
+                    f"Found new best with loss {best_val_loss} on epoch "
                     f"{epoch+1}. Saving model!!!"
                 )
                 torch.save(model.state_dict(), save_model_path)

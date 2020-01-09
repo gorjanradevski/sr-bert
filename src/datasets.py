@@ -164,15 +164,10 @@ class ScenesDatasetVal(TorchDataset, ScenesDataset):
 
 class ClipartsDataset(TorchDataset):
     def __init__(self, cliparts_path: str, visual2index_path: str):
-        tokenizer = BertTokenizer.from_pretrained("bert-large-uncased")
         visual2index = json.load(open(visual2index_path))
-        current_num_tokens = len(tokenizer)
-        new_num_tokens = max([token_index for token_index in visual2index.values()])
         self.file_paths_indices = []
-        for (key, value), index in zip(
-            visual2index.items(), range(current_num_tokens, new_num_tokens)
-        ):
-            name, extension = key.split(".")
+        for (file_path, index), index in visual2index.items():
+            name, extension = file_path.split(".")
             file_name = name[:-4] + "." + extension
             file_path = os.path.join(cliparts_path, file_name)
             self.file_paths_indices.append((file_path, index))
