@@ -60,7 +60,9 @@ def train(
     )
     # Define training specifics
     config = BertConfig()
-    model = nn.DataParallel(SceneModel(load_embeddings_path, config)).to(device)
+    model = nn.DataParallel(SceneModel(load_embeddings_path, config, finetune)).to(
+        device
+    )
     if finetune:
         logger.info(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -70,7 +72,7 @@ def train(
     for epoch in range(epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
-        model.train(True, finetune)
+        model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
             for (
                 input_ids,
@@ -107,7 +109,7 @@ def train(
                 pbar.set_postfix({"Batch loss": loss.item()})
 
         # Set model in evaluation mode
-        model.train(False, finetune)
+        model.train(False)
         with torch.no_grad():
             # Reset current loss
             cur_val_loss = 0

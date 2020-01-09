@@ -63,7 +63,7 @@ class SceneModel(nn.Module):
         if self.finetune and mode:
             self.bert.train(True)
             self.mlm_head.train(True)
-        elif self.mode:
+        elif mode:
             self.mlm_head.train(True)
         else:
             self.bert.train(False)
