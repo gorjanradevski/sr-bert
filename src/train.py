@@ -34,12 +34,13 @@ def train(
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
+    logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     train_dataset = ScenesDatasetTrain(
-        train_dataset_path, visual2index_path, mask_probability=0.3
+        train_dataset_path, visual2index_path, mask_probability=mask_probability
     )
     val_dataset = ScenesDatasetVal(
-        val_dataset_path, visual2index_path, mask_probability=0.3
+        val_dataset_path, visual2index_path, mask_probability=mask_probability
     )
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
@@ -61,11 +62,11 @@ def train(
     )
     # Define training specifics
     config = BertConfig()
-    model = SceneModel(load_embeddings_path, config, finetune)
+    model = SceneModel(load_embeddings_path, config, finetune, device)
     if use_cuda:
         model = nn.DataParallel(model).to(device)
     if finetune:
-        logger.info(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
+        logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)

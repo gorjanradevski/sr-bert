@@ -4,8 +4,13 @@ import torch
 from torchvision.models import resnet152
 from transformers import BertConfig
 import math
+import logging
 
 # https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_bert.py
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class MlmHead(nn.Module):
@@ -29,26 +34,30 @@ class MlmHead(nn.Module):
 
 
 class SceneModel(nn.Module):
-    def __init__(self, embeddings_path: str, config: BertConfig, finetune: bool):
+    def __init__(
+        self, embeddings_path: str, config: BertConfig, finetune: bool, device
+    ):
         super(SceneModel, self).__init__()
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         embeddings = torch.load(embeddings_path)
         self.bert.embeddings.word_embeddings = self.bert.embeddings.word_embeddings.from_pretrained(
             embeddings["weight"]
         )
+        logger.info("Embeddings loaded")
         self.visual_position_projector = nn.Linear(2, 768)
         self.text_position_projector = self.bert.embeddings.position_embeddings
         self.mlm_head = MlmHead(
             config, self.bert.embeddings.word_embeddings.num_embeddings
         )
         self.finetune = finetune
+        self.device = device
 
     def forward(self, input_ids, text_positions, visual_positions, token_type_ids):
         text_pos_embeddings = self.text_position_projector(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
         position_embeddings = torch.cat(
             [text_pos_embeddings, vis_pos_embeddings], dim=1
-        )
+        ).to(self.device)
 
         sequence_output = self.bert(
             input_ids=input_ids,
