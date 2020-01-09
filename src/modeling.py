@@ -52,6 +52,9 @@ class SceneModel(nn.Module):
         self.finetune = finetune
         self.device = device
 
+        for param in self.bert.parameters():
+            param.requires_grad = finetune
+
     def forward(self, input_ids, text_positions, visual_positions, token_type_ids):
         text_pos_embeddings = self.text_position_projector(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
