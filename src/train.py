@@ -61,9 +61,9 @@ def train(
     )
     # Define training specifics
     config = BertConfig()
-    model = nn.DataParallel(SceneModel(load_embeddings_path, config, finetune)).to(
-        device
-    )
+    model = SceneModel(load_embeddings_path, config, finetune)
+    if use_cuda:
+        model = nn.DataParallel(model).to(device)
     if finetune:
         logger.info(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
