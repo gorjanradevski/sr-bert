@@ -68,13 +68,13 @@ def train(
     if finetune:
         logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    criterion = nn.NLLLoss(dim=1)
+    criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     best_val_loss = sys.maxsize
     for epoch in range(epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
-        model.train(True)
+        model.train(False)
         with tqdm(total=len(train_loader)) as pbar:
             for (
                 input_ids,
@@ -99,7 +99,6 @@ def train(
                 # TODO: Change to a variable instead of hardcoding the value
                 predictions = predictions.view(-1, 31278)
                 masked_lm_labels = masked_lm_labels.view(-1)
-                # Add a small number in case everything is masked
                 loss = criterion(predictions, masked_lm_labels)
                 # backward
                 loss.backward()
