@@ -49,6 +49,7 @@ class SceneModel(nn.Module):
         self.mlm_head = MlmHead(
             config, self.bert.embeddings.word_embeddings.num_embeddings
         )
+        self.log_softmax = nn.LogSoftmax(dim=2)
         self.finetune = finetune
         self.device = device
 
@@ -69,7 +70,7 @@ class SceneModel(nn.Module):
         )[0]
         prediction_scores = self.mlm_head(sequence_output)
 
-        return prediction_scores
+        return self.log_softmax(prediction_scores)
 
     def train(self, mode: bool):
         if self.finetune and mode:

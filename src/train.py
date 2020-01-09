@@ -68,7 +68,7 @@ def train(
     if finetune:
         logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss(dim=1)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     best_val_loss = sys.maxsize
     for epoch in range(epochs):
