@@ -97,7 +97,8 @@ def train(
                 # TODO: Change to a variable instead of hardcoding the value
                 predictions = predictions.view(-1, 31277)
                 masked_lm_labels = masked_lm_labels.view(-1)
-                loss = criterion(predictions, masked_lm_labels)
+                # Add a small number in case everything is masked
+                loss = criterion(predictions, masked_lm_labels) + 0.000_000_1
                 # backward
                 loss.backward()
                 # clip the gradients
