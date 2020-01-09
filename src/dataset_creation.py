@@ -20,11 +20,14 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_siz
     with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
         _ = scenes.readline()
         for i, sentence in enumerate(sentences):
-            for _ in range(10):
+            for j in range(10):
                 scene = {}
                 scene["sentence"] = sentence.rstrip("\n").lower()
                 scene["elements"] = []
                 num_visuals = int(scenes.readline().split()[-1])
+                if num_visuals == 0:
+                    logger.warning(f"Skipping scene {i},{j}")
+                    continue
                 for _ in range(num_visuals):
                     visual_name, _, _, x, y, z, flip = scenes.readline().split()
                     scene["elements"].append(
