@@ -65,9 +65,17 @@ def train(
     model = SceneModel(load_embeddings_path, config, finetune, device)
     if use_cuda:
         model = nn.DataParallel(model).to(device)
+    # Pre-train and fine-stuff
+    total_number_of_parameters = sum(p.numel() for p in model.parameters())
+    trainable_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     if finetune:
+        assert total_number_of_parameters == trainable_parameters
         logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    else:
+        logger.warning(f"Pre-training! Training only the MLM Head.")
+        assert total_number_of_parameters > trainable_parameters
+    # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     best_val_loss = sys.maxsize
