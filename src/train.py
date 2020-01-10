@@ -8,7 +8,7 @@ import sys
 import logging
 from transformers import BertConfig
 
-from datasets import ScenesDatasetTrain, ScenesDatasetVal, collate_pad_batch
+from datasets import ScenesDataset, collate_pad_batch
 from modeling import SceneModel
 
 
@@ -36,10 +36,10 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
-    train_dataset = ScenesDatasetTrain(
+    train_dataset = ScenesDataset(
         train_dataset_path, visual2index_path, mask_probability=mask_probability
     )
-    val_dataset = ScenesDatasetVal(
+    val_dataset = ScenesDataset(
         val_dataset_path, visual2index_path, mask_probability=mask_probability
     )
     # Create samplers

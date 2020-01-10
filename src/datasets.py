@@ -20,7 +20,7 @@ class ScenesDataset:
         self.sep_token = self.tokenizer.convert_tokens_to_ids("[SEP]")
 
 
-class ScenesDatasetTrain(TorchDataset, ScenesDataset):
+class ScenesDataset(TorchDataset, ScenesDataset):
     def __init__(
         self, dataset_file_path: str, visual2index_path: str, mask_probability: float
     ):
@@ -32,11 +32,13 @@ class ScenesDatasetTrain(TorchDataset, ScenesDataset):
 
     def __getitem__(self, idx: int):
         # Obtain elements
-        # TODO: Masking as in BERT (80%, 10%, 10%)
         scene = self.dataset_file[idx]
+        # Prepare sentence
         tokenized_sentence = self.tokenizer.encode(
             scene["sentence"], add_special_tokens=True
         )
+        input_ids_sentence = torch.tensor(tokenized_sentence)
+        # Prepare visuals
         tokenized_visuals = [
             self.visual2index[
                 element["visual_name"].split(".")[0]
@@ -50,31 +52,9 @@ class ScenesDatasetTrain(TorchDataset, ScenesDataset):
             for element in scene["elements"]
         ]
         tokenized_visuals.append(self.sep_token)
-        # Generate mask and skip SEP token
-        mask = [
-            np.random.choice(
-                [0, 1], p=[1 - self.mask_probability, self.mask_probability]
-            )
-            if token != self.sep_token
-            else 0
-            for token in tokenized_visuals
-        ]
-        # Mask elements
-        masked_visuals = [
-            element if m == 0 else self.mask_token
-            for m, element in zip(mask, tokenized_visuals)
-        ]
-        # Convert both to tensors
-        input_ids_sentence = torch.tensor(tokenized_sentence)
-        input_ids_visuals = torch.tensor(masked_visuals)
-        # Generate masked labels for visuals
-        masked_lm_labels_visuals = torch.tensor(
-            [
-                masked_visual.item() if input_id == self.mask_token else -100
-                for input_id, masked_visual in zip(
-                    input_ids_visuals, torch.tensor(tokenized_visuals)
-                )
-            ]
+        # Mask visual tokens
+        input_ids_visuals, masked_lm_labels_visuals = self.mask_tokens(
+            torch.tensor(tokenized_visuals), self.tokenizer, self.mask_probability
         )
         # Obtain and normalize visual positions
         visual_positions = [
@@ -90,76 +70,38 @@ class ScenesDatasetTrain(TorchDataset, ScenesDataset):
             torch.tensor(visual_positions),
         )
 
-
-class ScenesDatasetVal(TorchDataset, ScenesDataset):
-    def __init__(
-        self, dataset_file_path: str, visual2index_path: str, mask_probability: float
-    ):
-        super().__init__(dataset_file_path, visual2index_path)
-        self.mask_probability = mask_probability
-
-    def __len__(self):
-        return len(self.dataset_file)
-
-    def __getitem__(self, idx: int):
-        # TODO: I got a feeling that the validation set should not be random?
-        # Obtain elements
-        scene = self.dataset_file[idx]
-        tokenized_sentence = self.tokenizer.encode(
-            scene["sentence"], add_special_tokens=True
+    @staticmethod
+    def mask_tokens(inputs: torch.Tensor, tokenizer, mask_prob):
+        # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
+        labels = inputs.clone()
+        # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
+        probability_matrix = torch.full(labels.shape, mask_prob)
+        special_tokens_mask = tokenizer.get_special_tokens_mask(
+            labels.tolist(), already_has_special_tokens=True
         )
-        tokenized_visuals = [
-            self.visual2index[
-                element["visual_name"].split(".")[0]
-                + "_"
-                + str(element["z"])
-                + "_"
-                + str(element["flip"])
-                + "."
-                + element["visual_name"].split(".")[-1]
-            ]
-            for element in scene["elements"]
-        ]
-        tokenized_visuals.append(self.sep_token)
-        # Generate mask and skip SEP token
-        mask = [
-            np.random.choice(
-                [0, 1], p=[1 - self.mask_probability, self.mask_probability]
-            )
-            if token != self.sep_token
-            else 0
-            for token in tokenized_visuals
-        ]
-        # Mask elements
-        masked_visuals = [
-            element if m == 0 else self.mask_token
-            for m, element in zip(mask, tokenized_visuals)
-        ]
-        # Convert both to tensors
-        input_ids_sentence = torch.tensor(tokenized_sentence)
-        input_ids_visuals = torch.tensor(masked_visuals)
-        # Generate masked labels for visuals
-        masked_lm_labels_visuals = torch.tensor(
-            [
-                masked_visual.item() if input_id == self.mask_token else -100
-                for input_id, masked_visual in zip(
-                    input_ids_visuals, torch.tensor(tokenized_visuals)
-                )
-            ]
+        probability_matrix.masked_fill_(
+            torch.tensor(special_tokens_mask, dtype=torch.bool), value=0.0
         )
-        # Obtain and normalize visual positions
-        visual_positions = [
-            [element["x"] / MAX_WIDTH, element["y"] / MAX_HEIGHT]
-            for element in scene["elements"]
-        ]
-        visual_positions.append([-1, -1])
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+        labels[~masked_indices] = -100  # We only compute loss on masked tokens
 
-        return (
-            input_ids_sentence,
-            input_ids_visuals,
-            masked_lm_labels_visuals,
-            torch.tensor(visual_positions),
+        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        indices_replaced = (
+            torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         )
+        inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+
+        # 10% of the time, we replace masked input tokens with random word
+        indices_random = (
+            torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
+            & masked_indices
+            & ~indices_replaced
+        )
+        random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
+        inputs[indices_random] = random_words[indices_random]
+
+        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+        return inputs, labels
 
 
 class ClipartsDataset(TorchDataset):

@@ -39,7 +39,7 @@ class SceneModel(nn.Module):
     ):
         super(SceneModel, self).__init__()
         self.bert = BertModel.from_pretrained("bert-base-uncased")
-        embeddings = torch.load(embeddings_path)
+        embeddings = torch.load(embeddings_path, map_location=device)
         self.bert.embeddings.word_embeddings = self.bert.embeddings.word_embeddings.from_pretrained(
             embeddings["weight"]
         )
@@ -53,8 +53,11 @@ class SceneModel(nn.Module):
         self.finetune = finetune
         self.device = device
 
+        # Disable BERT fine-tuning
         for param in self.bert.parameters():
             param.requires_grad = finetune
+        # Disable text_pos_proj fine-tuning
+        self.text_position_projector.weight.requires_grad = finetune
 
     def forward(self, input_ids, text_positions, visual_positions, token_type_ids):
         text_pos_embeddings = self.text_position_projector(text_positions)
