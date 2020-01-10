@@ -1,30 +1,24 @@
-from torch.utils.data import Dataset as TorchDataset
+from torch.utils.data import Dataset
 import json
 from transformers import BertTokenizer
 import torch
-import numpy as np
 import os
 from PIL import Image
 from torchvision import transforms
 from typing import Tuple, List
 
-from constants import MAX_WIDTH, MAX_HEIGHT
+from constants import MAX_X, MAX_Y
 
 
-class ScenesDataset:
-    def __init__(self, dataset_file_path: str, visual2index_path: str):
+class ScenesDataset(Dataset):
+    def __init__(
+        self, dataset_file_path: str, visual2index_path: str, mask_probability: float
+    ):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = json.load(open(visual2index_path))
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.mask_token = self.tokenizer.convert_tokens_to_ids("[MASK]")
         self.sep_token = self.tokenizer.convert_tokens_to_ids("[SEP]")
-
-
-class ScenesDataset(TorchDataset, ScenesDataset):
-    def __init__(
-        self, dataset_file_path: str, visual2index_path: str, mask_probability: float
-    ):
-        super().__init__(dataset_file_path, visual2index_path)
         self.mask_probability = mask_probability
 
     def __len__(self):
@@ -58,7 +52,7 @@ class ScenesDataset(TorchDataset, ScenesDataset):
         )
         # Obtain and normalize visual positions
         visual_positions = [
-            [element["x"] / MAX_WIDTH, element["y"] / MAX_HEIGHT]
+            [element["x"] / MAX_X, element["y"] / MAX_Y]
             for element in scene["elements"]
         ]
         visual_positions.append([-1, -1])
@@ -104,7 +98,7 @@ class ScenesDataset(TorchDataset, ScenesDataset):
         return inputs, labels
 
 
-class ClipartsDataset(TorchDataset):
+class ClipartsDataset(Dataset):
     def __init__(self, cliparts_path: str, visual2index_path: str):
         visual2index = json.load(open(visual2index_path))
         self.file_paths_indices = []
