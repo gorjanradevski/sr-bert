@@ -77,7 +77,7 @@ class SceneModel(nn.Module):
             input_ids=input_ids,
             position_embeddings=position_embeddings,
             token_type_ids=token_type_ids,
-            attention_mask=attention_mask
+            attention_mask=attention_mask,
         )[0]
         prediction_scores = self.mlm_head(sequence_output)
 

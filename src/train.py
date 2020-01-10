@@ -30,6 +30,7 @@ def train(
     epochs: int,
     clip_val: float,
     save_model_path: str,
+    intermediate_checkpoint_path: str,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -169,6 +170,7 @@ def train(
                 print("======================")
             else:
                 print(f"Loss on epoch {epoch+1} is: {cur_val_loss}")
+                torch.save(model.state_dict(), intermediate_checkpoint_path)
 
 
 def parse_args():
@@ -226,6 +228,12 @@ def parse_args():
         default="models/best.pt",
         help="Where to save the model.",
     )
+    parser.add_argument(
+        "--intermediate_checkpoint_path",
+        type=str,
+        default="models/intermediate.pt",
+        help="Where to save the model.",
+    )
 
     return parser.parse_args()
 
@@ -246,6 +254,7 @@ def main():
         args.epochs,
         args.clip_val,
         args.save_model_path,
+        args.intermediate_checkpoint_path,
     )
 
 
