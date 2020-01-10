@@ -90,19 +90,25 @@ def train(
                 text_positions,
                 visual_positions,
                 token_type_ids,
+                attention_masks,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids = (
+                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
                     input_ids.to(device),
                     masked_lm_labels.to(device),
                     text_positions.to(device),
                     visual_positions.to(device),
                     token_type_ids.to(device),
+                    attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids, text_positions, visual_positions, token_type_ids
+                    input_ids,
+                    text_positions,
+                    visual_positions,
+                    token_type_ids,
+                    attention_masks,
                 )
                 # TODO: Change to a variable instead of hardcoding the value
                 predictions = predictions.view(-1, 31278)
@@ -129,16 +135,22 @@ def train(
                 text_positions,
                 visual_positions,
                 token_type_ids,
+                attention_masks,
             ) in tqdm(val_loader):
-                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids = (
+                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
                     input_ids.to(device),
                     masked_lm_labels.to(device),
                     text_positions.to(device),
                     visual_positions.to(device),
                     token_type_ids.to(device),
+                    attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids, text_positions, visual_positions, token_type_ids
+                    input_ids,
+                    text_positions,
+                    visual_positions,
+                    token_type_ids,
+                    attention_masks,
                 )
                 # TODO: Change to a variable instead of hardcoding the value
                 predictions = predictions.view(-1, 31278)

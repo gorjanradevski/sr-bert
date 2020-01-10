@@ -59,7 +59,14 @@ class SceneModel(nn.Module):
         # Disable text_pos_proj fine-tuning
         self.text_position_projector.weight.requires_grad = finetune
 
-    def forward(self, input_ids, text_positions, visual_positions, token_type_ids):
+    def forward(
+        self,
+        input_ids,
+        text_positions,
+        visual_positions,
+        token_type_ids,
+        attention_mask,
+    ):
         text_pos_embeddings = self.text_position_projector(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
         position_embeddings = torch.cat(
@@ -70,6 +77,7 @@ class SceneModel(nn.Module):
             input_ids=input_ids,
             position_embeddings=position_embeddings,
             token_type_ids=token_type_ids,
+            attention_mask=attention_mask
         )[0]
         prediction_scores = self.mlm_head(sequence_output)
 

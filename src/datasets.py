@@ -156,6 +156,10 @@ def collate_pad_batch(
     )
     # Concatenate stuff
     input_ids = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
+    # Obtain attention mask
+    attention_mask = input_ids.clone()
+    attention_mask[torch.where(attention_mask > 0)] = 1
+    # Prepare masked labels
     masked_lm_labels_text = torch.ones_like(input_ids_sentence) * -100
     masked_lm_labels = torch.cat(
         [masked_lm_labels_text, masked_lm_labels_visuals], dim=1
@@ -171,4 +175,5 @@ def collate_pad_batch(
         text_positions,
         visual_positions,
         token_type_ids,
+        attention_mask,
     )
