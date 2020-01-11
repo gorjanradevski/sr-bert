@@ -4,6 +4,7 @@ from transformers import BertTokenizer
 import torch
 import os
 from PIL import Image
+import numpy as np
 from torchvision import transforms
 from typing import Tuple, List
 
@@ -38,8 +39,6 @@ class ScenesDataset(Dataset):
             self.visual2index[
                 element["visual_name"].split(".")[0]
                 + "_"
-                + str(element["z"])
-                + "_"
                 + str(element["flip"])
                 + "."
                 + element["visual_name"].split(".")[-1]
@@ -51,12 +50,16 @@ class ScenesDataset(Dataset):
         input_ids_visuals, masked_lm_labels_visuals = self.mask_tokens(
             torch.tensor(tokenized_visuals), self.tokenizer, self.mask_probability
         )
+        # Obtain Z-indexes
+        z_indexes = np.array([element["z"] for element in scene["elements"]])
+        z_onehot = np.zeros((z_indexes.size, z_indexes.max() + 1))
+        z_onehot[np.arange(z_indexes.size), z_indexes] = 1
         # Obtain and normalize visual positions
         visual_positions = [
-            [element["x"] / MAX_X, element["y"] / MAX_Y]
-            for element in scene["elements"]
+            [element["x"] / MAX_X, element["y"] / MAX_Y] + z_index
+            for element, z_index in zip(scene["elements"], z_onehot.tolist())
         ]
-        visual_positions.append([-1, -1])
+        visual_positions.append([-1, -1, -1, -1, -1])
 
         return (
             input_ids_sentence,
