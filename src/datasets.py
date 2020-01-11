@@ -7,15 +7,15 @@ from PIL import Image
 from torchvision import transforms
 from typing import Tuple, List
 
-from constants import MAX_X, MAX_Y
+from constants import MAX_X, MAX_Y, MASK_TOKEN, SEP_TOKEN
 
 
 class ScenesDataset(Dataset):
     def __init__(
-        self, dataset_file_path: str, visual2index_path: str, mask_probability: float
+        self, dataset_file_path: str, visual2index: str, mask_probability: float
     ):
         self.dataset_file = json.load(open(dataset_file_path))
-        self.visual2index = json.load(open(visual2index_path))
+        self.visual2index = visual2index
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.mask_token = self.tokenizer.convert_tokens_to_ids("[MASK]")
         self.sep_token = self.tokenizer.convert_tokens_to_ids("[SEP]")
@@ -46,7 +46,7 @@ class ScenesDataset(Dataset):
             ]
             for element in scene["elements"]
         ]
-        tokenized_visuals.append(self.sep_token)
+        tokenized_visuals.append(SEP_TOKEN)
         # Mask visual tokens
         input_ids_visuals, masked_lm_labels_visuals = self.mask_tokens(
             torch.tensor(tokenized_visuals), self.tokenizer, self.mask_probability
@@ -65,8 +65,7 @@ class ScenesDataset(Dataset):
             torch.tensor(visual_positions),
         )
 
-    @staticmethod
-    def mask_tokens(inputs: torch.Tensor, tokenizer, mask_prob):
+    def mask_tokens(self, inputs: torch.Tensor, tokenizer, mask_prob):
         # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
         labels = inputs.clone()
         # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
@@ -84,7 +83,7 @@ class ScenesDataset(Dataset):
         indices_replaced = (
             torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         )
-        inputs[indices_replaced] = tokenizer.convert_tokens_to_ids(tokenizer.mask_token)
+        inputs[indices_replaced] = MASK_TOKEN
 
         # 10% of the time, we replace masked input tokens with random word
         indices_random = (
@@ -92,7 +91,9 @@ class ScenesDataset(Dataset):
             & masked_indices
             & ~indices_replaced
         )
-        random_words = torch.randint(len(tokenizer), labels.shape, dtype=torch.long)
+        random_words = torch.randint(
+            low=3, high=len(self.visual2index), size=labels.shape, dtype=torch.long
+        )
         inputs[indices_random] = random_words[indices_random]
 
         # The rest of the time (10% of the time) we keep the masked input tokens unchanged
@@ -103,7 +104,7 @@ class ClipartsDataset(Dataset):
     def __init__(self, cliparts_path: str, visual2index_path: str):
         visual2index = json.load(open(visual2index_path))
         self.file_paths_indices = []
-        for (file_path, index), index in visual2index.items():
+        for file_path, index in visual2index.items():
             name, extension = file_path.split(".")
             file_name = name[:-4] + "." + extension
             file_path = os.path.join(cliparts_path, file_name)
@@ -155,10 +156,8 @@ def collate_pad_batch(
     visual_positions = torch.nn.utils.rnn.pad_sequence(
         visual_positions, batch_first=True, padding_value=-1
     )
-    # Concatenate stuff
-    input_ids = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
     # Obtain attention mask
-    attention_mask = input_ids.clone()
+    attention_mask = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
     attention_mask[torch.where(attention_mask > 0)] = 1
     # Prepare masked labels
     masked_lm_labels_text = torch.ones_like(input_ids_sentence) * -100
@@ -171,7 +170,8 @@ def collate_pad_batch(
     )
 
     return (
-        input_ids,
+        input_ids_sentence,
+        input_ids_visuals,
         masked_lm_labels,
         text_positions,
         visual_positions,

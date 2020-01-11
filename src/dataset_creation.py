@@ -1,5 +1,4 @@
 import json
-from transformers import BertTokenizer
 import os
 import argparse
 import logging
@@ -61,9 +60,8 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_siz
         "MikeJenny.png",
         "title.png",
     }
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     visual2index = {}
-    index = len(tokenizer)
+    index = 3  # Starting from 3 because 0 = PAD, 1 = SEP, 2 = MASK
     pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
     for filename in os.listdir(pngs_file_path):
         if filename in excluded:
@@ -77,10 +75,11 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_siz
         visual2index[filename + "_2_1" + "." + extension] = index + 5
         index += 6
     json.dump(
-        visual2index, open(os.path.join(dump_datasets_path, "visual2index.json"), "w")
+        visual2index,
+        open(os.path.join(dump_datasets_path, "visual2index_updated.json"), "w"),
     )
 
-    logger.info("visual2index json file dumped.")
+    logger.info("Visual2index json file dumped.")
 
 
 def parse_args():

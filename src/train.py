@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
+import json
 from transformers import BertConfig
 
 from datasets import ScenesDataset, collate_pad_batch
@@ -30,18 +31,19 @@ def train(
     epochs: int,
     clip_val: float,
     save_model_path: str,
-    intermediate_checkpoint_path: str,
+    intermediate_save_checkpoint_path: str,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
+    visual2index = json.load(open(visual2index_path))
     train_dataset = ScenesDataset(
-        train_dataset_path, visual2index_path, mask_probability=mask_probability
+        train_dataset_path, visual2index, mask_probability=mask_probability
     )
     val_dataset = ScenesDataset(
-        val_dataset_path, visual2index_path, mask_probability=mask_probability
+        val_dataset_path, visual2index, mask_probability=mask_probability
     )
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
@@ -86,7 +88,8 @@ def train(
         model.train(False)
         with tqdm(total=len(train_loader)) as pbar:
             for (
-                input_ids,
+                input_ids_sentence,
+                input_ids_visuals,
                 masked_lm_labels,
                 text_positions,
                 visual_positions,
@@ -96,8 +99,9 @@ def train(
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                    input_ids.to(device),
+                input_ids_sentence, input_ids_visuals, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
+                    input_ids_sentence.to(device),
+                    input_ids_visuals.to(device),
                     masked_lm_labels.to(device),
                     text_positions.to(device),
                     visual_positions.to(device),
@@ -105,14 +109,14 @@ def train(
                     attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids,
+                    input_ids_sentence,
+                    input_ids_visuals,
                     text_positions,
                     visual_positions,
                     token_type_ids,
                     attention_masks,
                 )
-                # TODO: Change to a variable instead of hardcoding the value
-                predictions = predictions.view(-1, 31278)
+                predictions = predictions.view(-1, len(visual2index) + 3)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 loss = criterion(predictions, masked_lm_labels)
                 # backward
@@ -131,15 +135,17 @@ def train(
             # Reset current loss
             cur_val_loss = 0
             for (
-                input_ids,
+                input_ids_sentence,
+                input_ids_visuals,
                 masked_lm_labels,
                 text_positions,
                 visual_positions,
                 token_type_ids,
                 attention_masks,
             ) in tqdm(val_loader):
-                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                    input_ids.to(device),
+                input_ids_sentence, input_ids_visuals, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
+                    input_ids_sentence.to(device),
+                    input_ids_visuals.to(device),
                     masked_lm_labels.to(device),
                     text_positions.to(device),
                     visual_positions.to(device),
@@ -147,14 +153,14 @@ def train(
                     attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids,
+                    input_ids_sentence,
+                    input_ids_visuals,
                     text_positions,
                     visual_positions,
                     token_type_ids,
                     attention_masks,
                 )
-                # TODO: Change to a variable instead of hardcoding the value
-                predictions = predictions.view(-1, 31278)
+                predictions = predictions.view(-1, len(visual2index) + 3)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 loss = criterion(predictions, masked_lm_labels)
                 cur_val_loss += loss.item()
@@ -173,7 +179,7 @@ def train(
                     f"Loss on epoch {epoch+1} is: {cur_val_loss}. "
                     "Saving intermediate checkpoint..."
                 )
-                torch.save(model.state_dict(), intermediate_checkpoint_path)
+                torch.save(model.state_dict(), intermediate_save_checkpoint_path)
 
 
 def parse_args():
@@ -216,7 +222,7 @@ def parse_args():
     parser.add_argument(
         "--load_embeddings_path",
         type=str,
-        default="models/updated_embeddings.pt",
+        default="models/cliparts_embeddings.pt",
         help="From where to load the embeddings.",
     )
     parser.add_argument(
@@ -232,7 +238,7 @@ def parse_args():
         help="Where to save the model.",
     )
     parser.add_argument(
-        "--intermediate_checkpoint_path",
+        "--intermediate_save_checkpoint_path",
         type=str,
         default="models/intermediate.pt",
         help="Where to save the model.",
@@ -257,7 +263,7 @@ def main():
         args.epochs,
         args.clip_val,
         args.save_model_path,
-        args.intermediate_checkpoint_path,
+        args.intermediate_save_checkpoint_path,
     )
 
 

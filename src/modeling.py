@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 class MlmHead(nn.Module):
-    def __init__(self, config: BertConfig, vocab_size: int):
+    def __init__(self, config: BertConfig, num_cliparts: int):
         super(MlmHead, self).__init__()
         self.dense = nn.Linear(768, 768)
         self.layer_norm = torch.nn.LayerNorm(768, eps=config.layer_norm_eps)
-        self.predictions = nn.Linear(768, vocab_size, bias=False)
-        self.bias = nn.Parameter(torch.zeros(vocab_size))
+        self.predictions = nn.Linear(768, num_cliparts, bias=False)
+        self.bias = nn.Parameter(torch.zeros(num_cliparts))
 
     def forward(self, sequence_output):
         hidden_states = self.dense(sequence_output)
@@ -38,17 +38,14 @@ class SceneModel(nn.Module):
         self, embeddings_path: str, config: BertConfig, finetune: bool, device
     ):
         super(SceneModel, self).__init__()
+        self.cliparts_embeddings = nn.Embedding.from_pretrained(
+            torch.load(embeddings_path)
+        )
         self.bert = BertModel.from_pretrained("bert-base-uncased")
-        embeddings = torch.load(embeddings_path, map_location=device)
-        self.bert.embeddings.word_embeddings = self.bert.embeddings.word_embeddings.from_pretrained(
-            embeddings["weight"]
-        )
-        logger.info("Embeddings loaded")
+        logger.info("Embeddings and BERT loaded")
         self.visual_position_projector = nn.Linear(2, 768)
-        self.text_position_projector = self.bert.embeddings.position_embeddings
-        self.mlm_head = MlmHead(
-            config, self.bert.embeddings.word_embeddings.num_embeddings
-        )
+        print(dir(self.cliparts_embeddings))
+        self.mlm_head = MlmHead(config, self.cliparts_embeddings.num_embeddings)
         self.log_softmax = nn.LogSoftmax(dim=2)
         self.finetune = finetune
         self.device = device
@@ -56,25 +53,29 @@ class SceneModel(nn.Module):
         # Disable BERT fine-tuning
         for param in self.bert.parameters():
             param.requires_grad = finetune
-        # Disable text_pos_proj fine-tuning
-        self.text_position_projector.weight.requires_grad = finetune
+        # Disable cliparts_embeddings fine-tuning
+        self.cliparts_embeddings.weight.requires_grad = finetune
 
     def forward(
         self,
-        input_ids,
+        word_input_ids,
+        vis_input_ids,
         text_positions,
         visual_positions,
         token_type_ids,
         attention_mask=None,
     ):
-        text_pos_embeddings = self.text_position_projector(text_positions)
+        word_embeddings = self.bert.embeddings.word_embeddings(word_input_ids)
+        vis_embeddings = self.cliparts_embeddings(vis_input_ids)
+        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1)
+        text_pos_embeddings = self.bert.embeddings.position_embeddings(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
         position_embeddings = torch.cat(
             [text_pos_embeddings, vis_pos_embeddings], dim=1
         ).to(self.device)
 
         sequence_output = self.bert(
-            input_ids=input_ids,
+            inputs_embeds=input_embeddings,
             position_embeddings=position_embeddings,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
