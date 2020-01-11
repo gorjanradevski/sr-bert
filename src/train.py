@@ -85,7 +85,7 @@ def train(
     for epoch in range(epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
-        model.train(False)
+        model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
             for (
                 input_ids_sentence,

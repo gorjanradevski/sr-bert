@@ -44,7 +44,6 @@ class SceneModel(nn.Module):
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         logger.info("Embeddings and BERT loaded")
         self.visual_position_projector = nn.Linear(7, 768)
-        print(dir(self.cliparts_embeddings))
         self.mlm_head = MlmHead(config, self.cliparts_embeddings.num_embeddings)
         self.log_softmax = nn.LogSoftmax(dim=2)
         self.finetune = finetune
@@ -86,13 +85,13 @@ class SceneModel(nn.Module):
 
     def train(self, mode: bool):
         if self.finetune and mode:
-            self.bert.train(True)
-            self.mlm_head.train(True)
+            self.bert.train(mode)
+            self.mlm_head.train(mode)
         elif mode:
-            self.mlm_head.train(True)
+            self.mlm_head.train(mode)
         else:
-            self.bert.train(False)
-            self.mlm_head.train(False)
+            self.bert.train(mode)
+            self.mlm_head.train(mode)
 
 
 class ImageEmbeddingsGenerator(nn.Module):
@@ -101,7 +100,6 @@ class ImageEmbeddingsGenerator(nn.Module):
         self.resnet = torch.nn.Sequential(
             *(list(resnet152(pretrained=True).children())[:-1])
         )
-        self.resnet.eval()
         self.pooler = nn.AdaptiveAvgPool1d(768)
 
     def forward(self, x):

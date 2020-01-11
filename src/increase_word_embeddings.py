@@ -26,6 +26,7 @@ def dump_word_embeddings(
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     bert = BertModel.from_pretrained("bert-base-uncased")
     resnet_model = ImageEmbeddingsGenerator().to(device)
+    resnet_model.train(False)
     embedding_matrix = nn.Embedding(len(dataset) + 3, 768, padding_idx=0).to(device)
     with torch.no_grad():
         # Include PAD token, MASK token and SEP token
