@@ -25,6 +25,7 @@ class ScenesDataset(Dataset):
         return len(self.dataset_file)
 
     def __getitem__(self, idx: int):
+        # TODO: Provide a better positional encoding i.e Z-index
         # Obtain elements
         scene = self.dataset_file[idx]
         # Prepare sentence

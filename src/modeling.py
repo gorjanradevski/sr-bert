@@ -65,7 +65,7 @@ class SceneModel(nn.Module):
         text_positions,
         visual_positions,
         token_type_ids,
-        attention_mask,
+        attention_mask=None,
     ):
         text_pos_embeddings = self.text_position_projector(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)

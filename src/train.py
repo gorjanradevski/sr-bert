@@ -169,7 +169,10 @@ def train(
                 torch.save(model.state_dict(), save_model_path)
                 print("======================")
             else:
-                print(f"Loss on epoch {epoch+1} is: {cur_val_loss}")
+                print(
+                    f"Loss on epoch {epoch+1} is: {cur_val_loss}. "
+                    "Saving intermediate checkpoint..."
+                )
                 torch.save(model.state_dict(), intermediate_checkpoint_path)
 
 
