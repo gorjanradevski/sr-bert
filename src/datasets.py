@@ -26,7 +26,6 @@ class ScenesDataset(Dataset):
         return len(self.dataset_file)
 
     def __getitem__(self, idx: int):
-        # TODO: Provide a better positional encoding i.e Z-index
         # Obtain elements
         scene = self.dataset_file[idx]
         # Prepare sentence
@@ -52,7 +51,7 @@ class ScenesDataset(Dataset):
         )
         # Obtain Z-indexes
         z_indexes = np.array([element["z"] for element in scene["elements"]])
-        z_onehot = np.zeros((z_indexes.size, z_indexes.max() + 1))
+        z_onehot = np.zeros((z_indexes.size, 3))
         z_onehot[np.arange(z_indexes.size), z_indexes] = 1
         # Obtain and normalize visual positions
         visual_positions = [
