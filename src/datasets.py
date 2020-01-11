@@ -35,14 +35,7 @@ class ScenesDataset(Dataset):
         input_ids_sentence = torch.tensor(tokenized_sentence)
         # Prepare visuals
         tokenized_visuals = [
-            self.visual2index[
-                element["visual_name"].split(".")[0]
-                + "_"
-                + str(element["flip"])
-                + "."
-                + element["visual_name"].split(".")[-1]
-            ]
-            for element in scene["elements"]
+            self.visual2index[element["visual_name"]] for element in scene["elements"]
         ]
         tokenized_visuals.append(SEP_TOKEN)
         # Mask visual tokens
@@ -53,12 +46,18 @@ class ScenesDataset(Dataset):
         z_indexes = np.array([element["z"] for element in scene["elements"]])
         z_onehot = np.zeros((z_indexes.size, 3))
         z_onehot[np.arange(z_indexes.size), z_indexes] = 1
+        # Obtain flips
+        flips = np.array([element["flip"] for element in scene["elements"]])
+        flips_onehot = np.zeros((flips.size, 2))
+        flips_onehot[np.arange(flips.size), flips] = 1
         # Obtain and normalize visual positions
         visual_positions = [
-            [element["x"] / MAX_X, element["y"] / MAX_Y] + z_index
-            for element, z_index in zip(scene["elements"], z_onehot.tolist())
+            [element["x"] / MAX_X, element["y"] / MAX_Y] + z_index + flip
+            for element, z_index, flip in zip(
+                scene["elements"], z_onehot.tolist(), flips_onehot.tolist()
+            )
         ]
-        visual_positions.append([-1, -1, -1, -1, -1])
+        visual_positions.append([-1, -1, -1, -1, -1, -1, -1])
 
         return (
             input_ids_sentence,
@@ -106,9 +105,7 @@ class ClipartsDataset(Dataset):
     def __init__(self, cliparts_path: str, visual2index_path: str):
         visual2index = json.load(open(visual2index_path))
         self.file_paths_indices = []
-        for file_path, index in visual2index.items():
-            name, extension = file_path.split(".")
-            file_name = name[:-2] + "." + extension
+        for file_name, index in visual2index.items():
             file_path = os.path.join(cliparts_path, file_name)
             self.file_paths_indices.append((file_path, index))
         self.transforms = transforms.Compose(

@@ -66,10 +66,8 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_siz
     for filename in os.listdir(pngs_file_path):
         if filename in excluded:
             continue
-        filename, extension = filename.split(".")
-        visual2index[filename + "_0" + "." + extension] = index
-        visual2index[filename + "_1" + "." + extension] = index + 1
-        index += 2
+        visual2index[filename] = index
+        index += 1
     json.dump(
         visual2index,
         open(os.path.join(dump_datasets_path, "visual2index_updated.json"), "w"),

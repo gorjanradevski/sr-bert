@@ -43,7 +43,7 @@ class SceneModel(nn.Module):
         )
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         logger.info("Embeddings and BERT loaded")
-        self.visual_position_projector = nn.Linear(5, 768)
+        self.visual_position_projector = nn.Linear(7, 768)
         print(dir(self.cliparts_embeddings))
         self.mlm_head = MlmHead(config, self.cliparts_embeddings.num_embeddings)
         self.log_softmax = nn.LogSoftmax(dim=2)
