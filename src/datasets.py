@@ -109,7 +109,7 @@ class ClipartsDataset(Dataset):
         self.file_paths_indices = []
         for file_path, index in visual2index.items():
             name, extension = file_path.split(".")
-            file_name = name[:-4] + "." + extension
+            file_name = name[:-2] + "." + extension
             file_path = os.path.join(cliparts_path, file_name)
             self.file_paths_indices.append((file_path, index))
         self.transforms = transforms.Compose(
