@@ -11,7 +11,56 @@ from typing import Tuple, List
 from constants import MAX_X, MAX_Y, MASK_TOKEN, SEP_TOKEN
 
 
-class ScenesDataset(Dataset):
+class VisualScenesDataset(Dataset):
+    def __init__(
+        self, dataset_file_path: str, visual2index: str, mask_probability: float
+    ):
+        self.dataset_file = json.load(open(dataset_file_path))
+        self.visual2index = visual2index
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        self.mask_probability = mask_probability
+
+    def __len__(self):
+        return len(self.dataset_file)
+
+    def __getitem__(self, idx: int):
+        # Obtain elements
+        scene = self.dataset_file[idx]
+        # Prepare visuals
+        tokenized_visuals = [
+            self.visual2index[element["visual_name"]] for element in scene["elements"]
+        ]
+        # Mask visual tokens
+        input_ids_visuals, masked_lm_labels_visuals = mask_tokens(
+            torch.tensor(tokenized_visuals),
+            self.tokenizer,
+            self.mask_probability,
+            self.visual2index,
+        )
+        # Obtain Z-indexes
+        z_indexes = np.array([element["z"] for element in scene["elements"]])
+        z_onehot = np.zeros((z_indexes.size, 3))
+        z_onehot[np.arange(z_indexes.size), z_indexes] = 1
+        # Obtain flips
+        flips = np.array([element["flip"] for element in scene["elements"]])
+        flips_onehot = np.zeros((flips.size, 2))
+        flips_onehot[np.arange(flips.size), flips] = 1
+        # Obtain and normalize visual positions
+        visual_positions = [
+            [element["x"] / MAX_X, element["y"] / MAX_Y] + z_index + flip
+            for element, z_index, flip in zip(
+                scene["elements"], z_onehot.tolist(), flips_onehot.tolist()
+            )
+        ]
+
+        return (
+            input_ids_visuals,
+            masked_lm_labels_visuals,
+            torch.tensor(visual_positions),
+        )
+
+
+class MultimodalScenesDataset(Dataset):
     def __init__(
         self, dataset_file_path: str, visual2index: str, mask_probability: float
     ):
@@ -39,8 +88,11 @@ class ScenesDataset(Dataset):
         ]
         tokenized_visuals.append(SEP_TOKEN)
         # Mask visual tokens
-        input_ids_visuals, masked_lm_labels_visuals = self.mask_tokens(
-            torch.tensor(tokenized_visuals), self.tokenizer, self.mask_probability
+        input_ids_visuals, masked_lm_labels_visuals = mask_tokens(
+            torch.tensor(tokenized_visuals),
+            self.tokenizer,
+            self.mask_probability,
+            self.visual2index,
         )
         # Obtain Z-indexes
         z_indexes = np.array([element["z"] for element in scene["elements"]])
@@ -65,40 +117,6 @@ class ScenesDataset(Dataset):
             masked_lm_labels_visuals,
             torch.tensor(visual_positions),
         )
-
-    def mask_tokens(self, inputs: torch.Tensor, tokenizer, mask_prob):
-        # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
-        labels = inputs.clone()
-        # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
-        probability_matrix = torch.full(labels.shape, mask_prob)
-        special_tokens_mask = tokenizer.get_special_tokens_mask(
-            labels.tolist(), already_has_special_tokens=True
-        )
-        probability_matrix.masked_fill_(
-            torch.tensor(special_tokens_mask, dtype=torch.bool), value=0.0
-        )
-        masked_indices = torch.bernoulli(probability_matrix).bool()
-        labels[~masked_indices] = -100  # We only compute loss on masked tokens
-
-        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
-        indices_replaced = (
-            torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
-        )
-        inputs[indices_replaced] = MASK_TOKEN
-
-        # 10% of the time, we replace masked input tokens with random word
-        indices_random = (
-            torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
-            & masked_indices
-            & ~indices_replaced
-        )
-        random_words = torch.randint(
-            low=3, high=len(self.visual2index), size=labels.shape, dtype=torch.long
-        )
-        inputs[indices_random] = random_words[indices_random]
-
-        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
-        return inputs, labels
 
 
 class ClipartsDataset(Dataset):
@@ -129,7 +147,68 @@ class ClipartsDataset(Dataset):
         return len(self.file_paths_indices)
 
 
-def collate_pad_batch(
+def mask_tokens(inputs: torch.Tensor, tokenizer, mask_prob, visual2index):
+    # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
+    labels = inputs.clone()
+    # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
+    probability_matrix = torch.full(labels.shape, mask_prob)
+    special_tokens_mask = tokenizer.get_special_tokens_mask(
+        labels.tolist(), already_has_special_tokens=True
+    )
+    probability_matrix.masked_fill_(
+        torch.tensor(special_tokens_mask, dtype=torch.bool), value=0.0
+    )
+    masked_indices = torch.bernoulli(probability_matrix).bool()
+    labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+    # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+    indices_replaced = (
+        torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+    )
+    inputs[indices_replaced] = MASK_TOKEN
+
+    # 10% of the time, we replace masked input tokens with random word
+    indices_random = (
+        torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
+        & masked_indices
+        & ~indices_replaced
+    )
+    random_words = torch.randint(
+        low=3, high=len(visual2index), size=labels.shape, dtype=torch.long
+    )
+    inputs[indices_random] = random_words[indices_random]
+
+    # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+    return inputs, labels
+
+
+def collate_pad_visual_batch(
+    batch: Tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]
+):
+    input_ids_visuals, masked_lm_labels_visuals, visual_positions = zip(*batch)
+    # Expand the position ids
+    input_ids_visuals = torch.nn.utils.rnn.pad_sequence(
+        input_ids_visuals, batch_first=True
+    )
+    masked_lm_labels_visuals = torch.nn.utils.rnn.pad_sequence(
+        masked_lm_labels_visuals, batch_first=True, padding_value=-100
+    )
+    visual_positions = torch.nn.utils.rnn.pad_sequence(
+        visual_positions, batch_first=True, padding_value=-1
+    )
+    # Obtain attention mask
+    attention_mask = input_ids_visuals.clone()
+    attention_mask[torch.where(attention_mask > 0)] = 1
+
+    return (
+        input_ids_visuals,
+        masked_lm_labels_visuals,
+        visual_positions,
+        attention_mask,
+    )
+
+
+def collate_pad_multimodal_batch(
     batch: Tuple[
         List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]
     ]

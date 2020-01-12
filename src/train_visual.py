@@ -9,8 +9,8 @@ import logging
 import json
 from transformers import BertConfig
 
-from datasets import ScenesDataset, collate_pad_batch
-from modeling import SceneModel
+from datasets import VisualScenesDataset, collate_pad_visual_batch
+from modeling import VisualBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -39,10 +39,10 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = ScenesDataset(
+    train_dataset = VisualScenesDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = ScenesDataset(
+    val_dataset = VisualScenesDataset(
         val_dataset_path, visual2index, mask_probability=mask_probability
     )
     # Create samplers
@@ -54,18 +54,18 @@ def train(
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_batch,
+        collate_fn=collate_pad_visual_batch,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_batch,
+        collate_fn=collate_pad_visual_batch,
         sampler=val_sampler,
     )
     # Define training specifics
-    config = BertConfig()
-    model = SceneModel(load_embeddings_path, config, finetune, device)
+    config = BertConfig(vocab_size=len(visual2index) + 3)
+    model = VisualBert(load_embeddings_path, config, finetune)
     if use_cuda:
         model = nn.DataParallel(model).to(device)
     # Pre-train and fine-stuff
@@ -76,7 +76,7 @@ def train(
         logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     else:
-        logger.warning(f"Pre-training! Training only the MLM Head.")
+        logger.warning(f"Pre-training! Training BERT.")
         assert total_number_of_parameters > trainable_parameters
     # Loss and optimizer
     criterion = nn.NLLLoss()
@@ -88,33 +88,22 @@ def train(
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
             for (
-                input_ids_sentence,
                 input_ids_visuals,
                 masked_lm_labels,
-                text_positions,
                 visual_positions,
-                token_type_ids,
                 attention_masks,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                input_ids_sentence, input_ids_visuals, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                    input_ids_sentence.to(device),
+                input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
                     input_ids_visuals.to(device),
                     masked_lm_labels.to(device),
-                    text_positions.to(device),
                     visual_positions.to(device),
-                    token_type_ids.to(device),
                     attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids_sentence,
-                    input_ids_visuals,
-                    text_positions,
-                    visual_positions,
-                    token_type_ids,
-                    attention_masks,
+                    input_ids_visuals, visual_positions, attention_masks
                 )
                 predictions = predictions.view(-1, len(visual2index) + 3)
                 masked_lm_labels = masked_lm_labels.view(-1)
@@ -135,30 +124,19 @@ def train(
             # Reset current loss
             cur_val_loss = 0
             for (
-                input_ids_sentence,
                 input_ids_visuals,
                 masked_lm_labels,
-                text_positions,
                 visual_positions,
-                token_type_ids,
                 attention_masks,
             ) in tqdm(val_loader):
-                input_ids_sentence, input_ids_visuals, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                    input_ids_sentence.to(device),
+                input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
                     input_ids_visuals.to(device),
                     masked_lm_labels.to(device),
-                    text_positions.to(device),
                     visual_positions.to(device),
-                    token_type_ids.to(device),
                     attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids_sentence,
-                    input_ids_visuals,
-                    text_positions,
-                    visual_positions,
-                    token_type_ids,
-                    attention_masks,
+                    input_ids_visuals, visual_positions, attention_masks
                 )
                 predictions = predictions.view(-1, len(visual2index) + 3)
                 masked_lm_labels = masked_lm_labels.view(-1)
