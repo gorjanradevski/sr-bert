@@ -95,26 +95,19 @@ class MultiModalBert(nn.Module):
 
 
 class VisualBert(nn.Module):
-    def __init__(self, embeddings_path: str, config: BertConfig, finetune):
+    def __init__(self, config: BertConfig):
         super(VisualBert, self).__init__()
-        self.cliparts_embeddings = nn.Embedding.from_pretrained(
-            torch.load(embeddings_path)
-        )
         logger.info(f"Building BERT from {config}")
         self.bert = BertForMaskedLM(config)
         logger.info("Embeddings and BERT loaded")
         self.visual_position_projector = nn.Linear(7, 768)
         self.log_softmax = nn.LogSoftmax(dim=2)
-        self.finetune = finetune
-        # Disable cliparts_embeddings fine-tuning
-        self.cliparts_embeddings.weight.requires_grad = finetune
 
     def forward(self, vis_input_ids, visual_positions, attention_mask=None):
-        vis_embeddings = self.cliparts_embeddings(vis_input_ids)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
 
         outputs = self.bert(
-            inputs_embeds=vis_embeddings,
+            input_ids=vis_input_ids,
             position_embeddings=vis_pos_embeddings,
             attention_mask=attention_mask,
         )[0]

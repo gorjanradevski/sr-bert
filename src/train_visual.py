@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -19,14 +19,12 @@ logger = logging.getLogger(__name__)
 
 def train(
     use_cuda: bool,
-    finetune: bool,
     checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
-    load_embeddings_path: str,
     learning_rate: float,
     epochs: int,
     clip_val: float,
@@ -65,19 +63,12 @@ def train(
     )
     # Define training specifics
     config = BertConfig(vocab_size=len(visual2index) + 3)
-    model = VisualBert(load_embeddings_path, config, finetune)
+    model = VisualBert(config)
+    if checkpoint_path is not None:
+        logger.warning(f"Starting training from checkpoint {checkpoint_path}")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     if use_cuda:
         model = nn.DataParallel(model).to(device)
-    # Pre-train and fine-stuff
-    total_number_of_parameters = sum(p.numel() for p in model.parameters())
-    trainable_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    if finetune:
-        assert total_number_of_parameters == trainable_parameters
-        logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    else:
-        logger.warning(f"Pre-training! Training BERT.")
-        assert total_number_of_parameters > trainable_parameters
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -123,26 +114,27 @@ def train(
         with torch.no_grad():
             # Reset current loss
             cur_val_loss = 0
-            for (
-                input_ids_visuals,
-                masked_lm_labels,
-                visual_positions,
-                attention_masks,
-            ) in tqdm(val_loader):
-                input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
-                    input_ids_visuals.to(device),
-                    masked_lm_labels.to(device),
-                    visual_positions.to(device),
-                    attention_masks.to(device),
-                )
-                predictions = model(
-                    input_ids_visuals, visual_positions, attention_masks
-                )
-                predictions = predictions.view(-1, len(visual2index) + 3)
-                masked_lm_labels = masked_lm_labels.view(-1)
-                loss = criterion(predictions, masked_lm_labels)
-                cur_val_loss += loss.item()
-
+            for _ in tqdm(range(10)):
+                for (
+                    input_ids_visuals,
+                    masked_lm_labels,
+                    visual_positions,
+                    attention_masks,
+                ) in val_loader:
+                    input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
+                        input_ids_visuals.to(device),
+                        masked_lm_labels.to(device),
+                        visual_positions.to(device),
+                        attention_masks.to(device),
+                    )
+                    predictions = model(
+                        input_ids_visuals, visual_positions, attention_masks
+                    )
+                    predictions = predictions.view(-1, len(visual2index) + 3)
+                    masked_lm_labels = masked_lm_labels.view(-1)
+                    loss = criterion(predictions, masked_lm_labels)
+                    cur_val_loss += loss.item()
+            cur_val_loss /= 10
             if cur_val_loss < best_val_loss:
                 best_val_loss = cur_val_loss
                 print("======================")
@@ -165,11 +157,10 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description="Trains a Scene model.")
     parser.add_argument("--use_cuda", action="store_true", help="Whether to use cuda.")
-    parser.add_argument("--finetune", action="store_true", help="Whether to fine-tune.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        default="models/pretrained.pt",
+        default=None,
         help="Checkpoint to a pretrained model.",
     )
     parser.add_argument(
@@ -196,12 +187,6 @@ def parse_args():
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument("--epochs", type=int, default=100, help="The number of epochs.")
     parser.add_argument(
-        "--load_embeddings_path",
-        type=str,
-        default="models/cliparts_embeddings.pt",
-        help="From where to load the embeddings.",
-    )
-    parser.add_argument(
         "--learning_rate", type=float, default=0.0002, help="The learning rate."
     )
     parser.add_argument(
@@ -227,14 +212,12 @@ def main():
     args = parse_args()
     train(
         args.use_cuda,
-        args.finetune,
         args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,
-        args.load_embeddings_path,
         args.learning_rate,
         args.epochs,
         args.clip_val,
