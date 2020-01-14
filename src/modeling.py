@@ -99,7 +99,6 @@ class VisualBert(nn.Module):
         super(VisualBert, self).__init__()
         logger.info(f"Building BERT from {config}")
         self.bert = BertForMaskedLM(config)
-        logger.info("Embeddings and BERT loaded")
         self.visual_position_projector = nn.Linear(7, 768)
         self.log_softmax = nn.LogSoftmax(dim=2)
 

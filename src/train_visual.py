@@ -67,11 +67,17 @@ def train(
     if checkpoint_path is not None:
         logger.warning(f"Starting training from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    if use_cuda:
-        model = nn.DataParallel(model).to(device)
+    model = nn.DataParallel(model).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # Fixing parameters as per RoBERTa / LR, CLIP_V: https://arxiv.org/abs/1907.11692
+    optimizer = optim.Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=0.01,
+        betas=(0.9, 0.98),
+        eps=1e-6,
+    )
     best_val_loss = sys.maxsize
     for epoch in range(epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
@@ -134,6 +140,7 @@ def train(
                     masked_lm_labels = masked_lm_labels.view(-1)
                     loss = criterion(predictions, masked_lm_labels)
                     cur_val_loss += loss.item()
+
             cur_val_loss /= 10
             if cur_val_loss < best_val_loss:
                 best_val_loss = cur_val_loss
@@ -155,7 +162,7 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Trains a Scene model.")
+    parser = argparse.ArgumentParser(description="Trains a VisualBert model.")
     parser.add_argument("--use_cuda", action="store_true", help="Whether to use cuda.")
     parser.add_argument(
         "--checkpoint_path",
@@ -182,12 +189,14 @@ def parse_args():
         help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
-        "--mask_probability", type=float, default=0.3, help="The mask probability."
+        "--mask_probability", type=float, default=0.15, help="The mask probability."
     )
-    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
-    parser.add_argument("--epochs", type=int, default=100, help="The number of epochs.")
+    parser.add_argument("--batch_size", type=int, default=256, help="The batch size.")
     parser.add_argument(
-        "--learning_rate", type=float, default=0.0002, help="The learning rate."
+        "--epochs", type=int, default=1000, help="The number of epochs."
+    )
+    parser.add_argument(
+        "--learning_rate", type=float, default=2e-5, help="The learning rate."
     )
     parser.add_argument(
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
