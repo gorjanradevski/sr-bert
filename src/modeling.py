@@ -1,7 +1,7 @@
 from torch import nn
 import torch
 from torchvision.models import resnet152
-from transformers import BertConfig, BertModel, BertForMaskedLM, BertOnlyMLMHead
+from transformers import BertConfig, BertModel, BertOnlyMLMHead, BertForMaskedLM
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -9,26 +9,16 @@ logger = logging.getLogger(__name__)
 
 
 class MultiModalBert(nn.Module):
-    def __init__(
-        self, embeddings_path: str, config: BertConfig, finetune: bool, device
-    ):
+    def __init__(self, embeddings_path: str, config: BertConfig, device):
         super(MultiModalBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding.from_pretrained(
-            torch.load(embeddings_path, map_location=device)
+            torch.load(embeddings_path), freeze=False, padding_idx=0
         )
-        self.bert = BertModel.from_pretrained("bert-base-uncased")
-        logger.info("Embeddings and BERT loaded")
         self.visual_position_projector = nn.Linear(7, 768)
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
         self.mlm_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=2)
-        self.finetune = finetune
         self.device = device
-
-        # Disable BERT fine-tuning
-        for param in self.bert.parameters():
-            param.requires_grad = finetune
-        # Disable cliparts_embeddings fine-tuning
-        self.cliparts_embeddings.weight.requires_grad = finetune
 
     def forward(
         self,
@@ -60,29 +50,16 @@ class MultiModalBert(nn.Module):
 
         return self.log_softmax(prediction_scores)
 
-    def train(self, mode: bool):
-        if self.finetune and mode:
-            self.bert.train(mode)
-            self.mlm_head.train(mode)
-        elif mode:
-            self.bert.train(mode)
-            self.mlm_head.train(mode)
-        else:
-            self.bert.train(mode)
-            self.mlm_head.train(mode)
-
 
 class VisualBert(nn.Module):
     def __init__(self, config: BertConfig):
         super(VisualBert, self).__init__()
-        logger.info(f"Building BERT from {config}")
-        self.bert = BertForMaskedLM(config)
         self.visual_position_projector = nn.Linear(7, 768)
+        self.bert = BertForMaskedLM(config)
         self.log_softmax = nn.LogSoftmax(dim=2)
 
     def forward(self, vis_input_ids, visual_positions, attention_mask=None):
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
-
         outputs = self.bert(
             input_ids=vis_input_ids,
             position_embeddings=vis_pos_embeddings,

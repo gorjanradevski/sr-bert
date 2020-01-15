@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def train(
+    embeddings_path: str,
     checkpoint_path: str,
     dataset_path: str,
     visual2index_path: str,
@@ -62,11 +63,12 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
-    model = VisualBert(BertConfig(vocab_size=len(visual2index) + 3))
+    model = nn.DataParallel(
+        VisualBert(embeddings_path, BertConfig(vocab_size=len(visual2index) + 3))
+    ).to(device)
     if checkpoint_path is not None:
         logger.warning(f"Starting training from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    model = nn.DataParallel(model).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -176,7 +178,7 @@ def parse_args():
     parser.add_argument(
         "--mask_probability", type=float, default=0.15, help="The mask probability."
     )
-    parser.add_argument("--batch_size", type=int, default=256, help="The batch size.")
+    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
         "--epochs", type=int, default=1000, help="The number of epochs."
     )
@@ -198,6 +200,12 @@ def parse_args():
         default="models/intermediate.pt",
         help="Where to save the model.",
     )
+    parser.add_argument(
+        "--load_embeddings_path",
+        type=str,
+        default="models/clipart_embeddings.pt",
+        help="From where to load the embeddings.",
+    )
 
     return parser.parse_args()
 
@@ -205,6 +213,7 @@ def parse_args():
 def main():
     args = parse_args()
     train(
+        args.load_embeddings_path,
         args.checkpoint_path,
         args.dataset_path,
         args.visual2index_path,

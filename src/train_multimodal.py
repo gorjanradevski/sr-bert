@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 def train(
-    finetune: bool,
     checkpoint_path: str,
     dataset_path: str,
     visual2index_path: str,
@@ -62,22 +61,12 @@ def train(
     # Define training specifics
     model = nn.DataParallel(
         MultiModalBert(
-            load_embeddings_path,
-            BertConfig(vocab_size=len(visual2index) + 3),
-            finetune,
-            device,
+            load_embeddings_path, BertConfig(vocab_size=len(visual2index) + 3), device
         )
     ).to(device)
-    # Pre-train and fine-stuff
-    total_number_of_parameters = sum(p.numel() for p in model.parameters())
-    trainable_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    if finetune:
-        assert total_number_of_parameters == trainable_parameters
-        logger.warning(f"Fine-tuning! Starting from checkpoint {checkpoint_path}")
+    if checkpoint_path is not None:
+        logger.warning(f"Starting training from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    else:
-        logger.warning(f"Pre-training! Training only the MLM Head.")
-        assert total_number_of_parameters > trainable_parameters
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -188,12 +177,11 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a MultimodalBert model.")
-    parser.add_argument("--finetune", action="store_true", help="Whether to fine-tune.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        default="models/multimodal_pretrained.pt",
-        help="Checkpoint to a pretrained model.",
+        default=None,
+        help="Checkpoint to a trained model.",
     )
     parser.add_argument(
         "--dataset_path",
@@ -210,7 +198,7 @@ def parse_args():
     parser.add_argument(
         "--mask_probability", type=float, default=0.15, help="The mask probability."
     )
-    parser.add_argument("--batch_size", type=int, default=256, help="The batch size.")
+    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
         "--epochs", type=int, default=1000, help="The number of epochs."
     )
@@ -245,7 +233,6 @@ def parse_args():
 def main():
     args = parse_args()
     train(
-        args.finetune,
         args.checkpoint_path,
         args.dataset_path,
         args.visual2index_path,
