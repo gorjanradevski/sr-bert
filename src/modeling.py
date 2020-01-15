@@ -41,7 +41,9 @@ class MultiModalBert(nn.Module):
     ):
         word_embeddings = self.bert.embeddings.word_embeddings(word_input_ids)
         vis_embeddings = self.cliparts_embeddings(vis_input_ids)
-        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1)
+        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1).to(
+            self.device
+        )
         text_pos_embeddings = self.bert.embeddings.position_embeddings(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
         position_embeddings = torch.cat(
