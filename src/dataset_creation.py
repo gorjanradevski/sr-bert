@@ -46,11 +46,17 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str):
                 )
             index2scene[i] = scene
 
+    # TODO: Add the sentences from the other file
     # Combine the scenes and sentences
     for index in index2scene.keys():
         if index in index2sentences:
             index2scene[index]["sentence"] = index2sentences[index]
-    dataset = [index2scene[index] for index in index2scene.keys()]
+    dataset = [
+        index2scene[index]
+        for index in index2scene.keys()
+        if "sentence" in index2scene[index]
+    ]
+    # Delete the scenes that have no sentence available
     json.dump(dataset, open(os.path.join(dump_datasets_path, "dataset.json"), "w"))
 
     logger.info("Dataset dumped.")
