@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 def train(
-    use_cuda: bool,
     checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
@@ -33,7 +32,7 @@ def train(
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
-    device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
@@ -62,8 +61,7 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
-    config = BertConfig(vocab_size=len(visual2index) + 3)
-    model = VisualBert(config)
+    model = VisualBert(BertConfig(vocab_size=len(visual2index) + 3))
     if checkpoint_path is not None:
         logger.warning(f"Starting training from checkpoint {checkpoint_path}")
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -163,7 +161,6 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a VisualBert model.")
-    parser.add_argument("--use_cuda", action="store_true", help="Whether to use cuda.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,
@@ -220,7 +217,6 @@ def parse_args():
 def main():
     args = parse_args()
     train(
-        args.use_cuda,
         args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,

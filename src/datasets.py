@@ -67,8 +67,6 @@ class MultimodalScenesDataset(Dataset):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        self.mask_token = self.tokenizer.convert_tokens_to_ids("[MASK]")
-        self.sep_token = self.tokenizer.convert_tokens_to_ids("[SEP]")
         self.mask_probability = mask_probability
 
     def __len__(self):

@@ -1,35 +1,11 @@
 from torch import nn
 import torch
 from torchvision.models import resnet152
-from transformers import BertConfig, BertModel, BertForMaskedLM
-import math
+from transformers import BertConfig, BertModel, BertForMaskedLM, BertOnlyMLMHead
 import logging
-
-# https://github.com/huggingface/transformers/blob/master/src/transformers/modeling_bert.py
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class MlmHead(nn.Module):
-    def __init__(self, config: BertConfig, num_cliparts: int):
-        super(MlmHead, self).__init__()
-        self.dense = nn.Linear(768, 768)
-        self.layer_norm = torch.nn.LayerNorm(768, eps=config.layer_norm_eps)
-        self.predictions = nn.Linear(768, num_cliparts, bias=False)
-        self.bias = nn.Parameter(torch.zeros(num_cliparts))
-
-    def forward(self, sequence_output):
-        hidden_states = self.dense(sequence_output)
-        hidden_states = self.gelu(hidden_states)
-        hidden_states = self.layer_norm(hidden_states)
-        prediction_scores = self.predictions(hidden_states) + self.bias
-        return prediction_scores
-
-    @staticmethod
-    def gelu(x):
-        return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
 class MultiModalBert(nn.Module):
@@ -43,7 +19,7 @@ class MultiModalBert(nn.Module):
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         logger.info("Embeddings and BERT loaded")
         self.visual_position_projector = nn.Linear(7, 768)
-        self.mlm_head = MlmHead(config, self.cliparts_embeddings.num_embeddings)
+        self.mlm_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=2)
         self.finetune = finetune
         self.device = device
