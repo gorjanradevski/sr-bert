@@ -7,50 +7,53 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_size: int):
-    sentences = [
-        sentence
-        for sentence in open(
-            os.path.join(abstract_scenes_path, "Sentences_1002.txt"), "r"
+def create_dataset(dump_datasets_path: str, abstract_scenes_path: str):
+    index2sentences = {}
+    with open(
+        os.path.join(
+            abstract_scenes_path,
+            os.path.join("SimpleSentences", "SimpleSentences1_10020.txt"),
         )
-    ]
-    dataset_train = []
-    dataset_val = []
+    ) as sentences:
+        lines = sentences.readlines()
+        for line in lines:
+            if line == "\n":
+                continue
+            index = int(line.split("\t")[0])
+            if index not in index2sentences:
+                index2sentences[index] = ""
+            index2sentences[index] += line.split("\t")[-1].rstrip("\n").lower()
+    index2scene = {}
     with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
         _ = scenes.readline()
-        for i, sentence in enumerate(sentences):
-            for j in range(10):
-                scene = {}
-                scene["sentence"] = sentence.rstrip("\n").lower()
-                scene["elements"] = []
-                num_visuals = int(scenes.readline().split()[-1])
-                if num_visuals == 0:
-                    logger.warning(f"Skipping scene {i},{j}")
-                    continue
-                for _ in range(num_visuals):
-                    visual_name, _, _, x, y, z, flip = scenes.readline().split()
-                    scene["elements"].append(
-                        {
-                            "visual_name": visual_name,
-                            "x": int(x),
-                            "y": int(y),
-                            "z": int(z),
-                            "flip": int(flip),
-                        }
-                    )
-                if i < train_size:
-                    dataset_train.append(scene)
-                else:
-                    dataset_val.append(scene)
+        for i in range(10020):
+            scene = {}
+            scene["elements"] = []
+            num_visuals = int(scenes.readline().split()[-1])
+            if num_visuals == 0:
+                print(f"Skipping scene {i}")
+                continue
+            for _ in range(num_visuals):
+                visual_name, _, _, x, y, z, flip = scenes.readline().split()
+                scene["elements"].append(
+                    {
+                        "visual_name": visual_name,
+                        "x": int(x),
+                        "y": int(y),
+                        "z": int(z),
+                        "flip": int(flip),
+                    }
+                )
+            index2scene[i] = scene
 
-    json.dump(
-        dataset_train, open(os.path.join(dump_datasets_path, "dataset_train.json"), "w")
-    )
-    json.dump(
-        dataset_val, open(os.path.join(dump_datasets_path, "dataset_val.json"), "w")
-    )
+    # Combine the scenes and sentences
+    for index in index2scene.keys():
+        if index in index2sentences:
+            index2scene[index]["sentence"] = index2sentences[index]
+    dataset = [index2scene[index] for index in index2scene.keys()]
+    json.dump(dataset, open(os.path.join(dump_datasets_path, "dataset.json"), "w"))
 
-    logger.info("Train and validation datasets dumped.")
+    logger.info("Dataset dumped.")
 
     # Dump visual2index json file
     excluded = {
@@ -69,8 +72,7 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str, train_siz
         visual2index[filename] = index
         index += 1
     json.dump(
-        visual2index,
-        open(os.path.join(dump_datasets_path, "visual2index_updated.json"), "w"),
+        visual2index, open(os.path.join(dump_datasets_path, "visual2index.json"), "w")
     )
 
     logger.info("Visual2index json file dumped.")
@@ -85,10 +87,10 @@ def parse_args():
         description="Creates a train and val json datasets."
     )
     parser.add_argument(
-        "--dump_datasets_path",
+        "--dump_dataset_path",
         type=str,
         default="data/",
-        help="Where to dump the dataset files.",
+        help="Where to dump the dataset file.",
     )
     parser.add_argument(
         "--abstract_scenes_path",
@@ -96,19 +98,13 @@ def parse_args():
         default="data/AbstractScenes_v1.1",
         help="Path to the abstract scenes dataset.",
     )
-    parser.add_argument(
-        "--train_size",
-        type=str,
-        default=902,
-        help="Number of sentences to include in the train set.",
-    )
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    create_dataset(args.dump_datasets_path, args.abstract_scenes_path, args.train_size)
+    create_dataset(args.dump_dataset_path, args.abstract_scenes_path)
 
 
 if __name__ == "__main__":

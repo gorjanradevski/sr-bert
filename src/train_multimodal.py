@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 def train(
     finetune: bool,
     checkpoint_path: str,
-    train_dataset_path: str,
-    val_dataset_path: str,
+    dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
@@ -37,13 +36,11 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = MultimodalScenesDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability
+    dataset = MultimodalScenesDataset(
+        dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = MultimodalScenesDataset(
-        val_dataset_path, visual2index, mask_probability=mask_probability
-    )
-    # train_small = Subset(train_dataset, range(0, len(train_dataset), 4000))
+    train_dataset = Subset(dataset, list(range(0, 9000)))
+    val_dataset = Subset(dataset, list(range(9000, len(dataset))))
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
     val_sampler = SequentialSampler(val_dataset)
@@ -168,14 +165,7 @@ def train(
                     masked_lm_labels = masked_lm_labels.view(-1)
                     loss = criterion(predictions, masked_lm_labels)
                     cur_val_loss += loss.item()
-                """
-                inputs = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
-                print(
-                    f"Predictions: {torch.argmax(predictions, dim=1).view(inputs.size())}"
-                )
-                print(f"Labels: {masked_lm_labels.view(inputs.size())}")
-                print(f"Inputs: {inputs}")
-                """
+
             cur_val_loss /= 10
             if cur_val_loss < best_val_loss:
                 best_val_loss = cur_val_loss
@@ -206,16 +196,10 @@ def parse_args():
         help="Checkpoint to a pretrained model.",
     )
     parser.add_argument(
-        "--train_dataset_path",
+        "--dataset_path",
         type=str,
-        default="data/dataset_v2_train.json",
-        help="Path to the train dataset.",
-    )
-    parser.add_argument(
-        "--val_dataset_path",
-        type=str,
-        default="data/dataset_v2_val.json",
-        help="Path to the val dataset.",
+        default="data/dataset.json",
+        help="Path to the dataset.",
     )
     parser.add_argument(
         "--visual2index_path",
@@ -263,8 +247,7 @@ def main():
     train(
         args.finetune,
         args.checkpoint_path,
-        args.train_dataset_path,
-        args.val_dataset_path,
+        args.dataset_path,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,

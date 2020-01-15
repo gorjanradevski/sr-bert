@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -19,8 +19,7 @@ logger = logging.getLogger(__name__)
 
 def train(
     checkpoint_path: str,
-    train_dataset_path: str,
-    val_dataset_path: str,
+    dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
@@ -36,12 +35,14 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = VisualScenesDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability
+    dataset = VisualScenesDataset(
+        dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = VisualScenesDataset(
-        val_dataset_path, visual2index, mask_probability=mask_probability
+    dataset = VisualScenesDataset(
+        dataset_path, visual2index, mask_probability=mask_probability
     )
+    train_dataset = Subset(dataset, list(range(0, 9000)))
+    val_dataset = Subset(dataset, list(range(9000, len(dataset))))
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
     val_sampler = SequentialSampler(val_dataset)
@@ -68,14 +69,7 @@ def train(
     model = nn.DataParallel(model).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
-    # Fixing parameters as per RoBERTa / LR, CLIP_V: https://arxiv.org/abs/1907.11692
-    optimizer = optim.Adam(
-        model.parameters(),
-        lr=learning_rate,
-        weight_decay=0.01,
-        betas=(0.9, 0.98),
-        eps=1e-6,
-    )
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     best_val_loss = sys.maxsize
     for epoch in range(epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
@@ -168,16 +162,10 @@ def parse_args():
         help="Checkpoint to a pretrained model.",
     )
     parser.add_argument(
-        "--train_dataset_path",
+        "--dataset_path",
         type=str,
-        default="data/dataset_v2_train.json",
-        help="Path to the train dataset.",
-    )
-    parser.add_argument(
-        "--val_dataset_path",
-        type=str,
-        default="data/dataset_v2_val.json",
-        help="Path to the val dataset.",
+        default="data/dataset.json",
+        help="Path to the dataset.",
     )
     parser.add_argument(
         "--visual2index_path",
@@ -218,8 +206,7 @@ def main():
     args = parse_args()
     train(
         args.checkpoint_path,
-        args.train_dataset_path,
-        args.val_dataset_path,
+        args.dataset_path,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,
