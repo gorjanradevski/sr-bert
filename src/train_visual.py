@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 def train(
-    embeddings_path: str,
     checkpoint_path: str,
     dataset_path: str,
     visual2index_path: str,
@@ -64,7 +63,7 @@ def train(
     )
     # Define training specifics
     model = nn.DataParallel(
-        VisualBert(embeddings_path, BertConfig(vocab_size=len(visual2index) + 3))
+        VisualBert(BertConfig(vocab_size=len(visual2index) + 3))
     ).to(device)
     if checkpoint_path is not None:
         logger.warning(f"Starting training from checkpoint {checkpoint_path}")
@@ -200,12 +199,6 @@ def parse_args():
         default="models/intermediate.pt",
         help="Where to save the model.",
     )
-    parser.add_argument(
-        "--load_embeddings_path",
-        type=str,
-        default="models/clipart_embeddings.pt",
-        help="From where to load the embeddings.",
-    )
 
     return parser.parse_args()
 
@@ -213,7 +206,6 @@ def parse_args():
 def main():
     args = parse_args()
     train(
-        args.load_embeddings_path,
         args.checkpoint_path,
         args.dataset_path,
         args.visual2index_path,
