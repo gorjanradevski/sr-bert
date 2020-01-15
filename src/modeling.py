@@ -14,7 +14,7 @@ class MultiModalBert(nn.Module):
     ):
         super(MultiModalBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding.from_pretrained(
-            torch.load(embeddings_path)
+            torch.load(embeddings_path, map_location=device)
         )
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         logger.info("Embeddings and BERT loaded")
