@@ -2,17 +2,23 @@ import json
 import os
 import argparse
 import logging
+from typing import Dict
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def create_dataset(dump_datasets_path: str, abstract_scenes_path: str):
-    index2sentences = {}
+def parse_sentences(
+    abstract_scenes_path: str,
+    sententences_file_name: str,
+    index2sentence: Dict[int, str] = None,
+):
+    if index2sentence is None:
+        index2sentence = {}
     with open(
         os.path.join(
             abstract_scenes_path,
-            os.path.join("SimpleSentences", "SimpleSentences1_10020.txt"),
+            os.path.join("SimpleSentences", sententences_file_name),
         )
     ) as sentences:
         lines = sentences.readlines()
@@ -20,9 +26,24 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str):
             if line == "\n":
                 continue
             index = int(line.split("\t")[0])
-            if index not in index2sentences:
-                index2sentences[index] = ""
-            index2sentences[index] += line.split("\t")[-1].rstrip("\n").lower()
+            if index not in index2sentence:
+                index2sentence[index] = ""
+            index2sentence[index] += line.split("\t")[-1].rstrip("\n").lower()
+
+    return index2sentence
+
+
+def create_dataset(
+    dump_datasets_path: str,
+    abstract_scenes_path: str,
+    increase_sentences: bool,
+    generate_visual2index: bool,
+):
+    index2sentence = parse_sentences(abstract_scenes_path, "SimpleSentences1_10020.txt")
+    if increase_sentences:
+        index2sentence = parse_sentences(
+            abstract_scenes_path, "SimpleSentences2_10020.txt", index2sentence
+        )
     index2scene = {}
     with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
         _ = scenes.readline()
@@ -46,11 +67,11 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str):
                 )
             index2scene[i] = scene
 
-    # TODO: Add the sentences from the other file
     # Combine the scenes and sentences
     for index in index2scene.keys():
-        if index in index2sentences:
-            index2scene[index]["sentence"] = index2sentences[index]
+        if index in index2sentence:
+            index2scene[index]["sentence"] = index2sentence[index]
+
     dataset = [
         index2scene[index]
         for index in index2scene.keys()
@@ -62,26 +83,28 @@ def create_dataset(dump_datasets_path: str, abstract_scenes_path: str):
     logger.info("Dataset dumped.")
 
     # Dump visual2index json file
-    excluded = {
-        "background.png",
-        "selected.png",
-        "buttons.png",
-        "MikeJenny.png",
-        "title.png",
-    }
-    visual2index = {}
-    index = 3  # Starting from 3 because 0 = PAD, 1 = SEP, 2 = MASK
-    pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
-    for filename in os.listdir(pngs_file_path):
-        if filename in excluded:
-            continue
-        visual2index[filename] = index
-        index += 1
-    json.dump(
-        visual2index, open(os.path.join(dump_datasets_path, "visual2index.json"), "w")
-    )
+    if generate_visual2index:
+        excluded = {
+            "background.png",
+            "selected.png",
+            "buttons.png",
+            "MikeJenny.png",
+            "title.png",
+        }
+        visual2index = {}
+        index = 3  # Starting from 3 because 0 = PAD, 1 = SEP, 2 = MASK
+        pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
+        for filename in os.listdir(pngs_file_path):
+            if filename in excluded:
+                continue
+            visual2index[filename] = index
+            index += 1
+        json.dump(
+            visual2index,
+            open(os.path.join(dump_datasets_path, "visual2index.json"), "w"),
+        )
 
-    logger.info("Visual2index json file dumped.")
+        logger.info("Visual2index json file dumped.")
 
 
 def parse_args():
@@ -104,13 +127,24 @@ def parse_args():
         default="data/AbstractScenes_v1.1",
         help="Path to the abstract scenes dataset.",
     )
+    parser.add_argument(
+        "--generate_visual2index", action="store_true", help="Generate visual2index"
+    )
+    parser.add_argument(
+        "--increase_sentences", action="store_true", help="Generate visual2index"
+    )
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    create_dataset(args.dump_dataset_path, args.abstract_scenes_path)
+    create_dataset(
+        args.dump_dataset_path,
+        args.abstract_scenes_path,
+        args.increase_sentences,
+        args.generate_visual2index,
+    )
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 def train(
     checkpoint_path: str,
+    val_size: int,
     dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
@@ -38,8 +39,9 @@ def train(
     dataset = MultimodalScenesDataset(
         dataset_path, visual2index, mask_probability=mask_probability
     )
-    train_dataset = Subset(dataset, list(range(0, 9000)))
-    val_dataset = Subset(dataset, list(range(9000, len(dataset))))
+    train_size = len(dataset) - val_size
+    train_dataset = Subset(dataset, list(range(0, train_size))
+    val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
     val_sampler = SequentialSampler(val_dataset)
@@ -196,6 +198,12 @@ def parse_args():
         help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
+        "--val_size",
+        type=int,
+        default=1000,
+        help="Path to the visual2index mapping json.",
+    )
+    parser.add_argument(
         "--mask_probability", type=float, default=0.15, help="The mask probability."
     )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
@@ -234,6 +242,7 @@ def main():
     args = parse_args()
     train(
         args.checkpoint_path,
+        args.val_size,
         args.dataset_path,
         args.visual2index_path,
         args.mask_probability,
