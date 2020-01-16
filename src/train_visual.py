@@ -43,7 +43,7 @@ def train(
         dataset_path, visual2index, mask_probability=mask_probability
     )
     train_size = len(dataset) - val_size
-    train_dataset = Subset(dataset, list(range(0, train_size))
+    train_dataset = Subset(dataset, list(range(0, train_size)))
     val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
