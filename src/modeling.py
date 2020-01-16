@@ -12,7 +12,9 @@ class MultiModalBert(nn.Module):
     def __init__(self, embeddings_path: str, config: BertConfig, device):
         super(MultiModalBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding.from_pretrained(
-            torch.load(embeddings_path), freeze=False, padding_idx=0
+            torch.load(embeddings_path, map_location=device),
+            freeze=False,
+            padding_idx=0,
         )
         self.visual_position_projector = nn.Linear(7, 768)
         self.bert = BertModel.from_pretrained("bert-base-uncased")

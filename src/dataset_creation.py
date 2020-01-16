@@ -34,10 +34,10 @@ def parse_sentences(
 
 
 def create_dataset(
-    dump_datasets_path: str,
+    dump_dataset_path: str,
+    dump_visual2index_path: str,
     abstract_scenes_path: str,
     increase_sentences: bool,
-    generate_visual2index: bool,
 ):
     index2sentence = parse_sentences(abstract_scenes_path, "SimpleSentences1_10020.txt")
     if increase_sentences:
@@ -78,12 +78,12 @@ def create_dataset(
         if "sentence" in index2scene[index]
     ]
     # Delete the scenes that have no sentence available
-    json.dump(dataset, open(os.path.join(dump_datasets_path, "dataset.json"), "w"))
+    json.dump(dataset, open(dump_dataset_path, "w"))
 
     logger.info("Dataset dumped.")
 
     # Dump visual2index json file
-    if generate_visual2index:
+    if dump_visual2index_path is not None:
         excluded = {
             "background.png",
             "selected.png",
@@ -99,10 +99,7 @@ def create_dataset(
                 continue
             visual2index[filename] = index
             index += 1
-        json.dump(
-            visual2index,
-            open(os.path.join(dump_datasets_path, "visual2index.json"), "w"),
-        )
+        json.dump(visual2index, open(dump_visual2index_path, "w"))
 
         logger.info("Visual2index json file dumped.")
 
@@ -118,17 +115,20 @@ def parse_args():
     parser.add_argument(
         "--dump_dataset_path",
         type=str,
-        default="data/",
+        default="data/dataset.json",
         help="Where to dump the dataset file.",
+    )
+    parser.add_argument(
+        "--dump_visual2index_path",
+        type=str,
+        default=None,
+        help="Where to dump the visual2index file.",
     )
     parser.add_argument(
         "--abstract_scenes_path",
         type=str,
         default="data/AbstractScenes_v1.1",
         help="Path to the abstract scenes dataset.",
-    )
-    parser.add_argument(
-        "--generate_visual2index", action="store_true", help="Generate visual2index"
     )
     parser.add_argument(
         "--increase_sentences", action="store_true", help="Generate visual2index"
@@ -141,9 +141,9 @@ def main():
     args = parse_args()
     create_dataset(
         args.dump_dataset_path,
+        args.dump_visual2index_path,
         args.abstract_scenes_path,
         args.increase_sentences,
-        args.generate_visual2index,
     )
 
 
