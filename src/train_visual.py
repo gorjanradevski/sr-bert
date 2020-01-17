@@ -45,6 +45,8 @@ def train(
     train_size = len(dataset) - val_size
     train_dataset = Subset(dataset, list(range(0, train_size)))
     val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
+    logger.info(f"Training on {len(train_dataset)}")
+    logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
     val_sampler = SequentialSampler(val_dataset)
@@ -67,14 +69,20 @@ def train(
     model = nn.DataParallel(
         VisualBert(BertConfig(vocab_size=len(visual2index) + 3))
     ).to(device)
-    if checkpoint_path is not None:
-        logger.warning(f"Starting training from checkpoint {checkpoint_path}")
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    cur_epoch = 0
     best_val_loss = sys.maxsize
-    for epoch in range(epochs):
+    if checkpoint_path is not None:
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        cur_epoch = checkpoint["epoch"]
+        best_val_loss = checkpoint["loss"]
+        logger.warning(f"Starting training from checkpoint {checkpoint_path}")
+
+    for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
         model.train(True)
@@ -149,7 +157,15 @@ def train(
             else:
                 print(f"Loss on epoch {epoch+1} is: {cur_val_loss}. ")
             print("Saving intermediate checkpoint...")
-            torch.save(model.state_dict(), intermediate_save_checkpoint_path)
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": best_val_loss,
+                },
+                save_model_path,
+            )
 
 
 def parse_args():
