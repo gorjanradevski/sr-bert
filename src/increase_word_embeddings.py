@@ -17,34 +17,26 @@ logger = logging.getLogger(__name__)
 def dump_word_embeddings(
     cliparts_path: str, visual2index_path: str, save_embeddings_path: str
 ):
-    # Check for CUDA
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dataset = ClipartsDataset(cliparts_path, visual2index_path)
-    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
+    logger.info("Loading BERT...")
+    bert_model = BertModel.from_pretrained("bert-base-uncased").to(device)
     logger.info("Loading ResNet152...")
-    # Load BERT stuff
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    bert = BertModel.from_pretrained("bert-base-uncased")
     resnet_model = ImageEmbeddingsGenerator().to(device)
-    resnet_model.train(False)
-    embedding_matrix = nn.Embedding(len(dataset) + 3, 768, padding_idx=0).to(device)
+    current_num_embeds = bert_model.embeddings.word_embeddings.num_embeddings
+    logger.info(f"Current size of the word embeddings matrix {current_num_embeds}")
+    dataset = ClipartsDataset(cliparts_path, visual2index_path)
+    bert_model.resize_token_embeddings(current_num_embeds + len(dataset))
+    logger.info(
+        f"Updated size of the word embedding matrix {bert_model.embeddings.word_embeddings.num_embeddings}"
+    )
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
     with torch.no_grad():
-        # Include PAD token, MASK token and SEP token
-        for i, token in enumerate(
-            [tokenizer.pad_token, tokenizer.mask_token, tokenizer.sep_token]
-        ):
-            token_index = torch.tensor(
-                tokenizer.convert_tokens_to_ids(token)
-            ).unsqueeze(0)
-            embedding_matrix.weight[i, :] = bert.embeddings.word_embeddings(token_index)
-        logger.info("Embeddings for PAD, MASK and SEP token included.")
         for image, index in tqdm(loader):
             # https://github.com/huggingface/transformers/issues/1413
             image = image.to(device)
             image_embedding = resnet_model(image)
-            embedding_matrix.weight[index, :] = image_embedding
-
-    torch.save(embedding_matrix.weight.data, save_embeddings_path)
+            bert_model.embeddings.word_embeddings.weight[index, :] = image_embedding
+    torch.save(bert_model.embeddings.word_embeddings.weight.data, save_embeddings_path)
 
 
 def parse_args():

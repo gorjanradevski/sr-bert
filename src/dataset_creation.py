@@ -3,6 +3,7 @@ import os
 import argparse
 import logging
 from typing import Dict
+from transformers import BertTokenizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ def create_dataset(
             "title.png",
         }
         visual2index = {}
-        index = 3  # Starting from 3 because 0 = PAD, 1 = SEP, 2 = MASK
+        index = len(BertTokenizer.from_pretrained("bert-base-uncased"))
         pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
         for filename in os.listdir(pngs_file_path):
             if filename in excluded:

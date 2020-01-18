@@ -39,14 +39,14 @@ def train(
     dataset = MultimodalScenesDataset(
         dataset_path, visual2index, mask_probability=mask_probability
     )
-    train_size = len(dataset) - val_size
-    train_dataset = Subset(dataset, list(range(0, train_size)))
-    val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
+    # train_size = len(dataset) - val_size
+    train_dataset = Subset(dataset, list(range(0, len(dataset), 4000)))
+    # val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
     logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(val_dataset)}")
+    logger.info(f"Validating on {len(train_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(val_dataset)
+    val_sampler = SequentialSampler(train_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -56,18 +56,18 @@ def train(
         collate_fn=collate_pad_multimodal_batch,
     )
     val_loader = DataLoader(
-        val_dataset,
+        train_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_multimodal_batch,
         sampler=val_sampler,
     )
     # Define training specifics
-    model = nn.DataParallel(
-        MultiModalBert(
-            load_embeddings_path, BertConfig(vocab_size=len(visual2index) + 3), device
-        )
-    ).to(device)
+    config = BertConfig()
+    config.vocab_size += len(visual2index)
+    model = nn.DataParallel(MultiModalBert(load_embeddings_path, config, device)).to(
+        device
+    )
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -87,8 +87,7 @@ def train(
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
             for (
-                input_ids_sentence,
-                input_ids_visuals,
+                input_ids,
                 masked_lm_labels,
                 text_positions,
                 visual_positions,
@@ -98,9 +97,8 @@ def train(
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                input_ids_sentence, input_ids_visuals, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                    input_ids_sentence.to(device),
-                    input_ids_visuals.to(device),
+                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
+                    input_ids.to(device),
                     masked_lm_labels.to(device),
                     text_positions.to(device),
                     visual_positions.to(device),
@@ -108,14 +106,13 @@ def train(
                     attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids_sentence,
-                    input_ids_visuals,
+                    input_ids,
                     text_positions,
                     visual_positions,
                     token_type_ids,
                     attention_masks,
                 )
-                predictions = predictions.view(-1, len(visual2index) + 3)
+                predictions = predictions.view(-1, config.vocab_size)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 loss = criterion(predictions, masked_lm_labels)
                 # backward
@@ -133,38 +130,39 @@ def train(
         with torch.no_grad():
             # Reset current loss
             cur_val_loss = 0
-            for _ in tqdm(range(10)):
-                for (
-                    input_ids_sentence,
-                    input_ids_visuals,
-                    masked_lm_labels,
+            for (
+                input_ids,
+                masked_lm_labels,
+                text_positions,
+                visual_positions,
+                token_type_ids,
+                attention_masks,
+            ) in val_loader:
+                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
+                    input_ids.to(device),
+                    masked_lm_labels.to(device),
+                    text_positions.to(device),
+                    visual_positions.to(device),
+                    token_type_ids.to(device),
+                    attention_masks.to(device),
+                )
+                predictions = model(
+                    input_ids,
                     text_positions,
                     visual_positions,
                     token_type_ids,
                     attention_masks,
-                ) in val_loader:
-                    input_ids_sentence, input_ids_visuals, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                        input_ids_sentence.to(device),
-                        input_ids_visuals.to(device),
-                        masked_lm_labels.to(device),
-                        text_positions.to(device),
-                        visual_positions.to(device),
-                        token_type_ids.to(device),
-                        attention_masks.to(device),
-                    )
-                    predictions = model(
-                        input_ids_sentence,
-                        input_ids_visuals,
-                        text_positions,
-                        visual_positions,
-                        token_type_ids,
-                        attention_masks,
-                    )
-                    predictions = predictions.view(-1, len(visual2index) + 3)
-                    masked_lm_labels = masked_lm_labels.view(-1)
-                    loss = criterion(predictions, masked_lm_labels)
-                    cur_val_loss += loss.item()
-
+                )
+                predictions = predictions.view(-1, config.vocab_size)
+                masked_lm_labels = masked_lm_labels.view(-1)
+                loss = criterion(predictions, masked_lm_labels)
+                cur_val_loss += loss.item()
+                print(f"Inputs: {input_ids}")
+                print(
+                    f"Predictions: {torch.argmax(predictions, dim=1).view(input_ids.size())}"
+                )
+                print(f"Labels: {masked_lm_labels.view(input_ids.size())}")
+            """
             cur_val_loss /= 10
             if cur_val_loss < best_val_loss:
                 best_val_loss = cur_val_loss
@@ -187,6 +185,7 @@ def train(
                 },
                 save_model_path,
             )
+            """
 
 
 def parse_args():

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class MultiModalBert(nn.Module):
     def __init__(self, embeddings_path: str, config: BertConfig, device):
         super(MultiModalBert, self).__init__()
-        self.cliparts_embeddings = nn.Embedding.from_pretrained(
+        self.embeddings = nn.Embedding.from_pretrained(
             torch.load(embeddings_path, map_location=device),
             freeze=False,
             padding_idx=0,
@@ -24,18 +24,13 @@ class MultiModalBert(nn.Module):
 
     def forward(
         self,
-        word_input_ids,
-        vis_input_ids,
+        input_ids,
         text_positions,
         visual_positions,
         token_type_ids,
         attention_mask=None,
     ):
-        word_embeddings = self.bert.embeddings.word_embeddings(word_input_ids)
-        vis_embeddings = self.cliparts_embeddings(vis_input_ids)
-        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1).to(
-            self.device
-        )
+        input_embeddings = self.embeddings(input_ids)
         text_pos_embeddings = self.bert.embeddings.position_embeddings(text_positions)
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
         position_embeddings = torch.cat(

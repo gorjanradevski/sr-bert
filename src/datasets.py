@@ -8,7 +8,7 @@ import numpy as np
 from torchvision import transforms
 from typing import Tuple, List
 
-from constants import MAX_X, MAX_Y, MASK_TOKEN, SEP_TOKEN
+from constants import MAX_X, MAX_Y
 
 
 class VisualScenesDataset(Dataset):
@@ -79,18 +79,26 @@ class MultimodalScenesDataset(Dataset):
         tokenized_sentence = self.tokenizer.encode(
             scene["sentence"], add_special_tokens=True
         )
-        input_ids_sentence = torch.tensor(tokenized_sentence)
         # Prepare visuals
         tokenized_visuals = [
             self.visual2index[element["visual_name"]] for element in scene["elements"]
         ]
-        tokenized_visuals.append(SEP_TOKEN)
+        tokenized_visuals.append(self.tokenizer.sep_token_id)
+        # Masking sentence tokens
+        input_ids_sentence, masked_lm_labels_sentence = mask_tokens(
+            torch.tensor(tokenized_sentence),
+            self.tokenizer,
+            self.mask_probability,
+            self.visual2index,
+            masking_visuals=False,
+        )
         # Mask visual tokens
         input_ids_visuals, masked_lm_labels_visuals = mask_tokens(
             torch.tensor(tokenized_visuals),
             self.tokenizer,
             self.mask_probability,
             self.visual2index,
+            masking_visuals=True
         )
         # Obtain Z-indexes
         z_indexes = np.array([element["z"] for element in scene["elements"]])
@@ -112,6 +120,7 @@ class MultimodalScenesDataset(Dataset):
         return (
             input_ids_sentence,
             input_ids_visuals,
+            masked_lm_labels_sentence,
             masked_lm_labels_visuals,
             torch.tensor(visual_positions),
         )
@@ -145,7 +154,13 @@ class ClipartsDataset(Dataset):
         return len(self.file_paths_indices)
 
 
-def mask_tokens(inputs: torch.Tensor, tokenizer, mask_prob, visual2index):
+def mask_tokens(
+    inputs: torch.Tensor,
+    tokenizer,
+    mask_prob,
+    visual2index,
+    masking_visuals: bool = False,
+):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
     labels = inputs.clone()
     # We sample a few tokens in each sequence for masked-LM training (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
@@ -163,7 +178,7 @@ def mask_tokens(inputs: torch.Tensor, tokenizer, mask_prob, visual2index):
     indices_replaced = (
         torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
     )
-    inputs[indices_replaced] = MASK_TOKEN
+    inputs[indices_replaced] = tokenizer.mask_token_id
 
     # 10% of the time, we replace masked input tokens with random word
     indices_random = (
@@ -171,8 +186,15 @@ def mask_tokens(inputs: torch.Tensor, tokenizer, mask_prob, visual2index):
         & masked_indices
         & ~indices_replaced
     )
+    # Let's check whether we are masking visuals
+    if masking_visuals:
+        low = len(tokenizer)
+        high = len(tokenizer) + len(visual2index)
+    else:
+        low = 0
+        high = len(tokenizer)
     random_words = torch.randint(
-        low=3, high=len(visual2index), size=labels.shape, dtype=torch.long
+        low=low, high=high, size=labels.shape, dtype=torch.long
     )
     inputs[indices_random] = random_words[indices_random]
 
@@ -211,7 +233,7 @@ def collate_pad_multimodal_batch(
         List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]
     ]
 ):
-    input_ids_sentence, input_ids_visuals, masked_lm_labels_visuals, visual_positions = zip(
+    input_ids_sentence, input_ids_visuals, masked_lm_labels_sentence, masked_lm_labels_visuals, visual_positions = zip(
         *batch
     )
     # Generate position ids for the text
@@ -225,7 +247,11 @@ def collate_pad_multimodal_batch(
     input_ids_visuals = torch.nn.utils.rnn.pad_sequence(
         input_ids_visuals, batch_first=True
     )
+    input_ids = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
     text_positions = text_positions.unsqueeze(0).expand(input_ids_sentence.size())
+    masked_lm_labels_sentence = torch.nn.utils.rnn.pad_sequence(
+        masked_lm_labels_sentence, batch_first=True, padding_value=-100
+    )
     masked_lm_labels_visuals = torch.nn.utils.rnn.pad_sequence(
         masked_lm_labels_visuals, batch_first=True, padding_value=-100
     )
@@ -233,12 +259,11 @@ def collate_pad_multimodal_batch(
         visual_positions, batch_first=True, padding_value=-1
     )
     # Obtain attention mask
-    attention_mask = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
+    attention_mask = input_ids.clone()
     attention_mask[torch.where(attention_mask > 0)] = 1
     # Prepare masked labels
-    masked_lm_labels_text = torch.ones_like(input_ids_sentence) * -100
     masked_lm_labels = torch.cat(
-        [masked_lm_labels_text, masked_lm_labels_visuals], dim=1
+        [masked_lm_labels_sentence, masked_lm_labels_visuals], dim=1
     )
     token_type_ids = torch.cat(
         [torch.zeros_like(input_ids_sentence), torch.ones_like(input_ids_visuals)],
@@ -246,8 +271,7 @@ def collate_pad_multimodal_batch(
     )
 
     return (
-        input_ids_sentence,
-        input_ids_visuals,
+        input_ids,
         masked_lm_labels,
         text_positions,
         visual_positions,
