@@ -39,14 +39,14 @@ def train(
     dataset = MultimodalScenesDataset(
         dataset_path, visual2index, mask_probability=mask_probability
     )
-    # train_size = len(dataset) - val_size
-    train_dataset = Subset(dataset, list(range(0, len(dataset), 4000)))
-    # val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
+    train_size = len(dataset) - val_size
+    train_dataset = Subset(dataset, list(range(0, train_size)))
+    val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
     logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(train_dataset)}")
+    logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(train_dataset)
+    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -56,7 +56,7 @@ def train(
         collate_fn=collate_pad_multimodal_batch,
     )
     val_loader = DataLoader(
-        train_dataset,
+        val_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_multimodal_batch,
@@ -130,39 +130,35 @@ def train(
         with torch.no_grad():
             # Reset current loss
             cur_val_loss = 0
-            for (
-                input_ids,
-                masked_lm_labels,
-                text_positions,
-                visual_positions,
-                token_type_ids,
-                attention_masks,
-            ) in val_loader:
-                input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
-                    input_ids.to(device),
-                    masked_lm_labels.to(device),
-                    text_positions.to(device),
-                    visual_positions.to(device),
-                    token_type_ids.to(device),
-                    attention_masks.to(device),
-                )
-                predictions = model(
+            for _ in tqdm(range(10)):
+                for (
                     input_ids,
+                    masked_lm_labels,
                     text_positions,
                     visual_positions,
                     token_type_ids,
                     attention_masks,
-                )
-                predictions = predictions.view(-1, config.vocab_size)
-                masked_lm_labels = masked_lm_labels.view(-1)
-                loss = criterion(predictions, masked_lm_labels)
-                cur_val_loss += loss.item()
-                print(f"Inputs: {input_ids}")
-                print(
-                    f"Predictions: {torch.argmax(predictions, dim=1).view(input_ids.size())}"
-                )
-                print(f"Labels: {masked_lm_labels.view(input_ids.size())}")
-            """
+                ) in val_loader:
+                    input_ids, masked_lm_labels, text_positions, visual_positions, token_type_ids, attention_masks = (
+                        input_ids.to(device),
+                        masked_lm_labels.to(device),
+                        text_positions.to(device),
+                        visual_positions.to(device),
+                        token_type_ids.to(device),
+                        attention_masks.to(device),
+                    )
+                    predictions = model(
+                        input_ids,
+                        text_positions,
+                        visual_positions,
+                        token_type_ids,
+                        attention_masks,
+                    )
+                    predictions = predictions.view(-1, config.vocab_size)
+                    masked_lm_labels = masked_lm_labels.view(-1)
+                    loss = criterion(predictions, masked_lm_labels)
+                    cur_val_loss += loss.item()
+
             cur_val_loss /= 10
             if cur_val_loss < best_val_loss:
                 best_val_loss = cur_val_loss
@@ -185,7 +181,6 @@ def train(
                 },
                 save_model_path,
             )
-            """
 
 
 def parse_args():
