@@ -179,7 +179,7 @@ def train(
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": best_val_loss,
                 },
-                save_model_path,
+                intermediate_save_checkpoint_path,
             )
 
 
