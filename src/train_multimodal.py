@@ -82,7 +82,10 @@ def train(
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
         del checkpoint
 
-        logger.warning(f"Starting training from checkpoint {checkpoint_path}")
+        logger.warning(
+            f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
+        )
+        logger.warning(f"The previous best loss was {best_val_loss}!")
 
     for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
