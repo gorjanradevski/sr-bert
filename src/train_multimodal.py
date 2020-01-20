@@ -65,22 +65,21 @@ def train(
     # Define training specifics
     config = BertConfig()
     config.vocab_size += len(visual2index)
-    model = nn.DataParallel(MultiModalBert(load_embeddings_path, config, device)).to(
-        device
-    )
+    model = nn.DataParallel(MultiModalBert(load_embeddings_path, config, device))
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
     best_val_loss = sys.maxsize
     if checkpoint_path is not None:
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         cur_epoch = checkpoint["epoch"]
         best_val_loss = checkpoint["loss"]
         logger.warning(f"Starting training from checkpoint {checkpoint_path}")
 
+    model = model.to(device)
     for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
