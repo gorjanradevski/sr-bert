@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 def train(
     checkpoint_path: str,
-    val_size: int,
-    dataset_path: str,
+    train_dataset_path: str,
+    test_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
@@ -36,17 +36,17 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    dataset = MultimodalScenesDataset(
-        dataset_path, visual2index, mask_probability=mask_probability
+    train_dataset = MultimodalScenesDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
-    train_size = len(dataset) - val_size
-    train_dataset = Subset(dataset, list(range(0, train_size)))
-    val_dataset = Subset(dataset, list(range(train_size, len(dataset))))
+    test_dataset = MultimodalScenesDataset(
+        test_dataset_path, visual2index, mask_probability=mask_probability, train=False
+    )
     logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(val_dataset)}")
+    logger.info(f"Validating on {len(test_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(val_dataset)
+    val_sampler = SequentialSampler(test_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -56,7 +56,7 @@ def train(
         collate_fn=collate_pad_multimodal_batch,
     )
     val_loader = DataLoader(
-        val_dataset,
+        test_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_multimodal_batch,
@@ -202,10 +202,16 @@ def parse_args():
         help="Checkpoint to a trained model.",
     )
     parser.add_argument(
-        "--dataset_path",
+        "--train_dataset_path",
         type=str,
-        default="data/dataset.json",
-        help="Path to the dataset.",
+        default="data/train_dataset.json",
+        help="Path to the train dataset.",
+    )
+    parser.add_argument(
+        "--test_dataset_path",
+        type=str,
+        default="data/test_dataset.json",
+        help="Path to the test dataset.",
     )
     parser.add_argument(
         "--visual2index_path",
@@ -258,8 +264,8 @@ def main():
     args = parse_args()
     train(
         args.checkpoint_path,
-        args.val_size,
-        args.dataset_path,
+        args.train_dataset_path,
+        args.test_dataset_path,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,

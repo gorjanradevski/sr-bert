@@ -1,4 +1,4 @@
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset as TorchDataset
 import json
 from transformers import BertTokenizer
 import torch
@@ -11,7 +11,7 @@ from typing import Tuple, List
 from constants import MAX_X, MAX_Y
 
 
-class VisualScenesDataset(Dataset):
+class VisualScenesDataset(TorchDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: str, mask_probability: float
     ):
@@ -60,14 +60,19 @@ class VisualScenesDataset(Dataset):
         )
 
 
-class MultimodalScenesDataset(Dataset):
+class MultimodalScenesDataset:
     def __init__(
-        self, dataset_file_path: str, visual2index: str, mask_probability: float
+        self,
+        dataset_file_path: str,
+        visual2index: str,
+        mask_probability: float,
+        train: bool,
     ):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.mask_probability = mask_probability
+        self.train = train
 
     def __len__(self):
         return len(self.dataset_file)
@@ -75,10 +80,13 @@ class MultimodalScenesDataset(Dataset):
     def __getitem__(self, idx: int):
         # Obtain elements
         scene = self.dataset_file[idx]
-        # Prepare sentence
-        tokenized_sentence = self.tokenizer.encode(
-            scene["sentence"], add_special_tokens=True
-        )
+        # Obtain sentences
+        sentences = np.array(scene["sentences"])
+        if self.train:
+            sentences = " ".join(np.random.choice(sentences, 2, replace=False))
+        else:
+            sentences = " ".join(sentences)
+        tokenized_sentence = self.tokenizer.encode(sentences, add_special_tokens=True)
         # Prepare visuals
         tokenized_visuals = [
             self.visual2index[element["visual_name"]] for element in scene["elements"]
@@ -98,7 +106,7 @@ class MultimodalScenesDataset(Dataset):
             self.tokenizer,
             self.mask_probability,
             self.visual2index,
-            masking_visuals=True
+            masking_visuals=True,
         )
         # Obtain Z-indexes
         z_indexes = np.array([element["z"] for element in scene["elements"]])
@@ -126,7 +134,7 @@ class MultimodalScenesDataset(Dataset):
         )
 
 
-class ClipartsDataset(Dataset):
+class ClipartsDataset(TorchDataset):
     def __init__(self, cliparts_path: str, visual2index_path: str):
         visual2index = json.load(open(visual2index_path))
         self.file_paths_indices = []

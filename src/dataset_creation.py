@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 def parse_sentences(
     abstract_scenes_path: str,
     sententences_file_name: str,
-    index2sentence: Dict[int, str] = None,
+    index2sentences: Dict[int, str] = None,
 ):
-    if index2sentence is None:
-        index2sentence = {}
+    if index2sentences is None:
+        index2sentences = {}
     with open(
         os.path.join(
             abstract_scenes_path,
@@ -27,24 +27,29 @@ def parse_sentences(
             if line == "\n":
                 continue
             index = int(line.split("\t")[0])
-            if index not in index2sentence:
-                index2sentence[index] = ""
-            index2sentence[index] += line.split("\t")[-1].rstrip("\n").lower()
+            if index not in index2sentences:
+                index2sentences[index] = []
+            sentence = line.split("\t")[-1].rstrip("\n").rstrip().lower()
+            if not sentence.endswith((".", "!", "?", '"')):
+                sentence += "."
+            index2sentences[index].append(sentence)
 
-    return index2sentence
+    return index2sentences
 
 
 def create_dataset(
-    dump_dataset_path: str,
+    dump_train_dataset_path: str,
+    dump_test_dataset_path: str,
     dump_visual2index_path: str,
     abstract_scenes_path: str,
-    increase_sentences: bool,
+    test_size: int,
 ):
-    index2sentence = parse_sentences(abstract_scenes_path, "SimpleSentences1_10020.txt")
-    if increase_sentences:
-        index2sentence = parse_sentences(
-            abstract_scenes_path, "SimpleSentences2_10020.txt", index2sentence
-        )
+    index2sentences = parse_sentences(
+        abstract_scenes_path, "SimpleSentences1_10020.txt"
+    )
+    index2sentences = parse_sentences(
+        abstract_scenes_path, "SimpleSentences2_10020.txt", index2sentences
+    )
     index2scene = {}
     with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
         _ = scenes.readline()
@@ -70,18 +75,19 @@ def create_dataset(
 
     # Combine the scenes and sentences
     for index in index2scene.keys():
-        if index in index2sentence:
-            index2scene[index]["sentence"] = index2sentence[index]
+        if index in index2sentences:
+            index2scene[index]["sentences"] = index2sentences[index]
 
     dataset = [
         index2scene[index]
         for index in index2scene.keys()
-        if "sentence" in index2scene[index]
+        if "sentences" in index2scene[index]
     ]
     # Delete the scenes that have no sentence available
-    json.dump(dataset, open(dump_dataset_path, "w"))
-
-    logger.info("Dataset dumped.")
+    json.dump(dataset[:-test_size], open(dump_train_dataset_path, "w"))
+    logger.info(f"Train dataset dumped {dump_train_dataset_path}")
+    json.dump(dataset[-test_size:], open(dump_test_dataset_path, "w"))
+    logger.info(f"Test dataset dumped {dump_test_dataset_path}")
 
     # Dump visual2index json file
     if dump_visual2index_path is not None:
@@ -114,10 +120,16 @@ def parse_args():
         description="Creates a train and val json datasets."
     )
     parser.add_argument(
-        "--dump_dataset_path",
+        "--dump_train_dataset_path",
         type=str,
-        default="data/dataset.json",
-        help="Where to dump the dataset file.",
+        default="data/train_dataset.json",
+        help="Where to dump the train dataset file.",
+    )
+    parser.add_argument(
+        "--dump_test_dataset_path",
+        type=str,
+        default="data/test_dataset.json",
+        help="Where to dump the test dataset file.",
     )
     parser.add_argument(
         "--dump_visual2index_path",
@@ -132,7 +144,7 @@ def parse_args():
         help="Path to the abstract scenes dataset.",
     )
     parser.add_argument(
-        "--increase_sentences", action="store_true", help="Generate visual2index"
+        "--test_size", type=int, default=500, help="Size of the test set."
     )
 
     return parser.parse_args()
@@ -141,10 +153,11 @@ def parse_args():
 def main():
     args = parse_args()
     create_dataset(
-        args.dump_dataset_path,
+        args.dump_train_dataset_path,
+        args.dump_test_dataset_path,
         args.dump_visual2index_path,
         args.abstract_scenes_path,
-        args.increase_sentences,
+        args.test_size,
     )
 
 

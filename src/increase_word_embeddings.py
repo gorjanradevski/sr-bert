@@ -2,13 +2,12 @@ import argparse
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch import nn
 import logging
 
 from datasets import ClipartsDataset
 from modeling import ImageEmbeddingsGenerator
 
-from transformers import BertModel, BertTokenizer
+from transformers import BertModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
