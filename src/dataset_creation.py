@@ -9,6 +9,37 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def parse_relations(
+    abstract_scenes_path: str,
+    relations_file_name: str,
+    index2relations: Dict[int, str] = None,
+):
+    if index2relations is None:
+        index2relations = {}
+    with open(
+        os.path.join(
+            abstract_scenes_path,
+            os.path.join(
+                "SimpleSentences", os.path.join("tuples", relations_file_name)
+            ),
+        )
+    ) as relations:
+        for line in relations:
+            scene_index = int(line.split("\t")[0])
+            sentence_index = int(line.split("\t")[1])
+            if scene_index not in index2relations:
+                index2relations[scene_index] = {}
+            if sentence_index not in index2relations[scene_index]:
+                index2relations[scene_index][sentence_index] = []
+            relations = [
+                relation.rstrip("\n").rstrip().lower()
+                for relation in line.split("\t")[2:]
+            ]
+            index2relations[scene_index][sentence_index] += relations
+
+    return index2relations
+
+
 def parse_sentences(
     abstract_scenes_path: str,
     sententences_file_name: str,
@@ -26,13 +57,16 @@ def parse_sentences(
         for line in lines:
             if line == "\n":
                 continue
-            index = int(line.split("\t")[0])
-            if index not in index2sentences:
-                index2sentences[index] = []
+            scene_index = int(line.split("\t")[0])
+            sentence_index = int(line.split("\t")[1])
+            if scene_index not in index2sentences:
+                index2sentences[scene_index] = {}
+            if sentence_index not in index2sentences[scene_index]:
+                index2sentences[scene_index][sentence_index] = []
             sentence = line.split("\t")[-1].rstrip("\n").rstrip().lower()
             if not sentence.endswith((".", "!", "?", '"')):
                 sentence += "."
-            index2sentences[index].append(sentence)
+            index2sentences[scene_index][sentence_index].append(sentence)
 
     return index2sentences
 
@@ -49,6 +83,10 @@ def create_dataset(
     )
     index2sentences = parse_sentences(
         abstract_scenes_path, "SimpleSentences2_10020.txt", index2sentences
+    )
+    index2relations = parse_relations(abstract_scenes_path, "TuplesText1_10020.txt")
+    index2relations = parse_relations(
+        abstract_scenes_path, "TuplesText2_10020.txt", index2relations
     )
     index2scene = {}
     with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
@@ -77,6 +115,11 @@ def create_dataset(
     for index in index2scene.keys():
         if index in index2sentences:
             index2scene[index]["sentences"] = index2sentences[index]
+
+    # Combine the scenes and the relations
+    for index in index2scene.keys():
+        if index in index2relations:
+            index2scene[index]["relations"] = index2relations[index]
 
     dataset = [
         index2scene[index]

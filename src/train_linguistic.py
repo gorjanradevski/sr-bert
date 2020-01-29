@@ -2,15 +2,13 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
-import json
-from transformers import BertConfig
+from transformers import BertForMaskedLM
 
-from datasets import VisualScenesDataset, collate_pad_visual_batch
-from modeling import VisualBert
+from datasets import LinguisticScenesDataset, collate_pad_linguistic_batch
 
 
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +19,6 @@ def train(
     checkpoint_path: str,
     train_dataset_path: str,
     test_dataset_path: str,
-    visual2index_path: str,
     mask_probability: float,
     batch_size: int,
     learning_rate: float,
@@ -30,17 +27,15 @@ def train(
     save_model_path: str,
     intermediate_save_checkpoint_path: str,
 ):
-    # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
-    train_dataset = VisualScenesDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability
+    train_dataset = LinguisticScenesDataset(
+        train_dataset_path, mask_probability=mask_probability
     )
-    test_dataset = VisualScenesDataset(
-        test_dataset_path, visual2index, mask_probability=mask_probability
+    test_dataset = LinguisticScenesDataset(
+        test_dataset_path, mask_probability=mask_probability
     )
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(test_dataset)}")
@@ -53,21 +48,21 @@ def train(
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_visual_batch,
+        collate_fn=collate_pad_linguistic_batch,
     )
     val_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_visual_batch,
+        collate_fn=collate_pad_linguistic_batch,
         sampler=val_sampler,
     )
     # Define training specifics
-    model = nn.DataParallel(
-        VisualBert(BertConfig(vocab_size=len(visual2index) + 2))
-    ).to(device)
+    model = nn.DataParallel(BertForMaskedLM.from_pretrained("bert-base-uncased")).to(
+        device
+    )
     # Loss and optimizer
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
     best_val_loss = sys.maxsize
@@ -90,25 +85,21 @@ def train(
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for (
-                input_ids_visuals,
-                masked_lm_labels,
-                visual_positions,
-                attention_masks,
-            ) in train_loader:
+            for (input_ids, masked_lm_labels, attention_masks) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
-                    input_ids_visuals.to(device),
+                input_ids, masked_lm_labels, attention_masks = (
+                    input_ids.to(device),
                     masked_lm_labels.to(device),
-                    visual_positions.to(device),
                     attention_masks.to(device),
                 )
                 predictions = model(
-                    input_ids_visuals, visual_positions, attention_masks
+                    input_ids=input_ids, attention_mask=attention_masks
+                )[0]
+                predictions = predictions.view(
+                    -1, model.module.bert.embeddings.word_embeddings.num_embeddings
                 )
-                predictions = predictions.view(-1, len(visual2index) + 2)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 loss = criterion(predictions, masked_lm_labels)
                 # backward
@@ -127,22 +118,18 @@ def train(
             # Reset current loss
             cur_val_loss = 0
             for _ in tqdm(range(10)):
-                for (
-                    input_ids_visuals,
-                    masked_lm_labels,
-                    visual_positions,
-                    attention_masks,
-                ) in val_loader:
-                    input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
-                        input_ids_visuals.to(device),
+                for (input_ids, masked_lm_labels, attention_masks) in val_loader:
+                    input_ids, masked_lm_labels, attention_masks = (
+                        input_ids.to(device),
                         masked_lm_labels.to(device),
-                        visual_positions.to(device),
                         attention_masks.to(device),
                     )
                     predictions = model(
-                        input_ids_visuals, visual_positions, attention_masks
+                        input_ids=input_ids, attention_mask=attention_masks
+                    )[0]
+                    predictions = predictions.view(
+                        -1, model.module.bert.embeddings.word_embeddings.num_embeddings
                     )
-                    predictions = predictions.view(-1, len(visual2index) + 2)
                     masked_lm_labels = masked_lm_labels.view(-1)
                     loss = criterion(predictions, masked_lm_labels)
                     cur_val_loss += loss.item()
@@ -176,30 +163,24 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Trains a VisualBert model.")
+    parser = argparse.ArgumentParser(description="Trains a MultimodalBert model.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,
         default=None,
-        help="Checkpoint to a pretrained model.",
+        help="Checkpoint to a trained model.",
     )
     parser.add_argument(
         "--train_dataset_path",
         type=str,
         default="data/train_dataset.json",
-        help="Path to the train dataset mapping.",
+        help="Path to the train dataset.",
     )
     parser.add_argument(
         "--test_dataset_path",
         type=str,
         default="data/test_dataset.json",
         help="Path to the test dataset.",
-    )
-    parser.add_argument(
-        "--visual2index_path",
-        type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
         "--mask_probability", type=float, default=0.15, help="The mask probability."
@@ -217,13 +198,13 @@ def parse_args():
     parser.add_argument(
         "--save_model_path",
         type=str,
-        default="models/best.pt",
+        default="models/linguistic_best.pt",
         help="Where to save the model.",
     )
     parser.add_argument(
         "--intermediate_save_checkpoint_path",
         type=str,
-        default="models/intermediate.pt",
+        default="models/linguistic_intermediate.pt",
         help="Where to save the model.",
     )
 
@@ -236,7 +217,6 @@ def main():
         args.checkpoint_path,
         args.train_dataset_path,
         args.test_dataset_path,
-        args.visual2index_path,
         args.mask_probability,
         args.batch_size,
         args.learning_rate,
