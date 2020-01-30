@@ -4,6 +4,10 @@ import argparse
 import logging
 from typing import Dict
 from transformers import BertTokenizer
+from tqdm import tqdm
+import nltk
+from nltk.stem import PorterStemmer
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,7 +75,41 @@ def parse_sentences(
     return index2sentences
 
 
-def create_dataset(
+def reformat_dataset(old_dataset):
+    stemmer = PorterStemmer()
+    new_dataset = []
+    for scene in tqdm(old_dataset):
+        for sentence_index in scene["sentences"].keys():
+            if sentence_index in scene["relations"]:
+                relations = scene["relations"][sentence_index]
+                for sentence in scene["sentences"][sentence_index]:
+                    potential_masked_words = [
+                        word
+                        for word in nltk.word_tokenize(sentence)
+                        if stemmer.stem(word) in relations or word in relations
+                    ]
+                    for masked_word in potential_masked_words:
+                        test_sentence = []
+                        count = 0
+                        for word in nltk.word_tokenize(sentence):
+                            if word != masked_word:
+                                test_sentence.append(word)
+                            else:
+                                count += 1
+                                test_sentence.append("[MASK]")
+                        if count == 1:
+                            new_dataset.append(
+                                {
+                                    "sentence": " ".join(test_sentence),
+                                    "label": masked_word,
+                                    "relations": scene["relations"][sentence_index],
+                                    "elements": scene["elements"],
+                                }
+                            )
+    return new_dataset
+
+
+def create_datasets(
     dump_train_dataset_path: str,
     dump_test_dataset_path: str,
     dump_visual2index_path: str,
@@ -126,10 +164,15 @@ def create_dataset(
         for index in index2scene.keys()
         if "sentences" in index2scene[index]
     ]
+
+    train_dataset = dataset[:-test_size]
+    logger.info("Reformating test dataset...")
+    test_dataset = reformat_dataset(dataset[-test_size:])
+
     # Delete the scenes that have no sentence available
-    json.dump(dataset[:-test_size], open(dump_train_dataset_path, "w"))
+    json.dump(train_dataset, open(dump_train_dataset_path, "w"))
     logger.info(f"Train dataset dumped {dump_train_dataset_path}")
-    json.dump(dataset[-test_size:], open(dump_test_dataset_path, "w"))
+    json.dump(test_dataset, open(dump_test_dataset_path, "w"))
     logger.info(f"Test dataset dumped {dump_test_dataset_path}")
 
     # Dump visual2index json file
@@ -195,7 +238,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    create_dataset(
+    create_datasets(
         args.dump_train_dataset_path,
         args.dump_test_dataset_path,
         args.dump_visual2index_path,

@@ -5,7 +5,6 @@ import torch
 import os
 from PIL import Image
 import numpy as np
-import random
 from torchvision import transforms
 from typing import Tuple, List
 
@@ -71,7 +70,6 @@ class LinguisticScenesTrainDataset(TorchDataset, ScenesDataset):
         # Collect sentences
         nested_sentences = [sentences for sentences in scene["sentences"].values()]
         sentences = [sentence for sublist in nested_sentences for sentence in sublist]
-        random.shuffle(sentences)
         # Obtain sentences
         tokenized_sentences = self.tokenizer.encode(
             " ".join(sentences), add_special_tokens=True
@@ -165,8 +163,10 @@ class MultimodalScenesTrainDataset(TorchDataset, ScenesDataset):
         scene = self.dataset_file[idx]
         # Obtain sentences
         nested_sentences = [sentences for sentences in scene["sentences"].values()]
-        sentences = [sentence for sublist in nested_sentences for sentence in sublist]
-        random.shuffle(sentences)
+        all_sentences = np.array(
+            [sentence for sublist in nested_sentences for sentence in sublist]
+        )
+        sentences = np.random.choice(all_sentences, 3, replace=False)
         tokenized_sentence = self.tokenizer.encode(
             " ".join(sentences), add_special_tokens=True
         )
