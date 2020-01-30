@@ -112,6 +112,7 @@ def reformat_dataset(old_dataset):
 def create_datasets(
     dump_train_dataset_path: str,
     dump_test_dataset_path: str,
+    dump_reformated_test_dataset_path: str,
     dump_visual2index_path: str,
     abstract_scenes_path: str,
     test_size: int,
@@ -166,14 +167,17 @@ def create_datasets(
     ]
 
     train_dataset = dataset[:-test_size]
+    test_dataset = dataset[-test_size:]
     logger.info("Reformating test dataset...")
-    test_dataset = reformat_dataset(dataset[-test_size:])
+    test_dataset_reformated = reformat_dataset(test_dataset)
 
     # Delete the scenes that have no sentence available
     json.dump(train_dataset, open(dump_train_dataset_path, "w"))
     logger.info(f"Train dataset dumped {dump_train_dataset_path}")
     json.dump(test_dataset, open(dump_test_dataset_path, "w"))
     logger.info(f"Test dataset dumped {dump_test_dataset_path}")
+    json.dump(test_dataset_reformated, open(dump_reformated_test_dataset_path, "w"))
+    logger.info(f"Reformated test dataset dumped {dump_reformated_test_dataset_path}")
 
     # Dump visual2index json file
     if dump_visual2index_path is not None:
@@ -218,6 +222,12 @@ def parse_args():
         help="Where to dump the test dataset file.",
     )
     parser.add_argument(
+        "--dump_reformated_test_dataset_path",
+        type=str,
+        default="data/test_dataset_reformated.json",
+        help="Where to dump the reformated test dataset file.",
+    )
+    parser.add_argument(
         "--dump_visual2index_path",
         type=str,
         default=None,
@@ -241,6 +251,7 @@ def main():
     create_datasets(
         args.dump_train_dataset_path,
         args.dump_test_dataset_path,
+        args.dump_reformated_test_dataset_path,
         args.dump_visual2index_path,
         args.abstract_scenes_path,
         args.test_size,
