@@ -9,7 +9,7 @@ import logging
 import json
 from transformers import BertConfig
 
-from datasets import MultimodalScenesDataset, collate_pad_multimodal_batch
+from datasets import MultimodalScenesTrainDataset, collate_pad_multimodal_train_batch
 from modeling import MultiModalBert
 
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def train(
     checkpoint_path: str,
     train_dataset_path: str,
-    test_dataset_path: str,
+    val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
@@ -36,36 +36,36 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = MultimodalScenesDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = MultimodalScenesTrainDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    test_dataset = MultimodalScenesDataset(
-        test_dataset_path, visual2index, mask_probability=mask_probability, train=False
+    val_dataset = MultimodalScenesTrainDataset(
+        val_dataset_path, visual2index, mask_probability=mask_probability
     )
     logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(test_dataset)}")
+    logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(test_dataset)
+    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_multimodal_batch,
+        collate_fn=collate_pad_multimodal_train_batch,
     )
     val_loader = DataLoader(
-        test_dataset,
+        val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_multimodal_batch,
+        collate_fn=collate_pad_multimodal_train_batch,
         sampler=val_sampler,
     )
     # Define training specifics
     config = BertConfig()
     config.vocab_size += len(visual2index)
-    model = nn.DataParallel(MultiModalBert(load_embeddings_path, config, device)).to(
+    model = nn.DataParallel(MultiModalBert(config, device, load_embeddings_path)).to(
         device
     )
     # Loss and optimizer
@@ -208,10 +208,10 @@ def parse_args():
         help="Path to the train dataset.",
     )
     parser.add_argument(
-        "--test_dataset_path",
+        "--val_dataset_path",
         type=str,
-        default="data/test_dataset.json",
-        help="Path to the test dataset.",
+        default="data/val_dataset.json",
+        help="Path to the validation dataset.",
     )
     parser.add_argument(
         "--visual2index_path",
@@ -254,7 +254,7 @@ def parse_args():
         "--intermediate_save_checkpoint_path",
         type=str,
         default="models/multimodal_intermediate.pt",
-        help="Where to save the model.",
+        help="Where to save the intermediate checkpoint.",
     )
 
     return parser.parse_args()
@@ -265,7 +265,7 @@ def main():
     train(
         args.checkpoint_path,
         args.train_dataset_path,
-        args.test_dataset_path,
+        args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,

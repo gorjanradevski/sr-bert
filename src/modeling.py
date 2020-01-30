@@ -9,12 +9,16 @@ logger = logging.getLogger(__name__)
 
 
 class MultiModalBert(nn.Module):
-    def __init__(self, embeddings_path: str, config: BertConfig, device):
+    def __init__(self, config: BertConfig, device, embeddings_path: str = None):
         super(MultiModalBert, self).__init__()
-        self.embeddings = nn.Embedding.from_pretrained(
-            torch.load(embeddings_path, map_location=device),
-            freeze=False,
-            padding_idx=0,
+        self.embeddings = (
+            nn.Embedding.from_pretrained(
+                torch.load(embeddings_path, map_location=device),
+                freeze=False,
+                padding_idx=0,
+            )
+            if embeddings_path
+            else nn.Embedding(config.vocab_size, config.hidden_size)
         )
         self.visual_position_projector = nn.Linear(7, 768)
         self.bert = BertModel.from_pretrained("bert-base-uncased")

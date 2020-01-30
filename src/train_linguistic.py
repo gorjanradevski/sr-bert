@@ -8,7 +8,7 @@ import sys
 import logging
 from transformers import BertForMaskedLM
 
-from datasets import LinguisticScenesDataset, collate_pad_linguistic_batch
+from datasets import LinguisticScenesTrainDataset, collate_pad_linguistic_train_batch
 
 
 logging.basicConfig(level=logging.INFO)
@@ -31,30 +31,30 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
-    train_dataset = LinguisticScenesDataset(
+    train_dataset = LinguisticScenesTrainDataset(
         train_dataset_path, mask_probability=mask_probability
     )
-    test_dataset = LinguisticScenesDataset(
+    val_dataset = LinguisticScenesTrainDataset(
         test_dataset_path, mask_probability=mask_probability
     )
     logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(test_dataset)}")
+    logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(test_dataset)
+    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_linguistic_batch,
+        collate_fn=collate_pad_linguistic_train_batch,
     )
     val_loader = DataLoader(
-        test_dataset,
+        val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_linguistic_batch,
+        collate_fn=collate_pad_linguistic_train_batch,
         sampler=val_sampler,
     )
     # Define training specifics
@@ -177,10 +177,10 @@ def parse_args():
         help="Path to the train dataset.",
     )
     parser.add_argument(
-        "--test_dataset_path",
+        "--val_dataset_path",
         type=str,
-        default="data/test_dataset.json",
-        help="Path to the test dataset.",
+        default="data/val_dataset.json",
+        help="Path to the validation dataset.",
     )
     parser.add_argument(
         "--mask_probability", type=float, default=0.15, help="The mask probability."
@@ -205,7 +205,7 @@ def parse_args():
         "--intermediate_save_checkpoint_path",
         type=str,
         default="models/linguistic_intermediate.pt",
-        help="Where to save the model.",
+        help="Where to save the intermediate checkpoint.",
     )
 
     return parser.parse_args()

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def train(
     checkpoint_path: str,
     train_dataset_path: str,
-    test_dataset_path: str,
+    val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
@@ -39,14 +39,14 @@ def train(
     train_dataset = VisualScenesDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    test_dataset = VisualScenesDataset(
-        test_dataset_path, visual2index, mask_probability=mask_probability
+    val_dataset = VisualScenesDataset(
+        val_dataset_path, visual2index, mask_probability=mask_probability
     )
     logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(test_dataset)}")
+    logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(test_dataset)
+    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -56,7 +56,7 @@ def train(
         collate_fn=collate_pad_visual_batch,
     )
     val_loader = DataLoader(
-        test_dataset,
+        val_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_visual_batch,
@@ -187,13 +187,13 @@ def parse_args():
         "--train_dataset_path",
         type=str,
         default="data/train_dataset.json",
-        help="Path to the train dataset mapping.",
+        help="Path to the train dataset.",
     )
     parser.add_argument(
-        "--test_dataset_path",
+        "--val_dataset_path",
         type=str,
         default="data/test_dataset.json",
-        help="Path to the test dataset.",
+        help="Path to the validation dataset.",
     )
     parser.add_argument(
         "--visual2index_path",
@@ -224,7 +224,7 @@ def parse_args():
         "--intermediate_save_checkpoint_path",
         type=str,
         default="models/intermediate.pt",
-        help="Where to save the model.",
+        help="Where to save the intermediate checkpoint.",
     )
 
     return parser.parse_args()
@@ -235,7 +235,7 @@ def main():
     train(
         args.checkpoint_path,
         args.train_dataset_path,
-        args.test_dataset_path,
+        args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,
