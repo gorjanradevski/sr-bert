@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 def train(
     checkpoint_path: str,
-    train_dataset_path: str,
-    val_dataset_path: str,
+    dataset_path: str,
+    val_size: int,
     visual2index_path: str,
     mask_probability: float,
     batch_size: int,
@@ -36,12 +36,11 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = MultimodalScenesTrainDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability
+    dataset = MultimodalScenesTrainDataset(
+        dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = MultimodalScenesTrainDataset(
-        val_dataset_path, visual2index, mask_probability=mask_probability
-    )
+    train_dataset = Subset(dataset, list(range(0, len(dataset) - val_size)))
+    val_dataset = Subset(dataset, list(range(len(dataset) - val_size, len(dataset))))
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
@@ -202,27 +201,18 @@ def parse_args():
         help="Checkpoint to a trained model.",
     )
     parser.add_argument(
-        "--train_dataset_path",
+        "--dataset_path",
         type=str,
         default="data/train_dataset.json",
         help="Path to the train dataset.",
     )
     parser.add_argument(
-        "--val_dataset_path",
-        type=str,
-        default="data/val_dataset.json",
-        help="Path to the validation dataset.",
+        "--val_size", type=int, default=500, help="Size of the validation set."
     )
     parser.add_argument(
         "--visual2index_path",
         type=str,
         default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
-    )
-    parser.add_argument(
-        "--val_size",
-        type=int,
-        default=1000,
         help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
@@ -239,7 +229,7 @@ def parse_args():
         help="From where to load the embeddings.",
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=2e-5, help="The learning rate."
+        "--learning_rate", type=float, default=1e-5, help="The learning rate."
     )
     parser.add_argument(
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
@@ -264,8 +254,8 @@ def main():
     args = parse_args()
     train(
         args.checkpoint_path,
-        args.train_dataset_path,
-        args.val_dataset_path,
+        args.dataset_path,
+        args.val_size,
         args.visual2index_path,
         args.mask_probability,
         args.batch_size,

@@ -10,7 +10,8 @@ from transformers import BertTokenizer, BertConfig
 from modeling import MultiModalBert
 
 from datasets import (
-    MultimodalScenesInferenceDataset,
+    MultimodalScenesInferenceVisualDataset,
+    MultimodalScenesInferenceLinguisticDataset,
     collate_pad_multimodal_inference_batch,
 )
 
@@ -33,10 +34,27 @@ def evaluate_batch(
     return np.count_nonzero(output_ids == labels)
 
 
+def dataset_factory(
+    evaluation_type: str, test_dataset_path: str, visual2index, use_other_modality: bool
+):
+    if evaluation_type == "linguistic":
+        return MultimodalScenesInferenceLinguisticDataset(
+            test_dataset_path, visual2index, use_other_modality
+        )
+    elif evaluation_type == "visual":
+        return MultimodalScenesInferenceVisualDataset(
+            test_dataset_path, visual2index, use_other_modality
+        )
+    else:
+        raise ValueError(f"Evaluation type {evaluation_type} not recognized!")
+
+
 def inference(
+    evaluation_type: str,
     checkpoint_path: str,
     test_dataset_path: str,
     visual2index_path: str,
+    use_other_modality: bool,
     batch_size: int,
 ):
     # Check for CUDA
@@ -44,8 +62,12 @@ def inference(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    test_dataset = MultimodalScenesInferenceDataset(test_dataset_path, visual2index)
+    test_dataset = dataset_factory(
+        evaluation_type, test_dataset_path, visual2index, use_other_modality
+    )
     logger.info(f"Testing on on {len(test_dataset)}")
+    logger.warning(f"Evaluation type is: {evaluation_type}")
+    logger.warning(f"The use of other modality is: {use_other_modality}")
     # Create samplers
     test_sampler = SequentialSampler(test_dataset)
     # Create loaders
@@ -61,7 +83,7 @@ def inference(
     config = BertConfig()
     config.vocab_size += len(visual2index)
     model = nn.DataParallel(MultiModalBert(config, device)).to(device)
-    # model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     # Set model in evaluation mode
     model.train(False)
     total = 0
@@ -111,6 +133,12 @@ def parse_args():
         description="Performs inference with a multi-modal model."
     )
     parser.add_argument(
+        "--evaluation_type",
+        type=str,
+        default="linguistic",
+        help="The evaluation type: linguistic or visual",
+    )
+    parser.add_argument(
         "--checkpoint_path",
         type=str,
         default="models/multimodal_best_full_masking.pt",
@@ -129,6 +157,11 @@ def parse_args():
         help="Path to the visual2index file.",
     )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
+    parser.add_argument(
+        "--use_other_modality",
+        action="store_true",
+        help="Whether to do inference using the linguistic input",
+    )
 
     return parser.parse_args()
 
@@ -136,9 +169,11 @@ def parse_args():
 def main():
     args = parse_args()
     inference(
+        args.evaluation_type,
         args.checkpoint_path,
         args.test_dataset_path,
         args.visual2index_path,
+        args.use_other_modality,
         args.batch_size,
     )
 

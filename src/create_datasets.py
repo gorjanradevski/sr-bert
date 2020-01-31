@@ -75,7 +75,7 @@ def parse_sentences(
     return index2sentences
 
 
-def reformat_dataset(old_dataset):
+def reformat_lingustic_dataset(old_dataset):
     stemmer = PorterStemmer()
     new_dataset = []
     for scene in tqdm(old_dataset):
@@ -109,10 +109,30 @@ def reformat_dataset(old_dataset):
     return new_dataset
 
 
+def reformat_visual_dataset(old_dataset):
+    new_dataset = []
+    for scene in tqdm(old_dataset):
+        for i in range(len(scene["elements"])):
+            new_scene = {"elements": [], "sentences": scene["sentences"]}
+            for j, element in enumerate(scene["elements"]):
+                new_element = {
+                    "visual_name": element["visual_name"] if i != j else "[MASK]",
+                    "x": element["x"],
+                    "y": element["y"],
+                    "z": element["z"],
+                    "flip": element["flip"],
+                }
+                new_scene["elements"].append(new_element)
+            new_scene["label"] = scene["elements"][i]
+            new_dataset.append(new_scene)
+    return new_dataset
+
+
 def create_datasets(
     dump_train_dataset_path: str,
     dump_test_dataset_path: str,
-    dump_reformated_test_dataset_path: str,
+    dump_reformated_linguistic_test_dataset_path: str,
+    dump_reformated_visual_test_dataset_path: str,
     dump_visual2index_path: str,
     abstract_scenes_path: str,
     test_size: int,
@@ -169,15 +189,28 @@ def create_datasets(
     train_dataset = dataset[:-test_size]
     test_dataset = dataset[-test_size:]
     logger.info("Reformating test dataset...")
-    test_dataset_reformated = reformat_dataset(test_dataset)
+    test_linguistic_dataset_reformated = reformat_lingustic_dataset(test_dataset)
+    test_visual_dataset_reformated = reformat_visual_dataset(test_dataset)
 
     # Delete the scenes that have no sentence available
     json.dump(train_dataset, open(dump_train_dataset_path, "w"))
     logger.info(f"Train dataset dumped {dump_train_dataset_path}")
     json.dump(test_dataset, open(dump_test_dataset_path, "w"))
     logger.info(f"Test dataset dumped {dump_test_dataset_path}")
-    json.dump(test_dataset_reformated, open(dump_reformated_test_dataset_path, "w"))
-    logger.info(f"Reformated test dataset dumped {dump_reformated_test_dataset_path}")
+    json.dump(
+        test_linguistic_dataset_reformated,
+        open(dump_reformated_linguistic_test_dataset_path, "w"),
+    )
+    logger.info(
+        f"Reformated linguistic test dataset dumped {dump_reformated_linguistic_test_dataset_path}"
+    )
+    json.dump(
+        test_visual_dataset_reformated,
+        open(dump_reformated_visual_test_dataset_path, "w"),
+    )
+    logger.info(
+        f"Reformated visual test dataset dumped {dump_reformated_visual_test_dataset_path}"
+    )
 
     # Dump visual2index json file
     if dump_visual2index_path is not None:
@@ -222,10 +255,16 @@ def parse_args():
         help="Where to dump the test dataset file.",
     )
     parser.add_argument(
-        "--dump_reformated_test_dataset_path",
+        "--dump_reformated_visual_test_dataset_path",
         type=str,
-        default="data/test_dataset_reformated.json",
-        help="Where to dump the reformated test dataset file.",
+        default="data/test_dataset_reformated_visual.json",
+        help="Where to dump the reformated visual test dataset file.",
+    )
+    parser.add_argument(
+        "--dump_reformated_linguistic_test_dataset_path",
+        type=str,
+        default="data/test_dataset_reformated_linguistic.json",
+        help="Where to dump the reformated linguistic test dataset file.",
     )
     parser.add_argument(
         "--dump_visual2index_path",
@@ -251,7 +290,8 @@ def main():
     create_datasets(
         args.dump_train_dataset_path,
         args.dump_test_dataset_path,
-        args.dump_reformated_test_dataset_path,
+        args.dump_reformated_linguistic_test_dataset_path,
+        args.dump_reformated_visual_test_dataset_path,
         args.dump_visual2index_path,
         args.abstract_scenes_path,
         args.test_size,

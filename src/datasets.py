@@ -215,10 +215,11 @@ class MultimodalScenesTrainDataset(TorchDataset, ScenesDataset):
         )
 
 
-class MultimodalScenesInferenceDataset(TorchDataset, ScenesDataset):
-    def __init__(self, dataset_file_path: str, visual2index: str):
+class MultimodalScenesInferenceLinguisticDataset(TorchDataset, ScenesDataset):
+    def __init__(self, dataset_file_path: str, visual2index: str, use_visuals: bool):
         super().__init__(dataset_file_path)
         self.visual2index = visual2index
+        self.use_visuals = use_visuals
 
     def __len__(self):
         return super().__len__()
@@ -232,10 +233,75 @@ class MultimodalScenesInferenceDataset(TorchDataset, ScenesDataset):
             self.tokenizer.encode(scene["label"], add_special_tokens=False)
         )[0]
         # Prepare visuals
+        if self.use_visuals:
+            tokenized_visuals = [
+                self.visual2index[element["visual_name"]]
+                for element in scene["elements"]
+            ]
+        else:
+            tokenized_visuals = []
+        tokenized_visuals.append(self.tokenizer.sep_token_id)
+        # Obtain Z-indexes
+        if self.use_visuals:
+            z_indexes = np.array([element["z"] for element in scene["elements"]])
+            z_onehot = np.zeros((z_indexes.size, 3))
+            z_onehot[np.arange(z_indexes.size), z_indexes] = 1
+            # Obtain flips
+            flips = np.array([element["flip"] for element in scene["elements"]])
+            flips_onehot = np.zeros((flips.size, 2))
+            flips_onehot[np.arange(flips.size), flips] = 1
+            # Obtain and normalize visual positions
+            visual_positions = [
+                [element["x"] / MAX_X, element["y"] / MAX_Y] + z_index + flip
+                for element, z_index, flip in zip(
+                    scene["elements"], z_onehot.tolist(), flips_onehot.tolist()
+                )
+            ]
+        else:
+            visual_positions = []
+        visual_positions.append([-1.0, -1.0, -1, -1, -1, -1, -1])
+
+        return (
+            input_ids_sentence,
+            torch.tensor(tokenized_visuals),
+            torch.tensor(visual_positions),
+            input_id_label,
+        )
+
+
+class MultimodalScenesInferenceVisualDataset(TorchDataset, ScenesDataset):
+    def __init__(self, dataset_file_path: str, visual2index: str, use_linguistic: bool):
+        super().__init__(dataset_file_path)
+        self.visual2index = visual2index
+        self.use_linguistic = use_linguistic
+
+    def __len__(self):
+        return super().__len__()
+
+    def __getitem__(self, idx: int):
+        # Obtain elements
+        scene = self.dataset_file[idx]
+        # Obtain sentences
+        if self.use_linguistic:
+            nested_sentences = [sentences for sentences in scene["sentences"].values()]
+            all_sentences = [
+                sentence for sublist in nested_sentences for sentence in sublist
+            ]
+            tokenized_sentence = self.tokenizer.encode(
+                " ".join(all_sentences), add_special_tokens=True
+            )
+        else:
+            tokenized_sentence = self.tokenizer.encode("[CLS] [SEP]")
+        input_ids_sentence = torch.tensor(tokenized_sentence)
+        # Prepare visuals
         tokenized_visuals = [
-            self.visual2index[element["visual_name"]] for element in scene["elements"]
+            self.visual2index[element["visual_name"]]
+            if element["visual_name"] in self.visual2index
+            else self.tokenizer.mask_token_id
+            for element in scene["elements"]
         ]
         tokenized_visuals.append(self.tokenizer.sep_token_id)
+        input_ids_visuals = torch.tensor(tokenized_visuals)
         # Obtain Z-indexes
         z_indexes = np.array([element["z"] for element in scene["elements"]])
         z_onehot = np.zeros((z_indexes.size, 3))
@@ -253,11 +319,13 @@ class MultimodalScenesInferenceDataset(TorchDataset, ScenesDataset):
         ]
         visual_positions.append([-1, -1, -1, -1, -1, -1, -1])
 
+        label = torch.tensor(self.visual2index[scene["label"]["visual_name"]])
+
         return (
             input_ids_sentence,
-            torch.tensor(tokenized_visuals),
+            input_ids_visuals,
             torch.tensor(visual_positions),
-            input_id_label,
+            label,
         )
 
 
