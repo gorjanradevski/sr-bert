@@ -67,7 +67,8 @@ def train(
         VisualBert(BertConfig(vocab_size=len(visual2index) + 2))
     ).to(device)
     # Loss and optimizer
-    criterion = nn.NLLLoss()
+    class_criterion = nn.NLLLoss()
+    reg_criterion = nn.MSELoss(reduction="none")
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
     best_val_loss = sys.maxsize
@@ -94,24 +95,44 @@ def train(
                 input_ids_visuals,
                 masked_lm_labels,
                 visual_positions,
-                attention_masks,
+                visual_pos_maps,
+                visual_depth_maps,
+                visual_flip_maps,
+                general_mask,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
+                input_ids_visuals, masked_lm_labels, visual_positions, visual_pos_maps, visual_depth_maps, visual_flip_maps, general_mask = (
                     input_ids_visuals.to(device),
                     masked_lm_labels.to(device),
                     visual_positions.to(device),
-                    attention_masks.to(device),
+                    visual_pos_maps.to(device),
+                    visual_depth_maps.to(device),
+                    visual_flip_maps.to(device),
+                    general_mask.to(device),
                 )
-                predictions = model(
-                    input_ids_visuals, visual_positions, attention_masks
+                pred_mlm, pred_pos, pred_depth, pred_flip = model(
+                    input_ids_visuals, visual_positions, general_mask
                 )
-                predictions = predictions.view(-1, len(visual2index) + 2)
+                # Get MLM loss
+                pred_mlm = pred_mlm.view(-1, len(visual2index) + 2)
                 masked_lm_labels = masked_lm_labels.view(-1)
-                loss = criterion(predictions, masked_lm_labels)
-                # backward
+                mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
+                # Get pos loss
+                pos_loss = reg_criterion(
+                    pred_pos, visual_pos_maps
+                ) * general_mask.unsqueeze(-1)
+                pos_loss = pos_loss.mean()
+                # Get depth and flip loss
+                pred_depth = pred_depth.view(-1, 3)
+                visual_depth_maps = visual_depth_maps.view(-1)
+                depth_loss = class_criterion(pred_depth, visual_depth_maps)
+                pred_flip = pred_flip.view(-1, 2)
+                visual_flip_maps = visual_flip_maps.view(-1)
+                flip_loss = class_criterion(pred_flip, visual_flip_maps)
+                # Comibine losses and backward
+                loss = mlm_loss + pos_loss + depth_loss + flip_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -131,20 +152,42 @@ def train(
                     input_ids_visuals,
                     masked_lm_labels,
                     visual_positions,
-                    attention_masks,
+                    visual_pos_maps,
+                    visual_depth_maps,
+                    visual_flip_maps,
+                    general_mask,
                 ) in val_loader:
-                    input_ids_visuals, masked_lm_labels, visual_positions, attention_masks = (
+                    # forward
+                    input_ids_visuals, masked_lm_labels, visual_positions, visual_pos_maps, visual_depth_maps, visual_flip_maps, general_mask = (
                         input_ids_visuals.to(device),
                         masked_lm_labels.to(device),
                         visual_positions.to(device),
-                        attention_masks.to(device),
+                        visual_pos_maps.to(device),
+                        visual_depth_maps.to(device),
+                        visual_flip_maps.to(device),
+                        general_mask.to(device),
                     )
-                    predictions = model(
-                        input_ids_visuals, visual_positions, attention_masks
+                    pred_mlm, pred_pos, pred_depth, pred_flip = model(
+                        input_ids_visuals, visual_positions, general_mask
                     )
-                    predictions = predictions.view(-1, len(visual2index) + 2)
+                    # Get MLM loss
+                    pred_mlm = pred_mlm.view(-1, len(visual2index) + 2)
                     masked_lm_labels = masked_lm_labels.view(-1)
-                    loss = criterion(predictions, masked_lm_labels)
+                    mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
+                    # Get pos loss
+                    pos_loss = reg_criterion(
+                        pred_pos, visual_pos_maps
+                    ) * general_mask.unsqueeze(-1)
+                    pos_loss = pos_loss.mean()
+                    # Get depth and flip loss
+                    pred_depth = pred_depth.view(-1, 3)
+                    visual_depth_maps = visual_depth_maps.view(-1)
+                    depth_loss = class_criterion(pred_depth, visual_depth_maps)
+                    pred_flip = pred_flip.view(-1, 2)
+                    visual_flip_maps = visual_flip_maps.view(-1)
+                    flip_loss = class_criterion(pred_flip, visual_flip_maps)
+                    # Comibine losses and backward
+                    loss = mlm_loss + pos_loss + depth_loss + flip_loss
                     cur_val_loss += loss.item()
 
             cur_val_loss /= 10

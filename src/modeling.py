@@ -1,7 +1,7 @@
 from torch import nn
 import torch
 from torchvision.models import resnet152
-from transformers import BertConfig, BertModel, BertOnlyMLMHead, BertForMaskedLM
+from transformers import BertConfig, BertModel, BertOnlyMLMHead
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -56,18 +56,35 @@ class VisualBert(nn.Module):
     def __init__(self, config: BertConfig):
         super(VisualBert, self).__init__()
         self.visual_position_projector = nn.Linear(7, 768)
-        self.bert = BertForMaskedLM(config)
+        self.bert = BertModel(config)
+        self.mlm_head = BertOnlyMLMHead(config)
+        # Change config for the flip and position
+        config.vocab_size = 2
+        self.flip_head = BertOnlyMLMHead(config)
+        self.pos_head = BertOnlyMLMHead(config)
+        # Change config for the depth
+        config.vocab_size = 3
+        self.depth_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=2)
 
     def forward(self, vis_input_ids, visual_positions, attention_mask=None):
         vis_pos_embeddings = self.visual_position_projector(visual_positions)
-        outputs = self.bert(
+        sequence_output = self.bert(
             input_ids=vis_input_ids,
             position_embeddings=vis_pos_embeddings,
             attention_mask=attention_mask,
         )[0]
+        prediction_scores = self.mlm_head(sequence_output)
+        flip_scores = self.flip_head(sequence_output)
+        depth_scores = self.depth_head(sequence_output)
+        pos_scores = self.pos_head(sequence_output)
 
-        return self.log_softmax(outputs)
+        return (
+            self.log_softmax(prediction_scores),
+            pos_scores,
+            self.log_softmax(depth_scores),
+            self.log_softmax(flip_scores),
+        )
 
 
 class ImageEmbeddingsGenerator(nn.Module):
