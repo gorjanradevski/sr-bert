@@ -63,8 +63,9 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
+    # TODO: +2
     model = nn.DataParallel(
-        VisualBert(BertConfig(vocab_size=len(visual2index) + 2))
+        VisualBert(BertConfig(vocab_size=len(visual2index) + 3))
     ).to(device)
     # Loss and optimizer
     class_criterion = nn.NLLLoss()
@@ -116,7 +117,7 @@ def train(
                     input_ids_visuals, visual_positions, general_mask
                 )
                 # Get MLM loss
-                pred_mlm = pred_mlm.view(-1, len(visual2index) + 2)
+                pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
                 masked_lm_labels = masked_lm_labels.view(-1)
                 mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                 # Get pos loss
