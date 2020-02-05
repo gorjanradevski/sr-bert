@@ -52,6 +52,65 @@ class MultiModalBert(nn.Module):
         return self.log_softmax(prediction_scores)
 
 
+class Text2VisualBert(nn.Module):
+    def __init__(self, config: BertConfig, device, embeddings_path: str = None):
+        super(Text2VisualBert, self).__init__()
+        self.cliparts_embeddings = nn.Embedding.from_pretrained(
+            torch.load(embeddings_path, map_location=device),
+            freeze=False,
+            padding_idx=0,
+        )
+        self.visual_position_projector = nn.Linear(7, 768)
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
+        self.mlm_head = BertOnlyMLMHead(config)
+        # Change config for the flip and position
+        config.vocab_size = 2
+        self.flip_head = BertOnlyMLMHead(config)
+        self.pos_head = BertOnlyMLMHead(config)
+        # Change config for the depth
+        config.vocab_size = 3
+        self.depth_head = BertOnlyMLMHead(config)
+        self.log_softmax = nn.LogSoftmax(dim=2)
+        self.device = device
+
+    def forward(
+        self,
+        input_ids_sen,
+        input_ids_vis,
+        text_positions,
+        visual_positions,
+        token_type_ids,
+        attention_mask=None,
+    ):
+        word_embeddings = self.bert.embeddings.word_embeddings(input_ids_sen)
+        vis_embeddings = self.cliparts_embeddings(input_ids_vis)
+        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1).to(
+            self.device
+        )
+        text_pos_embeddings = self.bert.embeddings.position_embeddings(text_positions)
+        vis_pos_embeddings = self.visual_position_projector(visual_positions)
+        position_embeddings = torch.cat(
+            [text_pos_embeddings, vis_pos_embeddings], dim=1
+        ).to(self.device)
+        sequence_output = self.bert(
+            inputs_embeds=input_embeddings,
+            position_embeddings=position_embeddings,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+        )[0]
+        prediction_scores = self.mlm_head(sequence_output)
+        flip_scores = self.flip_head(sequence_output)
+        depth_scores = self.depth_head(sequence_output)
+        pos_scores = self.pos_head(sequence_output)
+
+        return (
+            self.log_softmax(prediction_scores),
+            pos_scores,
+            self.log_softmax(depth_scores),
+            self.log_softmax(flip_scores),
+        )
+
+
 class VisualBert(nn.Module):
     def __init__(self, config: BertConfig):
         super(VisualBert, self).__init__()

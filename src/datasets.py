@@ -201,6 +201,117 @@ class VisualScenesDataset(TorchDataset):
         )
 
 
+class Text2VisualDataset(TorchDataset):
+    def __init__(
+        self, dataset_file_path: str, visual2index: str, mask_probability: float
+    ):
+        self.dataset_file = json.load(open(dataset_file_path))
+        self.visual2index = visual2index
+        self.mask_probability = mask_probability
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+
+    def masking(self, visuals, visual_positions, low, high):
+        # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
+        labels = visuals.clone()
+        visual_pos_maps = visual_positions[:, :2].clone()
+        visual_dep_map = torch.max(visual_positions[:, 2:5].clone(), dim=1)[1]
+        visual_flip_map = torch.max(visual_positions[:, 5:].clone(), dim=1)[1]
+        # Get probability matrix
+        probability_matrix = torch.full(labels.shape, self.mask_probability)
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+        labels[~masked_indices] = -100  # We only compute loss on masked tokens
+        # We compute the loss for the unmasked flips and depths. For the masked visuals,
+        # we keep the actual encoding as a label and an input to have a trivial
+        # solution. For the unmasked ones, we change to [-1, -1] to find the actual
+        # prediction.
+        visual_positions[~masked_indices, 2:] = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
+        visual_positions[~masked_indices, :2] = torch.tensor([-1.0, -1.0])
+        # For the depths and the flips we don't want to compute the loss for the masked
+        # elements.
+        visual_dep_map[masked_indices] = -100
+        visual_flip_map[masked_indices] = -100
+
+        # 80% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        indices_replaced = (
+            torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+        )
+        visuals[indices_replaced] = VISUAL_MASK_TOKEN
+
+        # 10% of the time, we replace masked input tokens with random word
+        indices_random = (
+            torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
+            & masked_indices
+            & ~indices_replaced
+        )
+        random_words = torch.randint(
+            low=low, high=high, size=labels.shape, dtype=torch.long
+        )
+        visuals[indices_random] = random_words[indices_random]
+        # The rest of the time (10% of the time) we keep the masked input tokens unchanged
+
+        return (
+            visuals,
+            labels,
+            visual_positions,
+            visual_pos_maps,
+            visual_dep_map,
+            visual_flip_map,
+        )
+
+    def __len__(self):
+        return len(self.dataset_file)
+
+    def __getitem__(self, idx: int):
+        # Obtain elements
+        scene = self.dataset_file[idx]
+        # Prepare sentences
+        nested_sentences = [sentences for sentences in scene["sentences"].values()]
+        all_sentences = np.array(
+            [sentence for sublist in nested_sentences for sentence in sublist]
+        )
+        tokenized_sentence = self.tokenizer.encode(
+            " ".join(all_sentences), add_special_tokens=True
+        )
+        input_ids_sentence = torch.tensor(tokenized_sentence)
+        # Prepare visuals
+        tokenized_visuals = [
+            self.visual2index[element["visual_name"]] for element in scene["elements"]
+        ]
+        # Obtain Z-indexes
+        z_indexes = np.array([element["z"] for element in scene["elements"]])
+        z_onehot = np.zeros((z_indexes.size, 3))
+        z_onehot[np.arange(z_indexes.size), z_indexes] = 1
+        # Obtain flips
+        flips = np.array([element["flip"] for element in scene["elements"]])
+        flips_onehot = np.zeros((flips.size, 2))
+        flips_onehot[np.arange(flips.size), flips] = 1
+        # Obtain and normalize visual positions
+        visual_positions = [
+            [element["x"] / MAX_X, element["y"] / MAX_Y] + z_index + flip
+            for element, z_index, flip in zip(
+                scene["elements"], z_onehot.tolist(), flips_onehot.tolist()
+            )
+        ]
+
+        # Mask visual tokens
+        input_ids_visuals, masked_lm_labels_visuals, visual_pos, visual_pos_maps, visual_dep_map, visual_flip_map, = self.masking(
+            torch.tensor(tokenized_visuals),
+            torch.tensor(visual_positions),
+            low=2,
+            high=len(self.visual2index) + 2,
+        )
+
+        return (
+            input_ids_sentence,
+            input_ids_visuals,
+            masked_lm_labels_visuals,
+            visual_pos,
+            visual_pos_maps,
+            visual_dep_map,
+            visual_flip_map,
+        )
+
+
 class MultimodalScenesTrainDataset(TorchDataset, ScenesDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: str, mask_probability: float
@@ -487,6 +598,82 @@ def collate_pad_visual_batch(
         visual_pos_maps,
         visual_depth_maps,
         visual_flip_maps,
+        general_mask,
+    )
+
+
+def collate_pad_text2visual_batch(
+    batch: Tuple[
+        List[torch.Tensor],
+        List[torch.Tensor],
+        List[torch.Tensor],
+        List[torch.Tensor],
+        List[torch.tensor],
+        List[torch.tensor],
+        List[torch.tensor],
+    ]
+):
+    input_ids_sentence, input_ids_visuals, masked_lm_labels_visuals, visual_positions, visual_pos_maps, visual_depth_maps, visual_flip_maps = zip(
+        *batch
+    )
+    # Get max text length to get the text positions
+    max_text_length = max([element.size()[0] for element in input_ids_sentence])
+    text_positions = torch.arange(max_text_length, dtype=torch.long)
+    # Pad the sentences
+    input_ids_sentence = torch.nn.utils.rnn.pad_sequence(
+        input_ids_sentence, batch_first=True
+    )
+    # Obtain the text positions
+    text_positions = text_positions.unsqueeze(0).expand(input_ids_sentence.size())
+    # Pad the visuals
+    input_ids_visuals = torch.nn.utils.rnn.pad_sequence(
+        input_ids_visuals, batch_first=True
+    )
+    # Pad the visual labels
+    masked_lm_labels_visuals = torch.nn.utils.rnn.pad_sequence(
+        masked_lm_labels_visuals, batch_first=True, padding_value=-100
+    )
+    # Pad all visual position stuff
+    visual_positions = torch.nn.utils.rnn.pad_sequence(
+        visual_positions, batch_first=True, padding_value=-1
+    )
+    visual_pos_maps = torch.nn.utils.rnn.pad_sequence(
+        visual_pos_maps, batch_first=True, padding_value=-1
+    )
+    visual_depth_maps = torch.nn.utils.rnn.pad_sequence(
+        visual_depth_maps, batch_first=True, padding_value=-100
+    )
+    visual_flip_maps = torch.nn.utils.rnn.pad_sequence(
+        visual_flip_maps, batch_first=True, padding_value=-100
+    )
+    # Obtain general mask (Also used as an attention mask)
+    general_mask = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
+    general_mask[torch.where(general_mask > 0)] = 1
+    # Prepare masked labels
+    labels_text = torch.ones_like(input_ids_sentence) * -100
+    labels_text_pos = torch.ones(input_ids_sentence.size()[0], input_ids_sentence.size()[1], 2)
+    masked_lm_labels = torch.cat(
+        [labels_text, masked_lm_labels_visuals], dim=1
+    )
+    token_type_ids = torch.cat(
+        [torch.zeros_like(input_ids_sentence), torch.ones_like(input_ids_visuals)],
+        dim=1,
+    )
+    # Extend the visual positions and the rest separately
+    visual_pos_maps = torch.cat([labels_text_pos, visual_pos_maps], dim=1)
+    visual_depth_maps = torch.cat([labels_text, visual_depth_maps], dim=1)
+    visual_flip_maps = torch.cat([labels_text, visual_flip_maps], dim=1)
+
+    return (
+        input_ids_sentence,
+        input_ids_visuals,
+        masked_lm_labels,
+        text_positions,
+        visual_positions,
+        visual_pos_maps,
+        visual_depth_maps,
+        visual_flip_maps,
+        token_type_ids,
         general_mask,
     )
 
