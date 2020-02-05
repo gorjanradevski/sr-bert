@@ -105,12 +105,13 @@ def train(
                 vis_dep_maps,
                 vis_flip_maps,
                 t_type_ids,
-                g_mask,
+                a_mask,
+                l_mask,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                in_ids_sen, in_ids_vis, labels, text_pos, vis_pos, vis_pos_maps, vis_dep_maps, vis_flip_maps, t_type_ids, g_mask = (
+                in_ids_sen, in_ids_vis, labels, text_pos, vis_pos, vis_pos_maps, vis_dep_maps, vis_flip_maps, t_type_ids, a_mask, l_mask = (
                     in_ids_sen.to(device),
                     in_ids_vis.to(device),
                     labels.to(device),
@@ -120,17 +121,18 @@ def train(
                     vis_dep_maps.to(device),
                     vis_flip_maps.to(device),
                     t_type_ids.to(device),
-                    g_mask.to(device),
+                    a_mask.to(device),
+                    l_mask.to(device),
                 )
                 pred_mlm, pred_pos, pred_depth, pred_flip = model(
-                    in_ids_sen, in_ids_vis, text_pos, vis_pos, t_type_ids, g_mask
+                    in_ids_sen, in_ids_vis, text_pos, vis_pos, t_type_ids, a_mask
                 )
                 # Get MLM loss
                 pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
                 masked_lm_labels = labels.view(-1)
                 mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                 # Get pos loss
-                pos_loss = reg_criterion(pred_pos, vis_pos_maps) * g_mask.unsqueeze(-1)
+                pos_loss = reg_criterion(pred_pos, vis_pos_maps) * l_mask.unsqueeze(-1)
                 pos_loss = pos_loss.mean()
                 # Get depth and flip loss
                 pred_depth = pred_depth.view(-1, 3)
@@ -166,10 +168,11 @@ def train(
                     vis_dep_maps,
                     vis_flip_maps,
                     t_type_ids,
-                    g_mask,
+                    a_mask,
+                    l_mask,
                 ) in val_loader:
                     # forward
-                    in_ids_sen, in_ids_vis, labels, text_pos, vis_pos, vis_pos_maps, vis_dep_maps, vis_flip_maps, t_type_ids, g_mask = (
+                    in_ids_sen, in_ids_vis, labels, text_pos, vis_pos, vis_pos_maps, vis_dep_maps, vis_flip_maps, t_type_ids, a_mask, l_mask = (
                         in_ids_sen.to(device),
                         in_ids_vis.to(device),
                         labels.to(device),
@@ -179,17 +182,18 @@ def train(
                         vis_dep_maps.to(device),
                         vis_flip_maps.to(device),
                         t_type_ids.to(device),
-                        g_mask.to(device),
+                        a_mask.to(device),
+                        l_mask.to(device),
                     )
                     pred_mlm, pred_pos, pred_depth, pred_flip = model(
-                        in_ids_sen, in_ids_vis, text_pos, vis_pos, t_type_ids, g_mask
+                        in_ids_sen, in_ids_vis, text_pos, vis_pos, t_type_ids, a_mask
                     )
                     # Get MLM loss
                     pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
                     masked_lm_labels = labels.view(-1)
                     mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                     # Get pos loss
-                    pos_loss = reg_criterion(pred_pos, vis_pos_maps) * g_mask.unsqueeze(
+                    pos_loss = reg_criterion(pred_pos, vis_pos_maps) * l_mask.unsqueeze(
                         -1
                     )
                     pos_loss = pos_loss.mean()

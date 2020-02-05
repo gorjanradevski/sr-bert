@@ -647,14 +647,14 @@ def collate_pad_text2visual_batch(
         visual_flip_maps, batch_first=True, padding_value=-100
     )
     # Obtain general mask (Also used as an attention mask)
-    general_mask = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
-    general_mask[torch.where(general_mask > 0)] = 1
+    attention_mask = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
+    attention_mask[torch.where(attention_mask > 0)] = 1
     # Prepare masked labels
     labels_text = torch.ones_like(input_ids_sentence) * -100
-    labels_text_pos = torch.ones(input_ids_sentence.size()[0], input_ids_sentence.size()[1], 2)
-    masked_lm_labels = torch.cat(
-        [labels_text, masked_lm_labels_visuals], dim=1
+    labels_text_pos = (
+        torch.ones(input_ids_sentence.size()[0], input_ids_sentence.size()[1], 2) * -1
     )
+    masked_lm_labels = torch.cat([labels_text, masked_lm_labels_visuals], dim=1)
     token_type_ids = torch.cat(
         [torch.zeros_like(input_ids_sentence), torch.ones_like(input_ids_visuals)],
         dim=1,
@@ -663,6 +663,11 @@ def collate_pad_text2visual_batch(
     visual_pos_maps = torch.cat([labels_text_pos, visual_pos_maps], dim=1)
     visual_depth_maps = torch.cat([labels_text, visual_depth_maps], dim=1)
     visual_flip_maps = torch.cat([labels_text, visual_flip_maps], dim=1)
+    # Position loss mask
+    text_mask_loss = torch.cat(
+        [torch.zeros_like(input_ids_sentence), torch.ones_like(input_ids_visuals)],
+        dim=1,
+    )
 
     return (
         input_ids_sentence,
@@ -674,7 +679,8 @@ def collate_pad_text2visual_batch(
         visual_depth_maps,
         visual_flip_maps,
         token_type_ids,
-        general_mask,
+        attention_mask,
+        text_mask_loss,
     )
 
 
