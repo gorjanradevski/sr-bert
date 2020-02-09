@@ -38,10 +38,10 @@ def train(
     # Create datasets
     visual2index = json.load(open(visual2index_path))
     train_dataset = Text2VisualDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability
+        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
     val_dataset = Text2VisualDataset(
-        val_dataset_path, visual2index, mask_probability=mask_probability
+        val_dataset_path, visual2index, mask_probability=mask_probability, train=False
     )
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")

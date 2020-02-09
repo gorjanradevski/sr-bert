@@ -203,12 +203,17 @@ class VisualScenesDataset(TorchDataset):
 
 class Text2VisualDataset(TorchDataset):
     def __init__(
-        self, dataset_file_path: str, visual2index: str, mask_probability: float
+        self,
+        dataset_file_path: str,
+        visual2index: str,
+        mask_probability: float,
+        train: bool,
     ):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
         self.mask_probability = mask_probability
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        self.train = train
 
     def masking(self, visuals, visual_positions, low, high):
         # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
@@ -269,9 +274,12 @@ class Text2VisualDataset(TorchDataset):
         all_sentences = np.array(
             [sentence for sublist in nested_sentences for sentence in sublist]
         )
+        if self.train:
+            sentences = np.random.choice(all_sentences, size=3, replace=False)
+        else:
+            sentences = all_sentences
         tokenized_sentence = self.tokenizer.encode(
-            " ".join(np.random.choice(all_sentences, size=3, replace=False)),
-            add_special_tokens=True,
+            " ".join(sentences), add_special_tokens=True
         )
         input_ids_sentence = torch.tensor(tokenized_sentence)
         # Prepare visuals
