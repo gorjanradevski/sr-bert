@@ -230,7 +230,7 @@ class Text2VisualDataset(TorchDataset):
         # solution. For the unmasked ones, we change to [-1, -1] to find the actual
         # prediction.
         visual_positions[~masked_indices, 2:] = torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0])
-        visual_positions[~masked_indices, :2] = torch.tensor([-1.0, -1.0])
+        visual_positions[~masked_indices, :2] = torch.tensor([0.0, 0.0])
         # For the depths and the flips we don't want to compute the loss for the masked
         # elements.
         visual_dep_map[masked_indices] = -100
