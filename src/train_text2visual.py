@@ -96,51 +96,49 @@ def train(
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
             for (
-                in_ids_sen,
-                in_ids_vis,
+                ids_text,
+                ids_vis,
                 labels,
-                text_pos,
-                vis_pos,
-                vis_pos_maps,
-                vis_dep_maps,
-                vis_flip_maps,
-                t_type_ids,
-                a_mask,
-                l_mask,
+                pos_text,
+                pos_vis,
+                pos_maps,
+                dep_maps,
+                flip_maps,
+                t_types,
+                attn_mask,
+                maps_mask_loss,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                in_ids_sen, in_ids_vis, labels, text_pos, vis_pos, vis_pos_maps, vis_dep_maps, vis_flip_maps, t_type_ids, a_mask, l_mask = (
-                    in_ids_sen.to(device),
-                    in_ids_vis.to(device),
+                ids_text, ids_vis, labels, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
+                    ids_text.to(device),
+                    ids_vis.to(device),
                     labels.to(device),
-                    text_pos.to(device),
-                    vis_pos.to(device),
-                    vis_pos_maps.to(device),
-                    vis_dep_maps.to(device),
-                    vis_flip_maps.to(device),
-                    t_type_ids.to(device),
-                    a_mask.to(device),
-                    l_mask.to(device),
+                    pos_text.to(device),
+                    pos_vis.to(device),
+                    pos_maps.to(device),
+                    dep_maps.to(device),
+                    flip_maps.to(device),
+                    t_types.to(device),
+                    attn_mask.to(device),
+                    maps_mask_loss.to(device),
                 )
                 pred_mlm, pred_pos, pred_depth, pred_flip = model(
-                    in_ids_sen, in_ids_vis, text_pos, vis_pos, t_type_ids, a_mask
+                    ids_text, ids_vis, pos_text, pos_vis, t_types, attn_mask
                 )
                 # Get MLM loss
                 pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
                 masked_lm_labels = labels.view(-1)
                 mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                 # Get pos loss
-                pos_loss = reg_criterion(pred_pos, vis_pos_maps) * l_mask.unsqueeze(-1)
+                pos_loss = reg_criterion(pred_pos, pos_maps) * maps_mask_loss.unsqueeze(
+                    -1
+                )
                 pos_loss = pos_loss.mean()
                 # Get depth and flip loss
-                pred_depth = pred_depth.view(-1, 3)
-                visual_depth_maps = vis_dep_maps.view(-1)
-                depth_loss = class_criterion(pred_depth, visual_depth_maps)
-                pred_flip = pred_flip.view(-1, 2)
-                visual_flip_maps = vis_flip_maps.view(-1)
-                flip_loss = class_criterion(pred_flip, visual_flip_maps)
+                depth_loss = class_criterion(pred_depth.view(-1, 3), dep_maps.view(-1))
+                flip_loss = class_criterion(pred_flip.view(-1, 2), flip_maps.view(-1))
                 # Comibine losses and backward
                 loss = mlm_loss + pos_loss + depth_loss + flip_loss
                 loss.backward()
@@ -159,52 +157,56 @@ def train(
             cur_val_loss = 0
             for _ in tqdm(range(10)):
                 for (
-                    in_ids_sen,
-                    in_ids_vis,
+                    ids_text,
+                    ids_vis,
                     labels,
-                    text_pos,
-                    vis_pos,
-                    vis_pos_maps,
-                    vis_dep_maps,
-                    vis_flip_maps,
-                    t_type_ids,
-                    a_mask,
-                    l_mask,
+                    pos_text,
+                    pos_vis,
+                    pos_maps,
+                    dep_maps,
+                    flip_maps,
+                    t_types,
+                    attn_mask,
+                    maps_mask_loss,
                 ) in val_loader:
+                    # remove past gradients
+                    optimizer.zero_grad()
                     # forward
-                    in_ids_sen, in_ids_vis, labels, text_pos, vis_pos, vis_pos_maps, vis_dep_maps, vis_flip_maps, t_type_ids, a_mask, l_mask = (
-                        in_ids_sen.to(device),
-                        in_ids_vis.to(device),
+                    ids_text, ids_vis, labels, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
+                        ids_text.to(device),
+                        ids_vis.to(device),
                         labels.to(device),
-                        text_pos.to(device),
-                        vis_pos.to(device),
-                        vis_pos_maps.to(device),
-                        vis_dep_maps.to(device),
-                        vis_flip_maps.to(device),
-                        t_type_ids.to(device),
-                        a_mask.to(device),
-                        l_mask.to(device),
+                        pos_text.to(device),
+                        pos_vis.to(device),
+                        pos_maps.to(device),
+                        dep_maps.to(device),
+                        flip_maps.to(device),
+                        t_types.to(device),
+                        attn_mask.to(device),
+                        maps_mask_loss.to(device),
                     )
                     pred_mlm, pred_pos, pred_depth, pred_flip = model(
-                        in_ids_sen, in_ids_vis, text_pos, vis_pos, t_type_ids, a_mask
+                        ids_text, ids_vis, pos_text, pos_vis, t_types, attn_mask
                     )
                     # Get MLM loss
                     pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
                     masked_lm_labels = labels.view(-1)
                     mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                     # Get pos loss
-                    pos_loss = reg_criterion(pred_pos, vis_pos_maps) * l_mask.unsqueeze(
-                        -1
-                    )
+                    pos_loss = reg_criterion(
+                        pred_pos, pos_maps
+                    ) * maps_mask_loss.unsqueeze(-1)
                     pos_loss = pos_loss.mean()
                     # Get depth and flip loss
-                    pred_depth = pred_depth.view(-1, 3)
-                    visual_depth_maps = vis_dep_maps.view(-1)
-                    depth_loss = class_criterion(pred_depth, visual_depth_maps)
-                    pred_flip = pred_flip.view(-1, 2)
-                    visual_flip_maps = vis_flip_maps.view(-1)
-                    flip_loss = class_criterion(pred_flip, visual_flip_maps)
-                    # Comibine losses and backward
+                    depth_loss = class_criterion(
+                        pred_depth.view(-1, 3), dep_maps.view(-1)
+                    )
+                    flip_loss = class_criterion(
+                        pred_flip.view(-1, 2), flip_maps.view(-1)
+                    )
+                    # Comibine losses
+                    loss = mlm_loss + pos_loss + depth_loss + flip_loss
+                    # Comibine losses
                     loss = mlm_loss + pos_loss + depth_loss + flip_loss
                     cur_val_loss += loss.item()
 

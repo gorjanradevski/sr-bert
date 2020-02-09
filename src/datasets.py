@@ -604,83 +604,97 @@ def collate_pad_visual_batch(
 
 def collate_pad_text2visual_batch(
     batch: Tuple[
-        List[torch.Tensor],
-        List[torch.Tensor],
-        List[torch.Tensor],
-        List[torch.Tensor],
-        List[torch.tensor],
-        List[torch.tensor],
-        List[torch.tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.tensor],
+        Tuple[torch.tensor],
+        Tuple[torch.tensor],
     ]
 ):
-    input_ids_sentence, input_ids_visuals, masked_lm_labels_visuals, visual_positions, visual_pos_maps, visual_depth_maps, visual_flip_maps = zip(
+    ids_text, ids_vis, labels_vis, pos_vis, pos_maps_vis, dep_maps_vis, flip_maps_vis = zip(
         *batch
     )
     # Get max text length to get the text positions
-    max_text_length = max([element.size()[0] for element in input_ids_sentence])
-    text_positions = torch.arange(max_text_length, dtype=torch.long)
+    max_text_length = max([element.size()[0] for element in ids_text])
+    pos_text = torch.arange(max_text_length, dtype=torch.long)
     # Pad the sentences
-    input_ids_sentence = torch.nn.utils.rnn.pad_sequence(
-        input_ids_sentence, batch_first=True
-    )
-    # Obtain the text positions
-    text_positions = text_positions.unsqueeze(0).expand(input_ids_sentence.size())
+    ids_text = torch.nn.utils.rnn.pad_sequence(ids_text, batch_first=True)
     # Pad the visuals
-    input_ids_visuals = torch.nn.utils.rnn.pad_sequence(
-        input_ids_visuals, batch_first=True
-    )
+    ids_vis = torch.nn.utils.rnn.pad_sequence(ids_vis, batch_first=True)
+    # Obtain the text positions
+    pos_text = pos_text.unsqueeze(0).expand(ids_text.size())
     # Pad the visual labels
-    masked_lm_labels_visuals = torch.nn.utils.rnn.pad_sequence(
-        masked_lm_labels_visuals, batch_first=True, padding_value=-100
+    labels_vis = torch.nn.utils.rnn.pad_sequence(
+        labels_vis, batch_first=True, padding_value=-100
     )
-    # Pad all visual position stuff
-    visual_positions = torch.nn.utils.rnn.pad_sequence(
-        visual_positions, batch_first=True, padding_value=-1
+    # Obtain the labels for the captions
+    labels_text = torch.ones_like(ids_text) * -100
+    # Concatenate the text and visual labels
+    labels = torch.cat([labels_text, labels_vis], dim=1)
+    # Pad all visual positions
+    pos_vis = torch.nn.utils.rnn.pad_sequence(
+        pos_vis, batch_first=True, padding_value=-1
     )
-    visual_pos_maps = torch.nn.utils.rnn.pad_sequence(
-        visual_pos_maps, batch_first=True, padding_value=-1
+    # Pad the visual position mappings
+    pos_maps_vis = torch.nn.utils.rnn.pad_sequence(
+        pos_maps_vis, batch_first=True, padding_value=-1
     )
-    visual_depth_maps = torch.nn.utils.rnn.pad_sequence(
-        visual_depth_maps, batch_first=True, padding_value=-100
-    )
-    visual_flip_maps = torch.nn.utils.rnn.pad_sequence(
-        visual_flip_maps, batch_first=True, padding_value=-100
-    )
-    # Obtain general mask (Also used as an attention mask)
-    attention_mask = torch.cat([input_ids_sentence, input_ids_visuals], dim=1)
-    attention_mask[torch.where(attention_mask > 0)] = 1
-    # Prepare masked labels
-    labels_text = torch.ones_like(input_ids_sentence) * -100
-    labels_text_pos = (
-        torch.ones(input_ids_sentence.size()[0], input_ids_sentence.size()[1], 2) * -1
-    )
-    masked_lm_labels = torch.cat([labels_text, masked_lm_labels_visuals], dim=1)
-    token_type_ids = torch.cat(
-        [torch.zeros_like(input_ids_sentence), torch.ones_like(input_ids_visuals)],
+    # Obtain the position mappings for the text and concatenate the text and
+    # visual position mappings
+    pos_maps = torch.cat(
+        [torch.ones(ids_text.size()[0], ids_text.size()[1], 2) * -1, pos_maps_vis],
         dim=1,
     )
-    # Extend the visual positions and the rest separately
-    visual_pos_maps = torch.cat([labels_text_pos, visual_pos_maps], dim=1)
-    visual_depth_maps = torch.cat([labels_text, visual_depth_maps], dim=1)
-    visual_flip_maps = torch.cat([labels_text, visual_flip_maps], dim=1)
-    # Position loss mask
-    text_mask_loss = torch.cat(
-        [torch.zeros_like(input_ids_sentence), torch.ones_like(input_ids_visuals)],
+    # Pad the mappings for the depth and the flip
+    dep_maps_vis = torch.nn.utils.rnn.pad_sequence(
+        dep_maps_vis, batch_first=True, padding_value=-100
+    )
+    flip_maps_vis = torch.nn.utils.rnn.pad_sequence(
+        flip_maps_vis, batch_first=True, padding_value=-100
+    )
+    # Obtain the depth mappings for the text and concatenate the text and
+    # the visual depth mappings
+    dep_maps = torch.cat(
+        [
+            torch.ones((ids_text.size()[0], ids_text.size()[1]), dtype=torch.long)
+            * -100,
+            dep_maps_vis,
+        ],
         dim=1,
     )
+    # Obtain the flip mappings for the text and concatenate the text and
+    # the visual flip mappings
+    flip_maps = torch.cat(
+        [
+            torch.ones(ids_text.size()[0], ids_text.size()[1], dtype=torch.long) * -100,
+            flip_maps_vis,
+        ],
+        dim=1,
+    )
+    # Obtain a mask for masking the position loss for the text and padding
+    maps_mask_text_loss = ids_vis.clone()
+    maps_mask_text_loss[torch.where(ids_vis > 0)] = 1
+    maps_mask_loss = torch.cat([torch.zeros_like(ids_text), maps_mask_text_loss], dim=1)
+    # Obtain token type ids
+    t_types = torch.cat([torch.zeros_like(ids_text), torch.ones_like(ids_vis)], dim=1)
+    # Obtain the attention mask
+    attn_mask = torch.cat([ids_text, ids_vis], dim=1)
+    attn_mask[torch.where(attn_mask > 0)] = 1
 
     return (
-        input_ids_sentence,
-        input_ids_visuals,
-        masked_lm_labels,
-        text_positions,
-        visual_positions,
-        visual_pos_maps,
-        visual_depth_maps,
-        visual_flip_maps,
-        token_type_ids,
-        attention_mask,
-        text_mask_loss,
+        ids_text,
+        ids_vis,
+        labels,
+        pos_text,
+        pos_vis,
+        pos_maps,
+        dep_maps,
+        flip_maps,
+        t_types,
+        attn_mask,
+        maps_mask_loss,
     )
 
 
