@@ -270,7 +270,8 @@ class Text2VisualDataset(TorchDataset):
             [sentence for sublist in nested_sentences for sentence in sublist]
         )
         tokenized_sentence = self.tokenizer.encode(
-            " ".join(all_sentences), add_special_tokens=True
+            " ".join(np.random.choice(all_sentences, size=2, replace=False)),
+            add_special_tokens=True,
         )
         input_ids_sentence = torch.tensor(tokenized_sentence)
         # Prepare visuals
