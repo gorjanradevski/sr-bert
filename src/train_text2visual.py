@@ -98,7 +98,6 @@ def train(
             for (
                 ids_text,
                 ids_vis,
-                labels,
                 pos_text,
                 pos_vis,
                 pos_maps,
@@ -111,10 +110,9 @@ def train(
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, ids_vis, labels, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
+                ids_text, ids_vis, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
                     ids_text.to(device),
                     ids_vis.to(device),
-                    labels.to(device),
                     pos_text.to(device),
                     pos_vis.to(device),
                     pos_maps.to(device),
@@ -124,13 +122,9 @@ def train(
                     attn_mask.to(device),
                     maps_mask_loss.to(device),
                 )
-                pred_mlm, pred_pos, pred_depth, pred_flip = model(
+                pred_pos, pred_depth, pred_flip = model(
                     ids_text, ids_vis, pos_text, pos_vis, t_types, attn_mask
                 )
-                # Get MLM loss
-                pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
-                masked_lm_labels = labels.view(-1)
-                mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                 # Get pos loss
                 pos_loss = reg_criterion(pred_pos, pos_maps) * maps_mask_loss.unsqueeze(
                     -1
@@ -140,7 +134,7 @@ def train(
                 depth_loss = class_criterion(pred_depth.view(-1, 3), dep_maps.view(-1))
                 flip_loss = class_criterion(pred_flip.view(-1, 2), flip_maps.view(-1))
                 # Comibine losses and backward
-                loss = mlm_loss + pos_loss + depth_loss + flip_loss
+                loss = pos_loss + depth_loss + flip_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -159,7 +153,6 @@ def train(
                 for (
                     ids_text,
                     ids_vis,
-                    labels,
                     pos_text,
                     pos_vis,
                     pos_maps,
@@ -172,10 +165,9 @@ def train(
                     # remove past gradients
                     optimizer.zero_grad()
                     # forward
-                    ids_text, ids_vis, labels, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
+                    ids_text, ids_vis, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
                         ids_text.to(device),
                         ids_vis.to(device),
-                        labels.to(device),
                         pos_text.to(device),
                         pos_vis.to(device),
                         pos_maps.to(device),
@@ -185,13 +177,9 @@ def train(
                         attn_mask.to(device),
                         maps_mask_loss.to(device),
                     )
-                    pred_mlm, pred_pos, pred_depth, pred_flip = model(
+                    pred_pos, pred_depth, pred_flip = model(
                         ids_text, ids_vis, pos_text, pos_vis, t_types, attn_mask
                     )
-                    # Get MLM loss
-                    pred_mlm = pred_mlm.view(-1, len(visual2index) + 3)
-                    masked_lm_labels = labels.view(-1)
-                    mlm_loss = class_criterion(pred_mlm, masked_lm_labels)
                     # Get pos loss
                     pos_loss = reg_criterion(
                         pred_pos, pos_maps
@@ -205,9 +193,7 @@ def train(
                         pred_flip.view(-1, 2), flip_maps.view(-1)
                     )
                     # Comibine losses
-                    loss = mlm_loss + pos_loss + depth_loss + flip_loss
-                    # Comibine losses
-                    loss = mlm_loss + pos_loss + depth_loss + flip_loss
+                    loss =  pos_loss + depth_loss + flip_loss
                     cur_val_loss += loss.item()
 
             cur_val_loss /= 10

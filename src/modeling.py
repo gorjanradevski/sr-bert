@@ -62,7 +62,6 @@ class Text2VisualBert(nn.Module):
         )
         self.visual_position_projector = nn.Linear(7, 768)
         self.bert = BertModel.from_pretrained("bert-base-uncased")
-        self.mlm_head = BertOnlyMLMHead(config)
         # Change config for the flip and position
         config.vocab_size = 2
         self.flip_head = BertOnlyMLMHead(config)
@@ -98,13 +97,11 @@ class Text2VisualBert(nn.Module):
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
         )[0]
-        prediction_scores = self.mlm_head(sequence_output)
         flip_scores = self.flip_head(sequence_output)
         depth_scores = self.depth_head(sequence_output)
         pos_scores = self.pos_head(sequence_output)
 
         return (
-            self.log_softmax(prediction_scores),
             pos_scores,
             self.log_softmax(depth_scores),
             self.log_softmax(flip_scores),
