@@ -159,7 +159,6 @@ def train(
                     f_ind,
                     x_lab,
                     y_lab,
-                    z_lab,
                     f_lab,
                     t_types,
                     attn_mask,
@@ -180,7 +179,7 @@ def train(
                         t_types,
                         attn_mask,
                     )
-                    x_scores, y_scores, z_scores, f_scores = model(
+                    x_scores, y_scores, f_scores = model(
                         ids_text,
                         ids_vis,
                         pos_text,
