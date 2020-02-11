@@ -167,7 +167,7 @@ def train(
                     # remove past gradients
                     optimizer.zero_grad()
                     # forward
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, z_lab, f_lab, t_types, attn_mask = (
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
                         ids_text.to(device),
                         ids_vis.to(device),
                         pos_text.to(device),
