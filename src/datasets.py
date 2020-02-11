@@ -288,9 +288,13 @@ class Text2VisualDataset(TorchDataset):
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
         )
         # Obtain X-indexes
-        x_indexes = torch.tensor([element["x"] for element in scene["elements"]])
+        x_indexes = torch.tensor(
+            [element["x"] if element["x"] > -1 else 0 for element in scene["elements"]]
+        )
         # Obtain Y-indexes
-        y_indexes = torch.tensor([element["y"] for element in scene["elements"]])
+        y_indexes = torch.tensor(
+            [element["y"] if element["y"] > -1 else 0 for element in scene["elements"]]
+        )
         # Obtain Z-indexes
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
