@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -43,14 +43,8 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Subset(
-        Text2VisualDataset(
-            train_dataset_path,
-            visual2index,
-            mask_probability=mask_probability,
-            train=True,
-        ),
-        [0, 1, 2],
+    train_dataset = Text2VisualDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
     val_dataset = Text2VisualDataset(
         val_dataset_path, visual2index, mask_probability=mask_probability, train=False
@@ -59,7 +53,7 @@ def train(
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(train_dataset)
+    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -69,7 +63,7 @@ def train(
         collate_fn=collate_pad_text2visual_batch,
     )
     val_loader = DataLoader(
-        train_dataset,
+        val_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_text2visual_batch,
@@ -135,16 +129,6 @@ def train(
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
-                print("X preds:")
-                print(torch.argmax(x_scores, dim=-1)[:, ids_text.size()[1] :])
-                print("==================")
-                print("X input:")
-                print(x_ind)
-                print("===================")
-                print("Y preds:")
-                print(torch.argmax(y_scores, dim=-1)[:, ids_text.size()[1] :])
-                print("Y input:")
-                print(y_ind)
                 # Get losses
                 x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
@@ -159,7 +143,7 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-        """
+
         # Set model in evaluation mode
         model.train(False)
         with torch.no_grad():
@@ -236,7 +220,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-        """
 
 
 def parse_args():
