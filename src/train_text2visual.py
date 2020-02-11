@@ -14,7 +14,6 @@ from datasets import (
     collate_pad_text2visual_batch,
     X_PAD,
     Y_PAD,
-    Z_PAD,
     F_PAD,
 )
 from modeling import Text2VisualBert
@@ -111,11 +110,9 @@ def train(
                 pos_text,
                 x_ind,
                 y_ind,
-                z_ind,
                 f_ind,
                 x_lab,
                 y_lab,
-                z_lab,
                 f_lab,
                 t_types,
                 attn_mask,
@@ -123,39 +120,28 @@ def train(
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, ids_vis, pos_text, x_ind, y_ind, z_ind, f_ind, x_lab, y_lab, z_lab, f_lab, t_types, attn_mask = (
+                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
                     pos_text.to(device),
                     x_ind.to(device),
                     y_ind.to(device),
-                    z_ind.to(device),
                     f_ind.to(device),
                     x_lab.to(device),
                     y_lab.to(device),
-                    z_lab.to(device),
                     f_lab.to(device),
                     t_types,
                     attn_mask,
                 )
-                x_scores, y_scores, z_scores, f_scores = model(
-                    ids_text,
-                    ids_vis,
-                    pos_text,
-                    x_ind,
-                    y_ind,
-                    z_ind,
-                    f_ind,
-                    t_types,
-                    attn_mask,
+                x_scores, y_scores, f_scores = model(
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
                 # Get losses
                 x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
-                z_loss = criterion(z_scores.view(-1, Z_PAD + 1), z_lab.view(-1))
                 f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
-                loss = x_loss + y_loss + z_loss + f_loss
+                loss = x_loss + y_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -177,7 +163,6 @@ def train(
                     pos_text,
                     x_ind,
                     y_ind,
-                    z_ind,
                     f_ind,
                     x_lab,
                     y_lab,
@@ -189,17 +174,15 @@ def train(
                     # remove past gradients
                     optimizer.zero_grad()
                     # forward
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, z_ind, f_ind, x_lab, y_lab, z_lab, f_lab, t_types, attn_mask = (
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, z_lab, f_lab, t_types, attn_mask = (
                         ids_text.to(device),
                         ids_vis.to(device),
                         pos_text.to(device),
                         x_ind.to(device),
                         y_ind.to(device),
-                        z_ind.to(device),
                         f_ind.to(device),
                         x_lab.to(device),
                         y_lab.to(device),
-                        z_lab.to(device),
                         f_lab.to(device),
                         t_types,
                         attn_mask,
@@ -210,7 +193,6 @@ def train(
                         pos_text,
                         x_ind,
                         y_ind,
-                        z_ind,
                         f_ind,
                         t_types,
                         attn_mask,
@@ -218,10 +200,9 @@ def train(
                     # Get losses
                     x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                     y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
-                    z_loss = criterion(z_scores.view(-1, Z_PAD + 1), z_lab.view(-1))
                     f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                     # Comibine losses
-                    loss = x_loss + y_loss + z_loss + f_loss
+                    loss = x_loss + y_loss + f_loss
                     cur_val_loss += loss.item()
 
             cur_val_loss /= 10

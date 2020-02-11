@@ -12,8 +12,6 @@ X_MASK = 599
 X_PAD = 600
 Y_MASK = 705
 Y_PAD = 706
-Z_MASK = 3
-Z_PAD = 4
 F_MASK = 2
 F_PAD = 3
 
@@ -223,17 +221,12 @@ class Text2VisualDataset(TorchDataset):
         self.train = train
 
     def masking(
-        self,
-        x_indexes: torch.Tensor,
-        y_indexes: torch.Tensor,
-        z_indexes: torch.Tensor,
-        f_indexes: torch.Tensor,
+        self, x_indexes: torch.Tensor, y_indexes: torch.Tensor, f_indexes: torch.Tensor
     ):
         # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
         # Create clones for everything
         x_labels = x_indexes.clone()
         y_labels = y_indexes.clone()
-        z_labels = z_indexes.clone()
         f_labels = f_indexes.clone()
         # Get probability matrix
         probability_matrix = torch.full(x_indexes.shape, self.mask_probability)
@@ -241,7 +234,6 @@ class Text2VisualDataset(TorchDataset):
         # We only compute loss on masked tokens
         x_labels[~masked_indices] = -100
         y_labels[~masked_indices] = -100
-        z_labels[~masked_indices] = -100
         f_labels[~masked_indices] = -100
         # 80% we replace with a mask token
         indices_replaced = (
@@ -249,7 +241,6 @@ class Text2VisualDataset(TorchDataset):
         )
         x_indexes[indices_replaced] = X_MASK
         y_indexes[indices_replaced] = Y_MASK
-        z_indexes[indices_replaced] = Z_MASK
         f_indexes[indices_replaced] = F_MASK
 
         # 10% of the time, we replace masked input tokens with random word
@@ -264,27 +255,14 @@ class Text2VisualDataset(TorchDataset):
         random_y = torch.randint(
             low=0, high=Y_MASK - 1, size=x_labels.shape, dtype=torch.long
         )
-        random_z = torch.randint(
-            low=0, high=Z_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
         random_f = torch.randint(
             low=0, high=F_MASK - 1, size=x_labels.shape, dtype=torch.long
         )
         x_indexes[indices_random] = random_x[indices_random]
         y_indexes[indices_random] = random_y[indices_random]
-        z_indexes[indices_random] = random_z[indices_random]
         f_indexes[indices_random] = random_f[indices_random]
 
-        return (
-            x_indexes,
-            y_indexes,
-            z_indexes,
-            f_indexes,
-            x_labels,
-            y_labels,
-            z_labels,
-            f_labels,
-        )
+        return (x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels)
 
     def __len__(self):
         return len(self.dataset_file)
@@ -298,7 +276,7 @@ class Text2VisualDataset(TorchDataset):
             [sentence for sublist in nested_sentences for sentence in sublist]
         )
         if self.train:
-            sentences = np.random.choice(all_sentences, size=3, replace=False)
+            sentences = np.random.permutation(all_sentences)
         else:
             sentences = all_sentences
         # Prepare sentences
@@ -314,12 +292,11 @@ class Text2VisualDataset(TorchDataset):
         # Obtain Y-indexes
         y_indexes = torch.tensor([element["y"] for element in scene["elements"]])
         # Obtain Z-indexes
-        z_indexes = torch.tensor([element["z"] for element in scene["elements"]])
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
         # Mask visual tokens
-        x_indexes, y_indexes, z_indexes, f_indexes, x_labels, y_labels, z_labels, f_labels = self.masking(
-            x_indexes, y_indexes, z_indexes, f_indexes
+        x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels = self.masking(
+            x_indexes, y_indexes, f_indexes
         )
 
         return (
@@ -327,11 +304,9 @@ class Text2VisualDataset(TorchDataset):
             input_ids_visuals,
             x_indexes,
             y_indexes,
-            z_indexes,
             f_indexes,
             x_labels,
             y_labels,
-            z_labels,
             f_labels,
         )
 
@@ -629,8 +604,6 @@ def collate_pad_visual_batch(
 def collate_pad_text2visual_batch(
     batch: Tuple[
         Tuple[torch.Tensor],
-        Tuple[torch.Tensor],
-        Tuple[torch.Tensor],
         Tuple[torch.tensor],
         Tuple[torch.tensor],
         Tuple[torch.tensor],
@@ -640,16 +613,18 @@ def collate_pad_text2visual_batch(
         Tuple[torch.tensor],
     ]
 ):
-    ids_text, ids_vis, x_ind, y_ind, z_ind, f_ind, x_lab, y_lab, z_lab, f_lab = zip(
-        *batch
-    )
+    ids_text, ids_vis, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab = zip(*batch)
     # Get max text length to get the text positions
     max_text_length = max([element.size()[0] for element in ids_text])
     pos_text = torch.arange(max_text_length, dtype=torch.long)
     # Pad the sentences
-    ids_text = torch.nn.utils.rnn.pad_sequence(ids_text, batch_first=True, padding_value=0)
+    ids_text = torch.nn.utils.rnn.pad_sequence(
+        ids_text, batch_first=True, padding_value=0
+    )
     # Pad the visuals
-    ids_vis = torch.nn.utils.rnn.pad_sequence(ids_vis, batch_first=True, padding_value=0)
+    ids_vis = torch.nn.utils.rnn.pad_sequence(
+        ids_vis, batch_first=True, padding_value=0
+    )
     # Obtain the text positions
     pos_text = pos_text.unsqueeze(0).expand(ids_text.size())
     # Pad all visual inputs
@@ -658,9 +633,6 @@ def collate_pad_text2visual_batch(
     )
     y_ind = torch.nn.utils.rnn.pad_sequence(
         y_ind, batch_first=True, padding_value=Y_PAD
-    )
-    z_ind = torch.nn.utils.rnn.pad_sequence(
-        z_ind, batch_first=True, padding_value=Z_PAD
     )
     f_ind = torch.nn.utils.rnn.pad_sequence(
         f_ind, batch_first=True, padding_value=F_PAD
@@ -681,15 +653,6 @@ def collate_pad_text2visual_batch(
             text_labs,
             torch.nn.utils.rnn.pad_sequence(
                 y_lab, batch_first=True, padding_value=-100
-            ),
-        ],
-        dim=1,
-    )
-    z_lab = torch.cat(
-        [
-            text_labs,
-            torch.nn.utils.rnn.pad_sequence(
-                z_lab, batch_first=True, padding_value=-100
             ),
         ],
         dim=1,
@@ -715,11 +678,9 @@ def collate_pad_text2visual_batch(
         pos_text,
         x_ind,
         y_ind,
-        z_ind,
         f_ind,
         x_lab,
         y_lab,
-        z_lab,
         f_lab,
         t_types,
         attn_mask,
