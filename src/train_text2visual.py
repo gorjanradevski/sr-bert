@@ -76,7 +76,6 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
-    # TODO: +2
     model = nn.DataParallel(Text2VisualBert(BertConfig(), device, embeddings_path)).to(
         device
     )
@@ -136,6 +135,16 @@ def train(
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
+                print("X preds:")
+                print(torch.argmax(x_scores, dim=-1)[:, ids_text.size()[1] :])
+                print("==================")
+                print("X input:")
+                print(x_ind)
+                print("===================")
+                print("Y preds:")
+                print(torch.argmax(y_scores, dim=-1)[:, ids_text.size()[1] :])
+                print("Y input:")
+                print(y_ind)
                 # Get losses
                 x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))

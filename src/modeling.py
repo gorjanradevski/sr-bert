@@ -80,7 +80,7 @@ class Text2VisualBert(nn.Module):
         config.vocab_size = F_PAD + 1
         self.f_head = BertOnlyMLMHead(config)
         # Change config for the depth
-        self.log_softmax = nn.LogSoftmax(dim=2)
+        self.log_softmax = nn.LogSoftmax(dim=-1)
         self.device = device
 
     def forward(
