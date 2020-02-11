@@ -2,14 +2,21 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
 import json
 from transformers import BertConfig
 
-from datasets import Text2VisualDataset, collate_pad_text2visual_batch
+from datasets import (
+    Text2VisualDataset,
+    collate_pad_text2visual_batch,
+    X_PAD,
+    Y_PAD,
+    Z_PAD,
+    F_PAD,
+)
 from modeling import Text2VisualBert
 
 
@@ -37,8 +44,14 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Subset(
+        Text2VisualDataset(
+            train_dataset_path,
+            visual2index,
+            mask_probability=mask_probability,
+            train=True,
+        ),
+        [0, 1, 2],
     )
     val_dataset = Text2VisualDataset(
         val_dataset_path, visual2index, mask_probability=mask_probability, train=False
@@ -47,7 +60,7 @@ def train(
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(val_dataset)
+    val_sampler = SequentialSampler(train_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -57,7 +70,7 @@ def train(
         collate_fn=collate_pad_text2visual_batch,
     )
     val_loader = DataLoader(
-        val_dataset,
+        train_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_text2visual_batch,
@@ -65,14 +78,11 @@ def train(
     )
     # Define training specifics
     # TODO: +2
-    model = nn.DataParallel(
-        Text2VisualBert(
-            BertConfig(vocab_size=len(visual2index) + 3), device, embeddings_path
-        )
-    ).to(device)
+    model = nn.DataParallel(Text2VisualBert(BertConfig(), device, embeddings_path)).to(
+        device
+    )
     # Loss and optimizer
-    class_criterion = nn.NLLLoss()
-    reg_criterion = nn.MSELoss(reduction="none")
+    criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
     best_val_loss = sys.maxsize
@@ -99,42 +109,53 @@ def train(
                 ids_text,
                 ids_vis,
                 pos_text,
-                pos_vis,
-                pos_maps,
-                dep_maps,
-                flip_maps,
+                x_ind,
+                y_ind,
+                z_ind,
+                f_ind,
+                x_lab,
+                y_lab,
+                z_lab,
+                f_lab,
                 t_types,
                 attn_mask,
-                maps_mask_loss,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, ids_vis, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
+                ids_text, ids_vis, pos_text, x_ind, y_ind, z_ind, f_ind, x_lab, y_lab, z_lab, f_lab, t_types, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
                     pos_text.to(device),
-                    pos_vis.to(device),
-                    pos_maps.to(device),
-                    dep_maps.to(device),
-                    flip_maps.to(device),
-                    t_types.to(device),
-                    attn_mask.to(device),
-                    maps_mask_loss.to(device),
+                    x_ind.to(device),
+                    y_ind.to(device),
+                    z_ind.to(device),
+                    f_ind.to(device),
+                    x_lab.to(device),
+                    y_lab.to(device),
+                    z_lab.to(device),
+                    f_lab.to(device),
+                    t_types,
+                    attn_mask,
                 )
-                pred_pos, pred_depth, pred_flip = model(
-                    ids_text, ids_vis, pos_text, pos_vis, t_types, attn_mask
+                x_scores, y_scores, z_scores, f_scores = model(
+                    ids_text,
+                    ids_vis,
+                    pos_text,
+                    x_ind,
+                    y_ind,
+                    z_ind,
+                    f_ind,
+                    t_types,
+                    attn_mask,
                 )
-                # Get pos loss
-                pos_loss = reg_criterion(pred_pos, pos_maps) * maps_mask_loss.unsqueeze(
-                    -1
-                )
-                pos_loss = pos_loss.mean(dim=2).sum(dim=1).mean()
-                # Get depth and flip loss
-                depth_loss = class_criterion(pred_depth.view(-1, 3), dep_maps.view(-1))
-                flip_loss = class_criterion(pred_flip.view(-1, 2), flip_maps.view(-1))
+                # Get losses
+                x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
+                y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
+                z_loss = criterion(z_scores.view(-1, Z_PAD + 1), z_lab.view(-1))
+                f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
-                loss = pos_loss + depth_loss + flip_loss
+                loss = x_loss + y_loss + z_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -143,7 +164,7 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-
+        """
         # Set model in evaluation mode
         model.train(False)
         with torch.no_grad():
@@ -154,46 +175,53 @@ def train(
                     ids_text,
                     ids_vis,
                     pos_text,
-                    pos_vis,
-                    pos_maps,
-                    dep_maps,
-                    flip_maps,
+                    x_ind,
+                    y_ind,
+                    z_ind,
+                    f_ind,
+                    x_lab,
+                    y_lab,
+                    z_lab,
+                    f_lab,
                     t_types,
                     attn_mask,
-                    maps_mask_loss,
                 ) in val_loader:
                     # remove past gradients
                     optimizer.zero_grad()
                     # forward
-                    ids_text, ids_vis, pos_text, pos_vis, pos_maps, dep_maps, flip_maps, t_types, attn_mask, maps_mask_loss = (
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, z_ind, f_ind, x_lab, y_lab, z_lab, f_lab, t_types, attn_mask = (
                         ids_text.to(device),
                         ids_vis.to(device),
                         pos_text.to(device),
-                        pos_vis.to(device),
-                        pos_maps.to(device),
-                        dep_maps.to(device),
-                        flip_maps.to(device),
-                        t_types.to(device),
-                        attn_mask.to(device),
-                        maps_mask_loss.to(device),
+                        x_ind.to(device),
+                        y_ind.to(device),
+                        z_ind.to(device),
+                        f_ind.to(device),
+                        x_lab.to(device),
+                        y_lab.to(device),
+                        z_lab.to(device),
+                        f_lab.to(device),
+                        t_types,
+                        attn_mask,
                     )
-                    pred_pos, pred_depth, pred_flip = model(
-                        ids_text, ids_vis, pos_text, pos_vis, t_types, attn_mask
+                    x_scores, y_scores, z_scores, f_scores = model(
+                        ids_text,
+                        ids_vis,
+                        pos_text,
+                        x_ind,
+                        y_ind,
+                        z_ind,
+                        f_ind,
+                        t_types,
+                        attn_mask,
                     )
-                    # Get pos loss
-                    pos_loss = reg_criterion(
-                        pred_pos, pos_maps
-                    ) * maps_mask_loss.unsqueeze(-1)
-                    pos_loss = pos_loss.mean()
-                    # Get depth and flip loss
-                    depth_loss = class_criterion(
-                        pred_depth.view(-1, 3), dep_maps.view(-1)
-                    )
-                    flip_loss = class_criterion(
-                        pred_flip.view(-1, 2), flip_maps.view(-1)
-                    )
+                    # Get losses
+                    x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
+                    y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
+                    z_loss = criterion(z_scores.view(-1, Z_PAD + 1), z_lab.view(-1))
+                    f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                     # Comibine losses
-                    loss = pos_loss + depth_loss + flip_loss
+                    loss = x_loss + y_loss + z_loss + f_loss
                     cur_val_loss += loss.item()
 
             cur_val_loss /= 10
@@ -218,6 +246,7 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
+        """
 
 
 def parse_args():
