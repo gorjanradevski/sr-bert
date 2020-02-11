@@ -66,6 +66,7 @@ class Text2VisualBert(nn.Module):
         config.vocab_size = 2
         self.flip_head = BertOnlyMLMHead(config)
         self.pos_head = BertOnlyMLMHead(config)
+        self.sigmoid = nn.Sigmoid()
         # Change config for the depth
         config.vocab_size = 3
         self.depth_head = BertOnlyMLMHead(config)
@@ -102,7 +103,7 @@ class Text2VisualBert(nn.Module):
         pos_scores = self.pos_head(sequence_output)
 
         return (
-            pos_scores,
+            self.sigmoid(pos_scores),
             self.log_softmax(depth_scores),
             self.log_softmax(flip_scores),
         )

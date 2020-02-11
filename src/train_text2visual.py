@@ -129,7 +129,7 @@ def train(
                 pos_loss = reg_criterion(pred_pos, pos_maps) * maps_mask_loss.unsqueeze(
                     -1
                 )
-                pos_loss = pos_loss.mean()
+                pos_loss = pos_loss.mean(dim=2).sum(dim=1).mean()
                 # Get depth and flip loss
                 depth_loss = class_criterion(pred_depth.view(-1, 3), dep_maps.view(-1))
                 flip_loss = class_criterion(pred_flip.view(-1, 2), flip_maps.view(-1))
@@ -193,7 +193,7 @@ def train(
                         pred_flip.view(-1, 2), flip_maps.view(-1)
                     )
                     # Comibine losses
-                    loss =  pos_loss + depth_loss + flip_loss
+                    loss = pos_loss + depth_loss + flip_loss
                     cur_val_loss += loss.item()
 
             cur_val_loss /= 10
