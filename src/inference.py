@@ -21,11 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def distance(preds: torch.Tensor, labels: torch.Tensor):
-    return
-
-
-def train(
+def inference(
     embeddings_path: str,
     checkpoint_path: str,
     test_dataset_path: str,
@@ -60,6 +56,7 @@ def train(
     # Criterion
     total_dist_x = 0
     total_dist_y = 0
+    total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     # Set model in evaluation mode
     with torch.no_grad():
@@ -80,7 +77,7 @@ def train(
             x_ind[:, :] = X_MASK
             y_ind[:, :] = Y_MASK
             f_ind[:, :] = F_MASK
-            for iteration in range(20):
+            for iteration in range(1000):
                 first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                 for i in range(ids_vis.size()[1]):
                     # forward
@@ -125,12 +122,16 @@ def train(
             total_dist_y += torch.mean(
                 torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
             )
+            total_acc_f += (f_ind == f_lab[:, max_ids_text:]).sum() / f_ind.size()[1]
 
         print(
             f"The average distance per scene for X is: {total_dist_x/len(test_dataset)}"
         )
         print(
             f"The average distance per scene for Y is: {total_dist_y/len(test_dataset)}"
+        )
+        print(
+            f"The average accuracy per scene for F is: {total_acc_f/len(test_dataset)}"
         )
 
 
@@ -139,7 +140,9 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Trains a Text2Visual model.")
+    parser = argparse.ArgumentParser(
+        description="Performs inference with a Text2Position model."
+    )
     parser.add_argument(
         "--embeddings_path",
         type=str,
@@ -170,7 +173,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    train(
+    inference(
         args.embeddings_path,
         args.checkpoint_path,
         args.test_dataset_path,

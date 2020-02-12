@@ -226,7 +226,7 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Trains a Text2Visual model.")
+    parser = argparse.ArgumentParser(description="Trains a Text2Position model.")
     parser.add_argument(
         "--embeddings_path",
         type=str,
