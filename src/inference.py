@@ -26,6 +26,7 @@ def inference(
     checkpoint_path: str,
     test_dataset_path: str,
     visual2index_path: str,
+    num_iter: int,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -77,7 +78,7 @@ def inference(
             x_ind[:, :] = X_MASK
             y_ind[:, :] = Y_MASK
             f_ind[:, :] = F_MASK
-            for iteration in range(20):
+            for iteration in range(num_iter):
                 first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                 for i in range(ids_vis.size()[1]):
                     # forward
@@ -167,6 +168,12 @@ def parse_args():
         default="data/visual2index.json",
         help="Path to the visual2index mapping json.",
     )
+    parser.add_argument(
+        "--num_iter",
+        type=int,
+        default=5,
+        help="Number of iterations for the inference.",
+    )
 
     return parser.parse_args()
 
@@ -178,6 +185,7 @@ def main():
         args.checkpoint_path,
         args.test_dataset_path,
         args.visual2index_path,
+        args.num_iter,
     )
 
 
