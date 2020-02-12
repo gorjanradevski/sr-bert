@@ -58,7 +58,6 @@ def train(
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
     # Criterion
-    criterion = nn.MSELoss(reduction="mean")
     total_dist_x = 0
     total_dist_y = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
@@ -82,7 +81,7 @@ def train(
             y_ind[:, :] = Y_MASK
             f_ind[:, :] = F_MASK
             for iteration in range(20):
-                first = torch.cat([x_ind, y_ind, f_ind], dim=1)
+                first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                 for i in range(ids_vis.size()[1]):
                     # forward
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
@@ -116,7 +115,7 @@ def train(
                     y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
                     f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
                 # Check for termination
-                last = torch.cat([x_ind, y_ind, f_ind], dim=1)
+                last = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                 if torch.all(torch.eq(first, last)):
                     break
 
