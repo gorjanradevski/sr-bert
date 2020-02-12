@@ -72,12 +72,12 @@ def inference(
             f_lab,
             t_types,
             attn_mask,
-        ) in test_loader:
+        ) in tqdm(test_loader):
             # Set all indices to MASK tokens
             x_ind[:, :] = X_MASK
             y_ind[:, :] = Y_MASK
             f_ind[:, :] = F_MASK
-            for iteration in tqdm(range(20)):
+            for iteration in range(20):
                 first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                 for i in range(ids_vis.size()[1]):
                     # forward
