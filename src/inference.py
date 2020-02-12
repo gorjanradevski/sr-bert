@@ -123,7 +123,9 @@ def inference(
             total_dist_y += torch.mean(
                 torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
             )
-            total_acc_f += (f_ind == f_lab[:, max_ids_text:]).sum() / f_ind.size()[1]
+            total_acc_f += (
+                f_ind == f_lab[:, max_ids_text:]
+            ).sum().item() / f_ind.size()[1]
 
         print(
             f"The average distance per scene for X is: {total_dist_x/len(test_dataset)}"
