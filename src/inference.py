@@ -129,12 +129,10 @@ def inference(
                 f_ind == f_lab[:, max_ids_text:]
             ).sum().item() / f_ind.size()[1]
 
-        print(
-            f"The average distance per scene for X is: {total_dist_x/len(test_dataset)}"
-        )
-        print(
-            f"The average distance per scene for Y is: {total_dist_y/len(test_dataset)}"
-        )
+        total_dist_x /= len(test_dataset)
+        total_dist_y /= len(test_dataset)
+        print(f"The average distance per scene for X is: {round(total_dist_x, 2)}")
+        print(f"The average distance per scene for Y is: {round(total_dist_y, 2)}")
         print(
             f"The average accuracy per scene for F is: {total_acc_f/len(test_dataset)}"
         )
