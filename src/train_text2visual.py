@@ -234,8 +234,8 @@ def train(
                     f_ind == f_lab[:, max_ids_text:]
                 ).sum().item() / f_ind.size()[1]
 
-            total_dist_x /= len(val_dataset)
-            total_dist_y /= len(val_dataset)
+            total_dist_x /= len(train_dataset)
+            total_dist_y /= len(train_dataset)
             cur_avg_distance = round((total_dist_x + total_dist_y) / 2, 2)
             if cur_avg_distance < best_avg_distance:
                 best_avg_distance = cur_avg_distance
