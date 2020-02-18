@@ -92,8 +92,8 @@ def inference(
                         x_lab.to(device),
                         y_lab.to(device),
                         f_lab.to(device),
-                        t_types,
-                        attn_mask,
+                        t_types.to(device),
+                        attn_mask.to(device),
                     )
                     x_ind[:, i] = X_MASK
                     y_ind[:, i] = Y_MASK
