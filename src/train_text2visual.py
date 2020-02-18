@@ -56,7 +56,7 @@ def train(
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(train_dataset)
+    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -171,7 +171,7 @@ def train(
                 x_ind[:, :] = X_MASK
                 y_ind[:, :] = Y_MASK
                 f_ind[:, :] = F_MASK
-                for iteration in range(5):
+                for iteration in range(2):
                     first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                     for i in range(ids_vis.size()[1]):
                         # forward
