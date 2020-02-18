@@ -27,6 +27,7 @@ def inference(
     test_dataset_path: str,
     visual2index_path: str,
     num_iter: int,
+    batch_size: int,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -43,7 +44,7 @@ def inference(
     # Create loaders
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_text2visual_batch,
         sampler=test_sampler,
@@ -176,6 +177,7 @@ def parse_args():
         default=5,
         help="Number of iterations for the inference.",
     )
+    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
 
     return parser.parse_args()
 
@@ -188,6 +190,7 @@ def main():
         args.test_dataset_path,
         args.visual2index_path,
         args.num_iter,
+        args.batch_size,
     )
 
 
