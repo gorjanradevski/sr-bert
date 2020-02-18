@@ -146,7 +146,6 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-                print(x_loss.item(), y_loss.item(), f_loss.item())
 
         # Set model in evaluation mode
         model.train(False)
