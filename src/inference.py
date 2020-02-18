@@ -117,11 +117,13 @@ def inference(
                 if torch.all(torch.eq(first, last)):
                     break
 
-            total_dist_x += torch.mean(
+            total_dist_x += torch.sum(
                 torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
+                * attn_mask[:, max_ids_text:]
             )
-            total_dist_y += torch.mean(
+            total_dist_y += torch.sum(
                 torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
+                * attn_mask[:, max_ids_text:]
             )
             total_acc_f += (
                 f_ind == f_lab[:, max_ids_text:]

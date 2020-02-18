@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -15,6 +15,9 @@ from datasets import (
     X_PAD,
     Y_PAD,
     F_PAD,
+    X_MASK,
+    Y_MASK,
+    F_MASK,
 )
 from modeling import Text2VisualBert
 
@@ -43,8 +46,14 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Subset(
+        Text2VisualDataset(
+            train_dataset_path,
+            visual2index,
+            mask_probability=mask_probability,
+            train=True,
+        ),
+        [0, 1, 2],
     )
     val_dataset = Text2VisualDataset(
         val_dataset_path, visual2index, mask_probability=mask_probability, train=False
@@ -53,7 +62,7 @@ def train(
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(val_dataset)
+    val_sampler = SequentialSampler(train_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
@@ -63,7 +72,7 @@ def train(
         collate_fn=collate_pad_text2visual_batch,
     )
     val_loader = DataLoader(
-        val_dataset,
+        train_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_text2visual_batch,
@@ -77,20 +86,20 @@ def train(
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
-    best_val_loss = sys.maxsize
+    best_avg_distance = sys.maxsize
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         cur_epoch = checkpoint["epoch"]
-        best_val_loss = checkpoint["loss"]
+        best_avg_distance = checkpoint["distance"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
         del checkpoint
 
         logger.warning(
             f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
         )
-        logger.warning(f"The previous best loss was {best_val_loss}!")
+        logger.warning(f"The previous best avg distance was {best_avg_distance}!")
 
     for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
@@ -146,79 +155,113 @@ def train(
 
         # Set model in evaluation mode
         model.train(False)
+        # Reset counters
+        total_dist_x = 0
+        total_dist_y = 0
+        total_acc_f = 0
         with torch.no_grad():
-            # Reset current loss
-            cur_val_loss = 0
-            for _ in tqdm(range(10)):
-                for (
-                    ids_text,
-                    ids_vis,
-                    pos_text,
-                    x_ind,
-                    y_ind,
-                    f_ind,
-                    x_lab,
-                    y_lab,
-                    f_lab,
-                    t_types,
-                    attn_mask,
-                ) in val_loader:
-                    # remove past gradients
-                    optimizer.zero_grad()
-                    # forward
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
-                        ids_text.to(device),
-                        ids_vis.to(device),
-                        pos_text.to(device),
-                        x_ind.to(device),
-                        y_ind.to(device),
-                        f_ind.to(device),
-                        x_lab.to(device),
-                        y_lab.to(device),
-                        f_lab.to(device),
-                        t_types,
-                        attn_mask,
-                    )
-                    x_scores, y_scores, f_scores = model(
-                        ids_text,
-                        ids_vis,
-                        pos_text,
-                        x_ind,
-                        y_ind,
-                        f_ind,
-                        t_types,
-                        attn_mask,
-                    )
-                    # Get losses
-                    x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
-                    y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
-                    f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
-                    # Comibine losses
-                    loss = x_loss + y_loss + f_loss
-                    cur_val_loss += loss.item()
+            for (
+                ids_text,
+                ids_vis,
+                pos_text,
+                x_ind,
+                y_ind,
+                f_ind,
+                x_lab,
+                y_lab,
+                f_lab,
+                t_types,
+                attn_mask,
+            ) in tqdm(val_loader):
+                # Set all indices to MASK tokens
+                x_ind[:, :] = X_MASK
+                y_ind[:, :] = Y_MASK
+                f_ind[:, :] = F_MASK
+                for iteration in range(5):
+                    first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
+                    for i in range(ids_vis.size()[1]):
+                        # forward
+                        ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                            ids_text.to(device),
+                            ids_vis.to(device),
+                            pos_text.to(device),
+                            x_ind.to(device),
+                            y_ind.to(device),
+                            f_ind.to(device),
+                            x_lab.to(device),
+                            y_lab.to(device),
+                            f_lab.to(device),
+                            t_types,
+                            attn_mask,
+                        )
+                        x_ind[:, i] = X_MASK
+                        y_ind[:, i] = Y_MASK
+                        f_ind[:, i] = F_MASK
+                        max_ids_text = ids_text.size()[1]
+                        x_scores, y_scores, f_scores = model(
+                            ids_text,
+                            ids_vis,
+                            pos_text,
+                            x_ind,
+                            y_ind,
+                            f_ind,
+                            t_types,
+                            attn_mask,
+                        )
+                        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][
+                            :, i
+                        ]
+                        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][
+                            :, i
+                        ]
+                        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][
+                            :, i
+                        ]
+                    # Check for termination
+                    last = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
+                    if torch.all(torch.eq(first, last)):
+                        break
 
-            cur_val_loss /= 10
-            if cur_val_loss < best_val_loss:
-                best_val_loss = cur_val_loss
+                total_dist_x += torch.sum(
+                    torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
+                    * attn_mask[:, max_ids_text:]
+                ).item()
+                total_dist_y += torch.sum(
+                    torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
+                    * attn_mask[:, max_ids_text:]
+                ).item()
+                total_acc_f += (
+                    f_ind == f_lab[:, max_ids_text:]
+                ).sum().item() / f_ind.size()[1]
+
+            cur_avg_distance = round(
+                (total_dist_x / len(val_dataset) + total_dist_y / len(val_dataset)) / 2,
+                2,
+            )
+            if cur_avg_distance < best_avg_distance:
+                best_avg_distance = cur_avg_distance
                 print("======================")
                 print(
-                    f"Found new best with loss {best_val_loss} on epoch "
+                    f"Found new best with X distance {round(total_dist_x, 2)} and Y "
+                    f"distance {round(total_dist_y, 2)} on epoch "
                     f"{epoch+1}. Saving model!!!"
                 )
-                torch.save(model.state_dict(), save_model_path)
+                # torch.save(model.state_dict(), save_model_path)
                 print("======================")
             else:
-                print(f"Loss on epoch {epoch+1} is: {cur_val_loss}. ")
+                print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
             print("Saving intermediate checkpoint...")
+            """
             torch.save(
                 {
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                    "loss": best_val_loss,
+                    "distance": best_avg_distance,
                 },
                 intermediate_save_checkpoint_path,
             )
+            """
 
 
 def parse_args():
