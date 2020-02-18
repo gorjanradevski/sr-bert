@@ -2,12 +2,11 @@ import argparse
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch import nn
 import logging
 
 from datasets import ClipartsDataset
 from modeling import ImageEmbeddingsGenerator
-
-from transformers import BertModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,25 +16,17 @@ def dump_word_embeddings(
     cliparts_path: str, visual2index_path: str, save_embeddings_path: str
 ):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    logger.info("Loading BERT...")
-    bert_model = BertModel.from_pretrained("bert-base-uncased").to(device)
     logger.info("Loading ResNet152...")
     resnet_model = ImageEmbeddingsGenerator().to(device)
-    current_num_embeds = bert_model.embeddings.word_embeddings.num_embeddings
-    logger.info(f"Current size of the word embeddings matrix {current_num_embeds}")
     dataset = ClipartsDataset(cliparts_path, visual2index_path)
-    bert_model.resize_token_embeddings(current_num_embeds + len(dataset))
-    logger.info(
-        f"Updated size of the word embedding matrix {bert_model.embeddings.word_embeddings.num_embeddings}"
-    )
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
+    embedding_matrix = nn.Embedding(len(dataset) + 1, 768, padding_idx=0).to(device)
     with torch.no_grad():
         for image, index in tqdm(loader):
-            # https://github.com/huggingface/transformers/issues/1413
             image = image.to(device)
             image_embedding = resnet_model(image)
-            bert_model.embeddings.word_embeddings.weight[index, :] = image_embedding
-    torch.save(bert_model.embeddings.word_embeddings.weight.data, save_embeddings_path)
+            embedding_matrix.weight[index.item(), :] = image_embedding
+    torch.save(embedding_matrix.weight.data, save_embeddings_path)
 
 
 def parse_args():

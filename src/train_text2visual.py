@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -43,8 +43,14 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Subset(
+        Text2VisualDataset(
+            train_dataset_path,
+            visual2index,
+            mask_probability=mask_probability,
+            train=False,
+        ),
+        [0, 1],
     )
     val_dataset = Text2VisualDataset(
         val_dataset_path, visual2index, mask_probability=mask_probability, train=False
@@ -143,7 +149,7 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-
+        """
         # Set model in evaluation mode
         model.train(False)
         with torch.no_grad():
@@ -219,6 +225,7 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
+            """
 
 
 def parse_args():
