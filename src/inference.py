@@ -120,11 +120,11 @@ def inference(
             total_dist_x += torch.sum(
                 torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
                 * attn_mask[:, max_ids_text:]
-            )
+            ).item()
             total_dist_y += torch.sum(
                 torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
                 * attn_mask[:, max_ids_text:]
-            )
+            ).item()
             total_acc_f += (
                 f_ind == f_lab[:, max_ids_text:]
             ).sum().item() / f_ind.size()[1]

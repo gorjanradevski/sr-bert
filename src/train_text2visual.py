@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -46,14 +46,8 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Subset(
-        Text2VisualDataset(
-            train_dataset_path,
-            visual2index,
-            mask_probability=mask_probability,
-            train=True,
-        ),
-        [0, 1, 2],
+    train_dataset = Text2VisualDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
     val_dataset = Text2VisualDataset(
         val_dataset_path, visual2index, mask_probability=mask_probability, train=False
@@ -72,7 +66,7 @@ def train(
         collate_fn=collate_pad_text2visual_batch,
     )
     val_loader = DataLoader(
-        train_dataset,
+        val_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_text2visual_batch,
@@ -152,6 +146,7 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
+                print(x_loss.item(), y_loss.item(), f_loss.item())
 
         # Set model in evaluation mode
         model.train(False)
@@ -245,12 +240,12 @@ def train(
                     f"distance {round(total_dist_y, 2)} on epoch "
                     f"{epoch+1}. Saving model!!!"
                 )
-                # torch.save(model.state_dict(), save_model_path)
+                torch.save(model.state_dict(), save_model_path)
                 print("======================")
             else:
                 print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
             print("Saving intermediate checkpoint...")
-            """
+
             torch.save(
                 {
                     "epoch": epoch,
@@ -260,7 +255,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-            """
 
 
 def parse_args():
