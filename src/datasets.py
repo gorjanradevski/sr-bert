@@ -14,6 +14,7 @@ Y_MASK = 705
 Y_PAD = 706
 F_MASK = 2
 F_PAD = 3
+SCENE_WIDTH = 500
 
 
 class Text2VisualDataset(TorchDataset):
@@ -29,6 +30,17 @@ class Text2VisualDataset(TorchDataset):
         self.mask_probability = mask_probability
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.train = train
+
+    @staticmethod
+    def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
+        return torch.abs(SCENE_WIDTH - x_indexes), torch.abs(1 - f_indexes)
+
+    @staticmethod
+    def readjust_indexes(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
+        return (
+            torch.abs(x_indexes - torch.randint_like(x_indexes, low=-5, high=5)),
+            torch.abs(y_indexes - torch.randint_like(y_indexes, low=-5, high=5)),
+        )
 
     def masking(
         self, x_indexes: torch.Tensor, y_indexes: torch.Tensor, f_indexes: torch.Tensor
@@ -107,6 +119,14 @@ class Text2VisualDataset(TorchDataset):
         )
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
+        # Flip scene with 50% prob during training
+        if self.train and np.random.randint(low=0, high=2) == 1:
+            x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
+
+        # Readjust indices with 50% prob during training
+        if self.train and np.random.randint(low=0, high=2) == 1:
+            x_indexes, y_indexes = self.readjust_indexes(x_indexes, y_indexes)
+
         # Mask visual tokens
         x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels = self.masking(
             x_indexes, y_indexes, f_indexes
