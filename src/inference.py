@@ -6,6 +6,7 @@ from tqdm import tqdm
 import logging
 import json
 from transformers import BertConfig
+from inference_utils import real_distance, relative_distance
 
 from datasets import (
     Text2VisualDataset,
@@ -19,10 +20,6 @@ from modeling import Text2VisualBert
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def elementwise_distances(X: torch.Tensor):
-    return torch.triu(torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2)))
 
 
 def inference(
@@ -125,31 +122,21 @@ def inference(
                     break
 
             if metric_type == "relative_distance":
-                total_dist_x += torch.sum(
-                    torch.abs(
-                        elementwise_distances(x_ind)
-                        - elementwise_distances(x_lab[:, max_ids_text:])
-                    ).sum(dim=1)
-                    * attn_mask[:, max_ids_text:]
-                ).item()
-
-                total_dist_y += torch.sum(
-                    torch.abs(
-                        elementwise_distances(y_ind)
-                        - elementwise_distances(y_lab[:, max_ids_text:])
-                    ).sum(dim=1)
-                    * attn_mask[:, max_ids_text:]
-                ).item()
+                total_dist_x += relative_distance(
+                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                )
+                total_dist_y += relative_distance(
+                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                )
 
             elif metric_type == "real_distance":
-                total_dist_x += torch.sum(
-                    torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
-                    * attn_mask[:, max_ids_text:]
-                ).item()
-                total_dist_y += torch.sum(
-                    torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
-                    * attn_mask[:, max_ids_text:]
-                ).item()
+                total_dist_x += real_distance(
+                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                )
+
+                total_dist_y += real_distance(
+                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                )
                 total_acc_f += (
                     f_ind == f_lab[:, max_ids_text:]
                 ).sum().item() / f_ind.size()[1]

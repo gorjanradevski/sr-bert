@@ -4,8 +4,6 @@ import argparse
 import logging
 from typing import Dict
 
-from constants import remapped
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -41,38 +39,6 @@ def parse_sentences(
     return index2sentences
 
 
-def flip_scene(scene):
-    scene["elements"] = [
-        {
-            "visual_name": element["visual_name"],
-            "x": abs(500 - element["x"]),
-            "y": element["y"],
-            "z": element["z"],
-            "flip": abs(1 - element["flip"]),
-        }
-        for element in scene["elements"]
-    ]
-
-    return scene
-
-
-def detect_ambiguity(scene):
-    for element in scene["elements"]:
-        if element["visual_name"].startswith("hb0"):
-            mike_element = element
-        elif element["visual_name"].startswith("hb1"):
-            jenny_element = element
-        else:
-            continue
-
-    if "jenny_element" not in locals() or "mike_element" not in locals():
-        return False
-    if mike_element["x"] > jenny_element["x"]:
-        return True
-
-    return False
-
-
 def create_datasets(
     dump_train_dataset_path: str,
     dump_test_dataset_path: str,
@@ -98,8 +64,6 @@ def create_datasets(
                 continue
             for _ in range(num_visuals):
                 visual_name, _, _, x, y, z, flip = scenes.readline().split()
-                if visual_name in remapped:
-                    visual_name = remapped[visual_name]
                 scene["elements"].append(
                     {
                         "visual_name": visual_name,
@@ -109,8 +73,6 @@ def create_datasets(
                         "flip": int(flip),
                     }
                 )
-            if detect_ambiguity(scene):
-                scene = flip_scene(scene)
             index2scene[i] = scene
 
     # Combine the scenes and sentences
@@ -140,62 +102,6 @@ def create_datasets(
             "buttons.png",
             "MikeJenny.png",
             "title.png",
-            "hb0_0s.png",
-            "hb0_1s.png",
-            "hb0_3s.png",
-            "hb0_4s.png",
-            "hb0_5s.png",
-            "hb0_6s.png",
-            "hb0_8s.png",
-            "hb0_9s.png",
-            "hb0_10s.png",
-            "hb0_11s.png",
-            "hb0_13s.png",
-            "hb0_14s.png",
-            "hb0_15s.png",
-            "hb0_16s.png",
-            "hb0_18s.png",
-            "hb0_19s.png",
-            "hb0_20s.png",
-            "hb0_21s.png",
-            "hb0_23s.png",
-            "hb0_24s.png",
-            "hb0_25s.png",
-            "hb0_26s.png",
-            "hb0_28s.png",
-            "hb0_29s.png",
-            "hb0_30s.png",
-            "hb0_31s.png",
-            "hb0_33s.png",
-            "hb0_34s.png",
-            "hb1_0s.png",
-            "hb1_1s.png",
-            "hb1_3s.png",
-            "hb1_4s.png",
-            "hb1_5s.png",
-            "hb1_6s.png",
-            "hb1_8s.png",
-            "hb1_9s.png",
-            "hb1_10s.png",
-            "hb1_11s.png",
-            "hb1_13s.png",
-            "hb1_14s.png",
-            "hb1_15s.png",
-            "hb1_16s.png",
-            "hb1_18s.png",
-            "hb1_19s.png",
-            "hb1_20s.png",
-            "hb1_21s.png",
-            "hb1_23s.png",
-            "hb1_24s.png",
-            "hb1_25s.png",
-            "hb1_26s.png",
-            "hb1_28s.png",
-            "hb1_29s.png",
-            "hb1_30s.png",
-            "hb1_31s.png",
-            "hb1_33s.png",
-            "hb1_34s.png",
         }
         visual2index = {}
         index = 1

@@ -8,6 +8,7 @@ import sys
 import logging
 import json
 from transformers import BertConfig
+from inference_utils import relative_distance
 
 from datasets import (
     Text2VisualDataset,
@@ -127,7 +128,7 @@ def train(
                     y_lab.to(device),
                     f_lab.to(device),
                     t_types.to(device),
-                    attn_mask.to(device)
+                    attn_mask.to(device),
                 )
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
@@ -216,14 +217,12 @@ def train(
                     if torch.all(torch.eq(first, last)):
                         break
 
-                total_dist_x += torch.sum(
-                    torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
-                    * attn_mask[:, max_ids_text:]
-                ).item()
-                total_dist_y += torch.sum(
-                    torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
-                    * attn_mask[:, max_ids_text:]
-                ).item()
+                total_dist_x += relative_distance(
+                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                )
+                total_dist_y += relative_distance(
+                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                )
                 total_acc_f += (
                     f_ind == f_lab[:, max_ids_text:]
                 ).sum().item() / f_ind.size()[1]
