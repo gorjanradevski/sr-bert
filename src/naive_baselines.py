@@ -12,7 +12,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def naive_inference(test_dataset_path: str, visual2index_path: str, naive_type: str):
+def elementwise_distances(X: torch.Tensor):
+    return torch.triu(torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2)))
+
+
+def naive_inference(
+    test_dataset_path: str, visual2index_path: str, naive_type: str, metric_type: str
+):
     # Create datasets
     visual2index = json.load(open(visual2index_path))
     test_dataset = Text2VisualDataset(
@@ -51,9 +57,23 @@ def naive_inference(test_dataset_path: str, visual2index_path: str, naive_type: 
             else:
                 raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
-            total_dist_x += torch.mean(torch.abs(x_ind - x_lab).float())
-            total_dist_y += torch.mean(torch.abs(y_ind - y_lab).float())
-            total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
+            if metric_type == "real_distance":
+                total_dist_x += torch.sum(torch.abs(x_ind - x_lab).float())
+                total_dist_y += torch.sum(torch.abs(y_ind - y_lab).float())
+                total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
+            elif metric_type == "relative_distance":
+                total_dist_x += torch.sum(
+                    torch.abs(
+                        elementwise_distances(x_ind) - elementwise_distances(x_lab)
+                    ).sum(dim=1)
+                ).item()
+                total_dist_y += torch.sum(
+                    torch.abs(
+                        elementwise_distances(y_ind) - elementwise_distances(y_lab)
+                    ).sum(dim=1)
+                ).item()
+            else:
+                raise ValueError(f"{metric_type} not recognized")
 
         print(
             f"The average distance per scene for X is: {total_dist_x/len(test_dataset)}"
@@ -89,13 +109,21 @@ def parse_args():
         default="random",
         help="Type of naive inference: random or center",
     )
+    parser.add_argument(
+        "--metric_type", type=str, default="relative_distance", help="The metric type"
+    )
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    naive_inference(args.test_dataset_path, args.visual2index_path, args.naive_type)
+    naive_inference(
+        args.test_dataset_path,
+        args.visual2index_path,
+        args.naive_type,
+        args.metric_type,
+    )
 
 
 if __name__ == "__main__":

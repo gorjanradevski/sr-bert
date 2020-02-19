@@ -21,6 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def elementwise_distances(X: torch.Tensor):
+    return torch.triu(torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2)))
+
+
 def inference(
     embeddings_path: str,
     checkpoint_path: str,
@@ -28,6 +32,7 @@ def inference(
     visual2index_path: str,
     num_iter: int,
     batch_size: int,
+    metric_type: str,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -60,6 +65,7 @@ def inference(
     total_dist_y = 0
     total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
+    logger.warning(f"Using {metric_type} to perform inference!")
     # Set model in evaluation mode
     with torch.no_grad():
         for (
@@ -118,17 +124,38 @@ def inference(
                 if torch.all(torch.eq(first, last)):
                     break
 
-            total_dist_x += torch.sum(
-                torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
-                * attn_mask[:, max_ids_text:]
-            ).item()
-            total_dist_y += torch.sum(
-                torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
-                * attn_mask[:, max_ids_text:]
-            ).item()
-            total_acc_f += (
-                f_ind == f_lab[:, max_ids_text:]
-            ).sum().item() / f_ind.size()[1]
+            if metric_type == "relative_distance":
+                total_dist_x += torch.sum(
+                    torch.abs(
+                        elementwise_distances(x_ind)
+                        - elementwise_distances(x_lab[:, max_ids_text:])
+                    ).sum(dim=1)
+                    * attn_mask[:, max_ids_text:]
+                ).item()
+
+                total_dist_y += torch.sum(
+                    torch.abs(
+                        elementwise_distances(y_ind)
+                        - elementwise_distances(y_lab[:, max_ids_text:])
+                    ).sum(dim=1)
+                    * attn_mask[:, max_ids_text:]
+                ).item()
+
+            elif metric_type == "real_distance":
+                total_dist_x += torch.sum(
+                    torch.abs(x_ind - x_lab[:, max_ids_text:]).float()
+                    * attn_mask[:, max_ids_text:]
+                ).item()
+                total_dist_y += torch.sum(
+                    torch.abs(y_ind - y_lab[:, max_ids_text:]).float()
+                    * attn_mask[:, max_ids_text:]
+                ).item()
+                total_acc_f += (
+                    f_ind == f_lab[:, max_ids_text:]
+                ).sum().item() / f_ind.size()[1]
+
+            else:
+                raise ValueError(f"Metric {metric_type} not recognized!")
 
         total_dist_x /= len(test_dataset)
         total_dist_y /= len(test_dataset)
@@ -172,6 +199,9 @@ def parse_args():
         help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
+        "--metric_type", type=str, default="relative_distance", help="The metric type"
+    )
+    parser.add_argument(
         "--num_iter",
         type=int,
         default=5,
@@ -191,6 +221,7 @@ def main():
         args.visual2index_path,
         args.num_iter,
         args.batch_size,
+        args.metric_type,
     )
 
 

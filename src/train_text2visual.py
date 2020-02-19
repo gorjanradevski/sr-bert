@@ -126,8 +126,8 @@ def train(
                     x_lab.to(device),
                     y_lab.to(device),
                     f_lab.to(device),
-                    t_types.to(device),
-                    attn_mask.to(device),
+                    t_types,
+                    attn_mask,
                 )
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
