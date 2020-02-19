@@ -37,10 +37,16 @@ class Text2VisualDataset(TorchDataset):
 
     @staticmethod
     def readjust_indexes(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
-        return (
-            torch.abs(x_indexes - torch.randint_like(x_indexes, low=-5, high=5)),
-            torch.abs(y_indexes - torch.randint_like(y_indexes, low=-5, high=5)),
+        x_adjusted = torch.abs(
+            x_indexes - torch.randint_like(x_indexes, low=-5, high=5)
         )
+        y_adjusted = torch.abs(
+            y_indexes - torch.randint_like(y_indexes, low=-5, high=5)
+        )
+        x_adjusted[torch.where(x_adjusted >= X_MASK)] = X_MASK - 1
+        y_adjusted[torch.where(y_adjusted >= Y_MASK)] = Y_MASK - 1
+
+        return x_adjusted, y_adjusted
 
     def masking(
         self, x_indexes: torch.Tensor, y_indexes: torch.Tensor, f_indexes: torch.Tensor
