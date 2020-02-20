@@ -6,7 +6,7 @@ from tqdm import tqdm
 import logging
 import json
 from transformers import BertConfig
-from inference_utils import real_distance, relative_distance
+from utils import real_distance, relative_distance
 
 from datasets import (
     Text2VisualDiscreteDataset,
