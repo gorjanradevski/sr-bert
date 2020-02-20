@@ -9,13 +9,13 @@ from transformers import BertConfig
 from inference_utils import real_distance, relative_distance
 
 from datasets import (
-    Text2VisualDataset,
-    collate_pad_text2visual_batch,
+    Text2VisualDiscreteDataset,
+    collate_pad_discrete_text2visual_batch,
     X_MASK,
     Y_MASK,
     F_MASK,
 )
-from modeling import Text2VisualBert
+from modeling import Text2VisualDiscreteBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +29,7 @@ def inference(
     visual2index_path: str,
     num_iter: int,
     batch_size: int,
-    metric_type: str,
+    without_text: bool,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -37,8 +37,12 @@ def inference(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    test_dataset = Text2VisualDataset(
-        test_dataset_path, visual2index, mask_probability=1.0, train=False
+    test_dataset = Text2VisualDiscreteDataset(
+        test_dataset_path,
+        visual2index,
+        mask_probability=1.0,
+        train=False,
+        without_text=without_text,
     )
     logger.info(f"Testing on {len(test_dataset)}")
     # Create samplers
@@ -48,21 +52,24 @@ def inference(
         test_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_text2visual_batch,
+        collate_fn=collate_pad_discrete_text2visual_batch,
         sampler=test_sampler,
     )
     # Prepare model
-    model = nn.DataParallel(Text2VisualBert(BertConfig(), device, embeddings_path)).to(
-        device
-    )
+    model = nn.DataParallel(
+        Text2VisualDiscreteBert(BertConfig(), device, embeddings_path)
+    ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
     # Criterion
-    total_dist_x = 0
-    total_dist_y = 0
+    total_dist_x_relative = 0
+    total_dist_y_relative = 0
+    total_dist_x_real = 0
+    total_dist_y_real = 0
     total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
-    logger.warning(f"Using {metric_type} to perform inference!")
+    if without_text:
+        logger.warning("The model won't use the text to perfrom the inference.")
     # Set model in evaluation mode
     with torch.no_grad():
         for (
@@ -121,33 +128,38 @@ def inference(
                 if torch.all(torch.eq(first, last)):
                     break
 
-            if metric_type == "relative_distance":
-                total_dist_x += relative_distance(
-                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
-                total_dist_y += relative_distance(
-                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
+            total_dist_x_relative += relative_distance(
+                x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+            )
+            total_dist_y_relative += relative_distance(
+                y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+            )
+            total_dist_x_real += real_distance(
+                x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+            )
+            total_dist_y_real += real_distance(
+                y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+            )
+            total_acc_f += (
+                f_ind == f_lab[:, max_ids_text:]
+            ).sum().item() / f_ind.size()[1]
 
-            elif metric_type == "real_distance":
-                total_dist_x += real_distance(
-                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
-
-                total_dist_y += real_distance(
-                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
-                total_acc_f += (
-                    f_ind == f_lab[:, max_ids_text:]
-                ).sum().item() / f_ind.size()[1]
-
-            else:
-                raise ValueError(f"Metric {metric_type} not recognized!")
-
-        total_dist_x /= len(test_dataset)
-        total_dist_y /= len(test_dataset)
-        print(f"The average distance per scene for X is: {round(total_dist_x, 2)}")
-        print(f"The average distance per scene for Y is: {round(total_dist_y, 2)}")
+        total_dist_x_relative /= len(test_dataset)
+        total_dist_y_relative /= len(test_dataset)
+        total_dist_x_real /= len(test_dataset)
+        total_dist_y_real /= len(test_dataset)
+        print(
+            f"The average relative distance per scene for X is: {round(total_dist_x_relative, 2)}"
+        )
+        print(
+            f"The average relative distance per scene for Y is: {round(total_dist_y_relative, 2)}"
+        )
+        print(
+            f"The average real distance per scene for X is: {round(total_dist_x_real, 2)}"
+        )
+        print(
+            f"The average real distance per scene for Y is: {round(total_dist_y_real, 2)}"
+        )
         print(
             f"The average accuracy per scene for F is: {total_acc_f/len(test_dataset)}"
         )
@@ -186,15 +198,15 @@ def parse_args():
         help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
-        "--metric_type", type=str, default="relative_distance", help="The metric type"
-    )
-    parser.add_argument(
         "--num_iter",
         type=int,
         default=5,
         help="Number of iterations for the inference.",
     )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
+    parser.add_argument(
+        "--without_text", action="store_true", help="Whether to use the text."
+    )
 
     return parser.parse_args()
 
@@ -208,7 +220,7 @@ def main():
         args.visual2index_path,
         args.num_iter,
         args.batch_size,
-        args.metric_type,
+        args.without_text,
     )
 
 

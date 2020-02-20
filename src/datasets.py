@@ -17,19 +17,21 @@ F_PAD = 3
 SCENE_WIDTH = 500
 
 
-class Text2VisualDataset(TorchDataset):
+class Text2VisualDiscreteDataset(TorchDataset):
     def __init__(
         self,
         dataset_file_path: str,
         visual2index: str,
         mask_probability: float,
         train: bool,
+        without_text: bool = False,
     ):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
         self.mask_probability = mask_probability
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.train = train
+        self.without_text = without_text
 
     @staticmethod
     def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
@@ -111,6 +113,10 @@ class Text2VisualDataset(TorchDataset):
         input_ids_sentence = torch.tensor(
             self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
         )
+        if self.without_text:
+            input_ids_sentence = torch.tensor(
+                [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
+            )
         # Prepare visuals
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
@@ -179,7 +185,7 @@ class ClipartsDataset(TorchDataset):
         return len(self.file_paths_indices)
 
 
-def collate_pad_text2visual_batch(
+def collate_pad_discrete_text2visual_batch(
     batch: Tuple[
         Tuple[torch.Tensor],
         Tuple[torch.tensor],

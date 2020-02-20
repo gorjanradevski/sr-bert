@@ -1,11 +1,16 @@
 import argparse
 import torch
-from torch.utils.data import DataLoader, SequentialSampler, Subset
+from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import logging
 import json
-from inference_utils import elementwise_distances
-from datasets import Text2VisualDataset, collate_pad_text2visual_batch, X_MASK, Y_MASK
+from inference_utils import relative_distance
+from datasets import (
+    Text2VisualDiscreteDataset,
+    collate_pad_discrete_text2visual_batch,
+    X_MASK,
+    Y_MASK,
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -17,11 +22,8 @@ def naive_inference(
 ):
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    test_dataset = Subset(
-        Text2VisualDataset(
-            test_dataset_path, visual2index, mask_probability=1.0, train=False
-        ),
-        [0, 1, 2, 3, 4, 5],
+    test_dataset = Text2VisualDiscreteDataset(
+        test_dataset_path, visual2index, mask_probability=1.0, train=False
     )
     logger.info(f"Testing on {len(test_dataset)}")
     # Create samplers
@@ -31,7 +33,7 @@ def naive_inference(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_text2visual_batch,
+        collate_fn=collate_pad_discrete_text2visual_batch,
         sampler=test_sampler,
     )
     # Metrics
@@ -61,20 +63,8 @@ def naive_inference(
                 total_dist_y += torch.mean(torch.abs(y_ind - y_lab).float())
                 total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
             elif metric_type == "relative_distance":
-                total_dist_x += torch.mean(
-                    torch.abs(
-                        elementwise_distances(x_ind) - elementwise_distances(x_lab)
-                    )
-                    .float()
-                    .sum(dim=1)
-                ).item()
-                total_dist_y += torch.mean(
-                    torch.abs(
-                        elementwise_distances(y_ind) - elementwise_distances(y_lab)
-                    )
-                    .float()
-                    .sum(dim=1)
-                ).item()
+                total_dist_x += relative_distance(x_ind, x_lab, torch.ones_like(x_ind))
+                total_dist_y += relative_distance(y_ind, y_lab, torch.ones_like(x_ind))
             else:
                 raise ValueError(f"{metric_type} not recognized")
 

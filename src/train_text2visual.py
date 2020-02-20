@@ -11,8 +11,8 @@ from transformers import BertConfig
 from inference_utils import relative_distance
 
 from datasets import (
-    Text2VisualDataset,
-    collate_pad_text2visual_batch,
+    Text2VisualDiscreteDataset,
+    collate_pad_discrete_text2visual_batch,
     X_PAD,
     Y_PAD,
     F_PAD,
@@ -20,7 +20,7 @@ from datasets import (
     Y_MASK,
     F_MASK,
 )
-from modeling import Text2VisualBert
+from modeling import Text2VisualDiscreteBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -47,10 +47,10 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDataset(
+    train_dataset = Text2VisualDiscreteDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
-    val_dataset = Text2VisualDataset(
+    val_dataset = Text2VisualDiscreteDataset(
         val_dataset_path, visual2index, mask_probability=1.0, train=False
     )
     logger.info(f"Training on {len(train_dataset)}")
@@ -64,19 +64,19 @@ def train(
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_text2visual_batch,
+        collate_fn=collate_pad_discrete_text2visual_batch,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_text2visual_batch,
+        collate_fn=collate_pad_discrete_text2visual_batch,
         sampler=val_sampler,
     )
     # Define training specifics
-    model = nn.DataParallel(Text2VisualBert(BertConfig(), device, embeddings_path)).to(
-        device
-    )
+    model = nn.DataParallel(
+        Text2VisualDiscreteBert(BertConfig(), device, embeddings_path)
+    ).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)

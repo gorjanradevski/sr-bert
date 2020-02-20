@@ -10,9 +10,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class Text2VisualBert(nn.Module):
+class Text2VisualDiscreteBert(nn.Module):
     def __init__(self, config: BertConfig, device, embeddings_path: str = None):
-        super(Text2VisualBert, self).__init__()
+        super(Text2VisualDiscreteBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding.from_pretrained(
             torch.load(embeddings_path, map_location=device),
             freeze=False,
