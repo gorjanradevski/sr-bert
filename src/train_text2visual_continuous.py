@@ -150,13 +150,7 @@ def train(
                 )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
-                loss = (
-                    x_real_loss
-                    + y_real_loss
-                    + f_loss
-                    + x_relative_loss
-                    + y_relative_loss
-                )
+                loss = x_real_loss + y_real_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
