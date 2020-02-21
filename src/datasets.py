@@ -2,16 +2,13 @@ from torch.utils.data import Dataset as TorchDataset
 import json
 from transformers import BertTokenizer
 import torch
-import os
-from PIL import Image
 import numpy as np
-from torchvision import transforms
 from typing import Tuple
 
-X_MASK = 599
-X_PAD = 600
-Y_MASK = 705
-Y_PAD = 706
+X_MASK = 501
+X_PAD = 502
+Y_MASK = 401
+Y_PAD = 402
 F_MASK = 2
 F_PAD = 3
 SCENE_WIDTH = 500
@@ -36,19 +33,6 @@ class Text2VisualDiscreteDataset(TorchDataset):
     @staticmethod
     def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
         return torch.abs(SCENE_WIDTH - x_indexes), torch.abs(1 - f_indexes)
-
-    @staticmethod
-    def readjust_indexes(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
-        x_adjusted = torch.abs(
-            x_indexes - torch.randint_like(x_indexes, low=-5, high=5)
-        )
-        y_adjusted = torch.abs(
-            y_indexes - torch.randint_like(y_indexes, low=-5, high=5)
-        )
-        x_adjusted[torch.where(x_adjusted >= X_MASK)] = X_MASK - 1
-        y_adjusted[torch.where(y_adjusted >= Y_MASK)] = Y_MASK - 1
-
-        return x_adjusted, y_adjusted
 
     def masking(
         self, x_indexes: torch.Tensor, y_indexes: torch.Tensor, f_indexes: torch.Tensor
@@ -123,21 +107,31 @@ class Text2VisualDiscreteDataset(TorchDataset):
         )
         # Obtain X-indexes
         x_indexes = torch.tensor(
-            [element["x"] if element["x"] > -1 else 0 for element in scene["elements"]]
+            [
+                0
+                if element["x"] < 0
+                else X_MASK - 1
+                if element["x"] > X_MASK - 1
+                else element["x"]
+                for element in scene["elements"]
+            ]
         )
         # Obtain Y-indexes
         y_indexes = torch.tensor(
-            [element["y"] if element["y"] > -1 else 0 for element in scene["elements"]]
+            [
+                0
+                if element["y"] < 0
+                else Y_MASK - 1
+                if element["y"] > Y_MASK - 1
+                else element["y"]
+                for element in scene["elements"]
+            ]
         )
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
         # Flip scene with 50% prob during training
         if self.train and np.random.randint(low=0, high=2) == 1:
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
-
-        # Readjust indices with 50% prob during training
-        if self.train and np.random.randint(low=0, high=2) == 1:
-            x_indexes, y_indexes = self.readjust_indexes(x_indexes, y_indexes)
 
         # Mask visual tokens
         x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels = self.masking(
@@ -154,35 +148,6 @@ class Text2VisualDiscreteDataset(TorchDataset):
             y_labels,
             f_labels,
         )
-
-
-class ClipartsDataset(TorchDataset):
-    def __init__(self, cliparts_path: str, visual2index_path: str):
-        visual2index = json.load(open(visual2index_path))
-        self.file_paths_indices = []
-        for file_name, index in visual2index.items():
-            file_path = os.path.join(cliparts_path, file_name)
-            self.file_paths_indices.append((file_path, index))
-        print(f"Total number of clipars loaded: {len(self.file_paths_indices)}")
-        self.transforms = transforms.Compose(
-            [
-                transforms.Resize((224, 224)),
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-                ),
-            ]
-        )
-
-    def __getitem__(self, idx: int):
-        file_path, index = self.file_paths_indices[idx]
-        image = Image.open(file_path).convert("RGB")
-        image_transformed = self.transforms(image)
-
-        return image_transformed, index
-
-    def __len__(self):
-        return len(self.file_paths_indices)
 
 
 def collate_pad_discrete_text2visual_batch(

@@ -1,6 +1,5 @@
 from torch import nn
 import torch
-from torchvision.models import resnet152
 from transformers import BertConfig, BertModel, BertOnlyMLMHead
 import logging
 
@@ -11,21 +10,27 @@ logger = logging.getLogger(__name__)
 
 
 class Text2VisualDiscreteBert(nn.Module):
-    def __init__(self, config: BertConfig, device, embeddings_path: str = None):
+    def __init__(self, config: BertConfig, device):
         super(Text2VisualDiscreteBert, self).__init__()
-        self.cliparts_embeddings = nn.Embedding.from_pretrained(
-            torch.load(embeddings_path, map_location=device),
-            freeze=False,
+        self.cliparts_embeddings = nn.Embedding(
+            num_embeddings=config.vocab_size,
+            embedding_dim=config.hidden_size,
             padding_idx=0,
         )
         self.x_embeddings = nn.Embedding(
-            num_embeddings=X_PAD + 1, embedding_dim=768, padding_idx=X_PAD
+            num_embeddings=X_PAD + 1,
+            embedding_dim=config.hidden_size,
+            padding_idx=X_PAD,
         )
         self.y_embeddings = nn.Embedding(
-            num_embeddings=Y_PAD + 1, embedding_dim=768, padding_idx=Y_PAD
+            num_embeddings=Y_PAD + 1,
+            embedding_dim=config.hidden_size,
+            padding_idx=Y_PAD,
         )
         self.f_embeddings = nn.Embedding(
-            num_embeddings=F_PAD + 1, embedding_dim=768, padding_idx=F_PAD
+            num_embeddings=F_PAD + 1,
+            embedding_dim=config.hidden_size,
+            padding_idx=F_PAD,
         )
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         # Change config for the positions
@@ -80,17 +85,3 @@ class Text2VisualDiscreteBert(nn.Module):
             self.log_softmax(y_scores),
             self.log_softmax(f_scores),
         )
-
-
-class ImageEmbeddingsGenerator(nn.Module):
-    def __init__(self):
-        super(ImageEmbeddingsGenerator, self).__init__()
-        self.resnet = torch.nn.Sequential(
-            *(list(resnet152(pretrained=True).children())[:-1])
-        )
-        self.pooler = nn.AdaptiveAvgPool1d(768)
-
-    def forward(self, x):
-        output = torch.flatten(self.resnet(x), start_dim=1).unsqueeze(1)
-
-        return self.pooler(output)

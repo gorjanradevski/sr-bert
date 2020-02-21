@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 def train(
-    embeddings_path: str,
     checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
@@ -74,9 +73,9 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
-    model = nn.DataParallel(
-        Text2VisualDiscreteBert(BertConfig(), device, embeddings_path)
-    ).to(device)
+    config = BertConfig.from_pretrained("bert-base-uncased")
+    config.vocab_size = len(visual2index) + 3
+    model = nn.DataParallel(Text2VisualDiscreteBert(config, device)).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -279,7 +278,7 @@ def train(
                 best_avg_distance = cur_avg_distance
                 print("====================================================")
                 print(
-                    "Found new best average distance per scene:\n"
+                    "Found new best with average distances per scene:\n"
                     f"- X relative distance: {round(total_dist_x_relative, 2)}\n"
                     f"- Y relative distance: {round(total_dist_y_relative, 2)}\n"
                     f"- X real distance: {round(total_dist_x_real, 2)}\n"
@@ -308,12 +307,6 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a Text2Position model.")
-    parser.add_argument(
-        "--embeddings_path",
-        type=str,
-        default="models/cliparts_embeddings.pt",
-        help="Path to an embedding matrix",
-    )
     parser.add_argument(
         "--checkpoint_path",
         type=str,
@@ -370,7 +363,6 @@ def parse_args():
 def main():
     args = parse_args()
     train(
-        args.embeddings_path,
         args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,
