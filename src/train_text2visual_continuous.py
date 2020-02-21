@@ -132,15 +132,21 @@ def train(
                 )
                 # Get losses for the real distances as classification losses
                 max_ids_text = ids_text.size()[1]
-                x_real_loss = real_distance(
-                    x_scores.squeeze(-1)[:, max_ids_text:],
-                    x_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
+                x_real_loss = (
+                    real_distance(
+                        x_scores.squeeze(-1)[:, max_ids_text:],
+                        x_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
+                    )
+                    / ids_text.size()[0]
                 )
-                y_real_loss = real_distance(
-                    y_scores.squeeze(-1)[:, max_ids_text:],
-                    y_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
+                y_real_loss = (
+                    real_distance(
+                        y_scores.squeeze(-1)[:, max_ids_text:],
+                        y_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
+                    )
+                    / ids_text.size()[0]
                 )
                 x_relative_loss = (
                     relative_distance(
@@ -149,7 +155,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     * 10.0
-                )
+                ) / ids_text.size()[0]
                 y_relative_loss = (
                     relative_distance(
                         y_scores.squeeze(-1)[:, max_ids_text:],
@@ -157,7 +163,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     * 10.0
-                )
+                ) / ids_text.size()[0]
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (
@@ -167,11 +173,6 @@ def train(
                     + x_relative_loss
                     + y_relative_loss
                 )
-                print(f"X relative: {x_relative_loss}")
-                print(f"Y relative: {y_relative_loss}")
-                print(f"X real: {x_real_loss}")
-                print(f"Y real: {y_real_loss}")
-                print(f"F: {f_loss}")
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
