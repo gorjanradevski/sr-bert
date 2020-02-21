@@ -130,7 +130,7 @@ def train(
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
-                # Get losses for the real distances as classification losses
+                # Get losses for the real distances
                 max_ids_text = ids_text.size()[1]
                 x_real_loss = (
                     real_distance(
@@ -148,22 +148,6 @@ def train(
                     )
                     / ids_text.size()[0]
                 )
-                x_relative_loss = (
-                    relative_distance(
-                        x_scores.squeeze(-1)[:, max_ids_text:],
-                        x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    * 10.0
-                ) / ids_text.size()[0]
-                y_relative_loss = (
-                    relative_distance(
-                        y_scores.squeeze(-1)[:, max_ids_text:],
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    * 10.0
-                ) / ids_text.size()[0]
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (
