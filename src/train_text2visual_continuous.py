@@ -139,7 +139,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                )
+                ) / 20
                 y_real_loss = (
                     real_distance(
                         y_scores.squeeze(-1)[:, max_ids_text:],
@@ -147,18 +147,29 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
+                ) / 20
+                x_relative_loss = (
+                    relative_distance(
+                        x_scores.squeeze(-1)[:, max_ids_text:],
+                        x_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
+                    )
+                    / 20
                 )
-                x_relative_loss = relative_distance(
-                    x_scores.squeeze(-1)[:, max_ids_text:],
-                    x_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
-                )
-                y_relative_loss = relative_distance(
-                    y_scores.squeeze(-1)[:, max_ids_text:],
-                    y_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
+                y_relative_loss = (
+                    relative_distance(
+                        y_scores.squeeze(-1)[:, max_ids_text:],
+                        y_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
+                    )
+                    / 20
                 )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                # print(f"X real {x_real_loss}")
+                # print(f"Y real {y_real_loss}")
+                # print(f"X relative {x_relative_loss}")
+                # print(f"Y relative {y_relative_loss}")
+                # print(f"F loss {f_loss}")
                 # Comibine losses and backward
                 loss = (
                     x_real_loss
@@ -234,10 +245,10 @@ def train(
                             attn_mask,
                         )
                         x_ind[:, i] = torch.ceil(
-                            x_scores.squeeze(-1)[:, max_ids_text:][:, i] * (X_MASK - 1)
+                            x_scores.squeeze(-1)[:, max_ids_text:][:, i]
                         )
                         y_ind[:, i] = torch.ceil(
-                            y_scores.squeeze(-1)[:, max_ids_text:][:, i] * (Y_MASK - 1)
+                            y_scores.squeeze(-1)[:, max_ids_text:][:, i]
                         )
                         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][
                             :, i
