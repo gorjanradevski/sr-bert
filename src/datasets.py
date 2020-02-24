@@ -168,8 +168,8 @@ class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
             x_indexes,
             y_indexes,
             f_indexes,
-            x_labels.float() / (X_MASK - 1),
-            y_labels.float() / (Y_MASK - 1),
+            x_labels.float() / (X_MASK - 1) if self.train else x_labels.float(),
+            y_labels.float() / (Y_MASK - 1) if self.train else y_labels.float(),
             f_labels,
         )
 

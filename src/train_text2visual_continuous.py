@@ -234,10 +234,10 @@ def train(
                             attn_mask,
                         )
                         x_ind[:, i] = torch.ceil(
-                            x_scores.squeeze(-1)[:, max_ids_text:][:, i] * X_MASK - 1
+                            x_scores.squeeze(-1)[:, max_ids_text:][:, i] * (X_MASK - 1)
                         )
                         y_ind[:, i] = torch.ceil(
-                            y_scores.squeeze(-1)[:, max_ids_text:][:, i] * Y_MASK - 1
+                            y_scores.squeeze(-1)[:, max_ids_text:][:, i] * (Y_MASK - 1)
                         )
                         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][
                             :, i
