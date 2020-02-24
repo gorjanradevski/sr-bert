@@ -14,6 +14,9 @@ from datasets import (
     Text2VisualContinuousDataset,
     collate_pad_continuous_text2visual_batch,
     F_PAD,
+    X_MASK,
+    Y_MASK,
+    F_MASK,
 )
 from modeling import Text2VisualContinuousBert
 
@@ -170,10 +173,6 @@ def train(
                     + x_relative_loss
                     + y_relative_loss
                 )
-                print(f"X real: {x_real_loss}")
-                print(f"Y real: {y_real_loss}")
-                print(f"X relative: {x_relative_loss}")
-                print(f"Y relative: {y_relative_loss}")
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -182,8 +181,6 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-
-        """
 
         # Set model in evaluation mode
         model.train(False)
@@ -312,7 +309,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-    """
 
 
 def parse_args():
