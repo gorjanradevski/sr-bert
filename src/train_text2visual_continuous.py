@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -44,14 +44,8 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Subset(
-        Text2VisualContinuousDataset(
-            train_dataset_path,
-            visual2index,
-            mask_probability=mask_probability,
-            train=True,
-        ),
-        [0, 1, 2],
+    train_dataset = Text2VisualContinuousDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
     val_dataset = Text2VisualContinuousDataset(
         val_dataset_path, visual2index, mask_probability=1.0, train=False
@@ -145,7 +139,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 20
+                ) * 0.02
                 y_real_loss = (
                     real_distance(
                         y_scores.squeeze(-1)[:, max_ids_text:],
@@ -153,14 +147,14 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 20
+                ) * 0.02
                 x_relative_loss = (
                     relative_distance(
                         x_scores.squeeze(-1)[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
-                    * 20
+                    * 0.1
                 )
                 y_relative_loss = (
                     relative_distance(
@@ -168,18 +162,9 @@ def train(
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
-                    * 20
+                    * 0.1
                 )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
-                # print(f"X real {x_real_loss}")
-                # print(f"Y real {y_real_loss}")
-                # print(f"X relative {x_relative_loss}")
-                # print(f"Y relative {y_relative_loss}")
-                # print(f"F loss {f_loss}")
-                print(f"X labs: {x_lab[:, max_ids_text:]}")
-                print(f"X preds: {x_scores.squeeze(-1)[:, max_ids_text:]}")
-                print(f"Y labs: {y_lab[:, max_ids_text:]}")
-                print(f"Y preds: {y_scores.squeeze(-1)[:, max_ids_text:]}")
                 # Comibine losses and backward
                 loss = (
                     x_real_loss
@@ -196,7 +181,7 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-        """
+
         # Set model in evaluation mode
         model.train(False)
         # Reset counters
@@ -324,7 +309,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-    """
 
 
 def parse_args():

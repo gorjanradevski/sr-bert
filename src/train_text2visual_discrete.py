@@ -220,16 +220,16 @@ def train(
 
                 total_dist_x_relative += relative_distance(
                     x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
+                ).item()
                 total_dist_y_relative += relative_distance(
                     y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
+                ).item()
                 total_dist_x_real += real_distance(
                     x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
+                ).item()
                 total_dist_y_real += real_distance(
                     y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                )
+                ).item()
                 total_acc_f += (
                     f_ind == f_lab[:, max_ids_text:]
                 ).sum().item() / f_ind.size()[1]
