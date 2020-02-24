@@ -173,12 +173,6 @@ def parse_args():
         description="Performs inference with a Text2Position model."
     )
     parser.add_argument(
-        "--embeddings_path",
-        type=str,
-        default="models/cliparts_embeddings.pt",
-        help="Path to an embedding matrix",
-    )
-    parser.add_argument(
         "--checkpoint_path",
         type=str,
         default=None,
@@ -213,7 +207,6 @@ def parse_args():
 def main():
     args = parse_args()
     inference(
-        args.embeddings_path,
         args.checkpoint_path,
         args.test_dataset_path,
         args.visual2index_path,
