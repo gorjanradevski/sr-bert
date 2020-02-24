@@ -168,8 +168,8 @@ class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
             x_indexes,
             y_indexes,
             f_indexes,
-            x_labels / X_MASK - 1,
-            y_labels / Y_MASK - 1,
+            x_labels.float() / (X_MASK - 1),
+            y_labels.float() / (Y_MASK - 1),
             f_labels,
         )
 
@@ -382,7 +382,7 @@ def collate_pad_continuous_text2visual_batch(
     text_labs = torch.ones_like(ids_text) * -100
     x_lab = torch.cat(
         [
-            text_labs,
+            text_labs.float(),
             torch.nn.utils.rnn.pad_sequence(
                 x_lab, batch_first=True, padding_value=-100
             ),
@@ -391,7 +391,7 @@ def collate_pad_continuous_text2visual_batch(
     )
     y_lab = torch.cat(
         [
-            text_labs,
+            text_labs.float(),
             torch.nn.utils.rnn.pad_sequence(
                 y_lab, batch_first=True, padding_value=-100
             ),

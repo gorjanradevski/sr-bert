@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -13,9 +13,6 @@ from utils import relative_distance, real_distance
 from datasets import (
     Text2VisualContinuousDataset,
     collate_pad_continuous_text2visual_batch,
-    X_MASK,
-    Y_MASK,
-    F_MASK,
     F_PAD,
 )
 from modeling import Text2VisualContinuousBert
@@ -44,8 +41,14 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualContinuousDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Subset(
+        Text2VisualContinuousDataset(
+            train_dataset_path,
+            visual2index,
+            mask_probability=mask_probability,
+            train=True,
+        ),
+        [0, 1, 2],
     )
     val_dataset = Text2VisualContinuousDataset(
         val_dataset_path, visual2index, mask_probability=1.0, train=False
@@ -148,9 +151,29 @@ def train(
                     )
                     / ids_text.size()[0]
                 )
+                x_relative_loss = relative_distance(
+                    x_scores.squeeze(-1)[:, max_ids_text:],
+                    x_lab[:, max_ids_text:],
+                    attn_mask[:, max_ids_text:],
+                )
+                y_relative_loss = relative_distance(
+                    y_scores.squeeze(-1)[:, max_ids_text:],
+                    y_lab[:, max_ids_text:],
+                    attn_mask[:, max_ids_text:],
+                )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
-                loss = x_real_loss + y_real_loss + f_loss
+                loss = (
+                    x_real_loss
+                    + y_real_loss
+                    + f_loss
+                    + x_relative_loss
+                    + y_relative_loss
+                )
+                print(f"X real: {x_real_loss}")
+                print(f"Y real: {y_real_loss}")
+                print(f"X relative: {x_relative_loss}")
+                print(f"Y relative: {y_relative_loss}")
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -159,6 +182,8 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
+
+        """
 
         # Set model in evaluation mode
         model.train(False)
@@ -287,6 +312,7 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
+    """
 
 
 def parse_args():
