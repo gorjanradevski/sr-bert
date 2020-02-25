@@ -129,6 +129,7 @@ def train(
                     t_types.to(device),
                     attn_mask.to(device),
                 )
+                max_ids_text = ids_text.size()[1]
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
@@ -136,8 +137,36 @@ def train(
                 x_real_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_real_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
                 f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                # Get losses for the relative distances as regression losses
+                x_relative_loss = (
+                    relative_distance(
+                        torch.argmax(x_scores[:, max_ids_text:], dim=-1),
+                        x_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
+                    )
+                    * 0.2
+                )
+                y_relative_loss = (
+                    relative_distance(
+                        torch.argmax(y_scores[:, max_ids_text:], dim=-1),
+                        y_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
+                    )
+                    * 0.2
+                )
                 # Comibine losses and backward
-                loss = x_real_loss + y_real_loss + f_loss
+                loss = (
+                    x_real_loss
+                    + y_real_loss
+                    + f_loss
+                    + x_relative_loss
+                    + y_relative_loss
+                )
+                print(f"X real: {x_real_loss}")
+                print(f"Y real: {y_real_loss}")
+                print(f"X relative: {x_relative_loss}")
+                print(f"Y relative: {y_relative_loss}")
+                print(f"F: {f_loss}")
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -251,14 +280,13 @@ def train(
             if cur_avg_distance < best_avg_distance:
                 best_avg_distance = cur_avg_distance
                 print("====================================================")
-                print(
-                    "Found new best with average distances per scene:\n"
-                    f"- X relative distance: {round(total_dist_x_relative, 2)}\n"
-                    f"- Y relative distance: {round(total_dist_y_relative, 2)}\n"
-                    f"- X real distance: {round(total_dist_x_real, 2)}\n"
-                    f"- Y real distance: {round(total_dist_y_real, 2)}\n"
-                    f"on epoch {epoch+1}. Saving model!!!"
-                )
+                print("====================================================")
+                print("Found new best with average distances per scene:")
+                print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
+                print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
+                print(f"- X real distance: {round(total_dist_x_real, 2)}")
+                print(f"- Y real distance: {round(total_dist_y_real, 2)}")
+                print(f"on epoch {epoch+1}. Saving model!!!")
                 torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
             else:

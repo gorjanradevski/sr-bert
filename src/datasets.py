@@ -91,21 +91,7 @@ class Text2VisualDataset:
 
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
 
-
-class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
-    def __init__(
-        self,
-        dataset_file_path: str,
-        visual2index: Dict,
-        mask_probability: float,
-        train: bool,
-        without_text: bool = False,
-    ):
-        super().__init__(
-            dataset_file_path, visual2index, mask_probability, train, without_text
-        )
-
-    def masking(self, indexes: torch.Tensor, mask_token):
+    def masking(self, indexes: torch.Tensor, mask_token: int):
         # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
         # Create clone
         labels = indexes.clone()
@@ -127,11 +113,25 @@ class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
             & ~indices_replaced
         )
         random_pos = torch.randint(
-            low=0, high=mask_token - 1, size=labels.shape, dtype=torch.long
+            low=0, high=mask_token, size=labels.shape, dtype=torch.long
         )
         indexes[indices_random] = random_pos[indices_random]
 
         return indexes, labels
+
+
+class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
+    def __init__(
+        self,
+        dataset_file_path: str,
+        visual2index: Dict,
+        mask_probability: float,
+        train: bool,
+        without_text: bool = False,
+    ):
+        super().__init__(
+            dataset_file_path, visual2index, mask_probability, train, without_text
+        )
 
     def __len__(self):
         return super().__len__()
@@ -171,50 +171,6 @@ class Text2VisualDiscreteDataset(Text2VisualDataset, TorchDataset):
             dataset_file_path, visual2index, mask_probability, train, without_text
         )
 
-    def masking(
-        self, x_indexes: torch.Tensor, y_indexes: torch.Tensor, f_indexes: torch.Tensor
-    ):
-        # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
-        # Create clones for everything
-        x_labels = x_indexes.clone()
-        y_labels = y_indexes.clone()
-        f_labels = f_indexes.clone()
-        # Get probability matrix
-        probability_matrix = torch.full(x_indexes.shape, self.mask_probability)
-        masked_indices = torch.bernoulli(probability_matrix).bool()
-        # We only compute loss on masked tokens
-        x_labels[~masked_indices] = -100
-        y_labels[~masked_indices] = -100
-        f_labels[~masked_indices] = -100
-        # 80% we replace with a mask token
-        indices_replaced = (
-            torch.bernoulli(torch.full(x_indexes.shape, 0.8)).bool() & masked_indices
-        )
-        x_indexes[indices_replaced] = X_MASK
-        y_indexes[indices_replaced] = Y_MASK
-        f_indexes[indices_replaced] = F_MASK
-
-        # 10% of the time, we replace masked input tokens with random word
-        indices_random = (
-            torch.bernoulli(torch.full(x_labels.shape, 0.5)).bool()
-            & masked_indices
-            & ~indices_replaced
-        )
-        random_x = torch.randint(
-            low=0, high=X_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
-        random_y = torch.randint(
-            low=0, high=Y_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
-        random_f = torch.randint(
-            low=0, high=F_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
-        x_indexes[indices_random] = random_x[indices_random]
-        y_indexes[indices_random] = random_y[indices_random]
-        f_indexes[indices_random] = random_f[indices_random]
-
-        return (x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels)
-
     def __len__(self):
         return super().__len__()
 
@@ -224,9 +180,9 @@ class Text2VisualDiscreteDataset(Text2VisualDataset, TorchDataset):
         )
 
         # Mask visual tokens
-        x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels = self.masking(
-            x_indexes, y_indexes, f_indexes
-        )
+        x_indexes, x_labels = self.masking(x_indexes, X_MASK)
+        y_indexes, y_labels = self.masking(y_indexes, Y_MASK)
+        f_indexes, f_labels = self.masking(f_indexes, F_MASK)
 
         return (
             input_ids_sentence,

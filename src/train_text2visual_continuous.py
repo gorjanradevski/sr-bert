@@ -31,7 +31,6 @@ def train(
     val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
-    use_relative: bool,
     batch_size: int,
     learning_rate: float,
     epochs: int,
@@ -94,7 +93,6 @@ def train(
         )
         logger.warning(f"The previous best avg distance was {best_avg_distance}!")
 
-    logger.warning(f"Training on relative distances is: {use_relative}")
     for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
@@ -115,10 +113,6 @@ def train(
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
-                # set past distances to 0
-                x_real_loss = (
-                    y_real_loss
-                ) = x_relative_loss = y_relative_loss = f_loss = 0
                 # forward
                 ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
                     ids_text.to(device),
@@ -154,23 +148,22 @@ def train(
                     )
                     / ids_text.size()[0]
                 ) * 0.05
-                if use_relative:
-                    x_relative_loss = (
-                        relative_distance(
-                            x_scores.squeeze(-1)[:, max_ids_text:],
-                            x_lab[:, max_ids_text:],
-                            attn_mask[:, max_ids_text:],
-                        )
-                        * 0.002
+                x_relative_loss = (
+                    relative_distance(
+                        x_scores[:, max_ids_text:],
+                        x_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
                     )
-                    y_relative_loss = (
-                        relative_distance(
-                            y_scores[:, max_ids_text:],
-                            y_lab[:, max_ids_text:],
-                            attn_mask[:, max_ids_text:],
-                        )
-                        * 0.002
+                    * 0.002
+                )
+                y_relative_loss = (
+                    relative_distance(
+                        y_scores[:, max_ids_text:],
+                        y_lab[:, max_ids_text:],
+                        attn_mask[:, max_ids_text:],
                     )
+                    * 0.002
+                )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (
@@ -256,13 +249,12 @@ def train(
                     last = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                     if torch.all(torch.eq(first, last)):
                         break
-                if use_relative:
-                    total_dist_x_relative += relative_distance(
-                        x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                    ).item()
-                    total_dist_y_relative += relative_distance(
-                        y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                    ).item()
+                total_dist_x_relative += relative_distance(
+                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                ).item()
+                total_dist_y_relative += relative_distance(
+                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                ).item()
                 total_dist_x_real += real_distance(
                     x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
@@ -285,17 +277,13 @@ def train(
                     + total_dist_y_real
                 )
                 / 4
-                if use_relative
-                else (total_dist_x_real + total_dist_y_real) / 2,
-                2,
             )
             if cur_avg_distance < best_avg_distance:
                 best_avg_distance = cur_avg_distance
                 print("====================================================")
                 print("Found new best with average distances per scene:")
-                if use_relative:
-                    print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
-                    print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
+                print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
+                print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
                 print(f"- X real distance: {round(total_dist_x_real, 2)}")
                 print(f"- Y real distance: {round(total_dist_y_real, 2)}")
                 print(f"on epoch {epoch+1}. Saving model!!!")
@@ -370,11 +358,6 @@ def parse_args():
         default="models/intermediate.pt",
         help="Where to save the intermediate checkpoint.",
     )
-    parser.add_argument(
-        "--use_relative",
-        action="store_true",
-        help="Whether to train on the relative distances.",
-    )
 
     return parser.parse_args()
 
@@ -387,7 +370,6 @@ def main():
         args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
-        args.use_relative,
         args.batch_size,
         args.learning_rate,
         args.epochs,
