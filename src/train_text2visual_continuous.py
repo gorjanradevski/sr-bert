@@ -31,6 +31,7 @@ def train(
     val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
+    use_relative: bool,
     batch_size: int,
     learning_rate: float,
     epochs: int,
@@ -93,6 +94,7 @@ def train(
         )
         logger.warning(f"The previous best avg distance was {best_avg_distance}!")
 
+    logger.warning(f"Training on relative distances is: {use_relative}")
     for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
@@ -113,6 +115,10 @@ def train(
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
+                # set past distances to 0
+                x_real_loss = (
+                    y_real_loss
+                ) = x_relative_loss = y_relative_loss = f_loss = 0
                 # forward
                 ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
                     ids_text.to(device),
@@ -148,22 +154,23 @@ def train(
                     )
                     / ids_text.size()[0]
                 ) * 0.05
-                x_relative_loss = (
-                    relative_distance(
-                        x_scores.squeeze(-1)[:, max_ids_text:],
-                        x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
+                if use_relative:
+                    x_relative_loss = (
+                        relative_distance(
+                            x_scores.squeeze(-1)[:, max_ids_text:],
+                            x_lab[:, max_ids_text:],
+                            attn_mask[:, max_ids_text:],
+                        )
+                        * 0.002
                     )
-                    * 0.002
-                )
-                y_relative_loss = (
-                    relative_distance(
-                        y_scores[:, max_ids_text:],
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
+                    y_relative_loss = (
+                        relative_distance(
+                            y_scores[:, max_ids_text:],
+                            y_lab[:, max_ids_text:],
+                            attn_mask[:, max_ids_text:],
+                        )
+                        * 0.002
                     )
-                    * 0.002
-                )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (
@@ -239,12 +246,8 @@ def train(
                             t_types,
                             attn_mask,
                         )
-                        x_ind[:, i] = torch.ceil(
-                            x_scores.squeeze(-1)[:, max_ids_text:][:, i]
-                        )
-                        y_ind[:, i] = torch.ceil(
-                            y_scores.squeeze(-1)[:, max_ids_text:][:, i]
-                        )
+                        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
+                        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
                         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][
                             :, i
                         ]
@@ -295,11 +298,12 @@ def train(
                     f"- Y real distance: {round(total_dist_y_real, 2)}\n"
                     f"on epoch {epoch+1}. Saving model!!!"
                 )
-                torch.save(model.state_dict(), save_model_path)
+                # torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
             else:
                 print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
             print("Saving intermediate checkpoint...")
+            """
             torch.save(
                 {
                     "epoch": epoch,
@@ -309,6 +313,7 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
+            """
 
 
 def parse_args():
@@ -366,6 +371,11 @@ def parse_args():
         default="models/intermediate.pt",
         help="Where to save the intermediate checkpoint.",
     )
+    parser.add_argument(
+        "--use_relative",
+        action="store_true",
+        help="Whether to train on the relative distances.",
+    )
 
     return parser.parse_args()
 
@@ -378,6 +388,7 @@ def main():
         args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
+        args.use_relative,
         args.batch_size,
         args.learning_rate,
         args.epochs,
