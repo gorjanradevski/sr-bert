@@ -273,7 +273,8 @@ def train(
                     + total_dist_x_real
                     + total_dist_y_real
                 )
-                / 4
+                / 4,
+                2,
             )
             if cur_avg_distance < best_avg_distance:
                 best_avg_distance = cur_avg_distance
