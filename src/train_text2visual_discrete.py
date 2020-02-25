@@ -162,11 +162,6 @@ def train(
                     + x_relative_loss
                     + y_relative_loss
                 )
-                print(f"X real: {x_real_loss}")
-                print(f"Y real: {y_real_loss}")
-                print(f"X relative: {x_relative_loss}")
-                print(f"Y relative: {y_relative_loss}")
-                print(f"F: {f_loss}")
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -279,7 +274,6 @@ def train(
             )
             if cur_avg_distance < best_avg_distance:
                 best_avg_distance = cur_avg_distance
-                print("====================================================")
                 print("====================================================")
                 print("Found new best with average distances per scene:")
                 print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
