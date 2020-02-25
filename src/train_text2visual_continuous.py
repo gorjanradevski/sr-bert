@@ -139,7 +139,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 0.5
+                ) * 0.35
                 y_real_loss = (
                     real_distance(
                         y_scores[:, max_ids_text:],
@@ -147,7 +147,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 0.5
+                ) * 0.35
                 x_relative_loss = (
                     relative_distance(
                         x_scores[:, max_ids_text:],

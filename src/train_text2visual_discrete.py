@@ -170,7 +170,7 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-        """
+
         # Set model in evaluation mode
         model.train(False)
         # Reset counters
@@ -295,7 +295,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-    """
 
 
 def parse_args():
