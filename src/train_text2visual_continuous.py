@@ -139,7 +139,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 0.05
+                ) * 0.5
                 y_real_loss = (
                     real_distance(
                         y_scores[:, max_ids_text:],
@@ -147,14 +147,14 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 0.05
+                ) * 0.5
                 x_relative_loss = (
                     relative_distance(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
-                    * 0.002
+                    / ids_text.size()[0]
                 )
                 y_relative_loss = (
                     relative_distance(
@@ -162,7 +162,7 @@ def train(
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
-                    * 0.002
+                    / ids_text.size()[0]
                 )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
