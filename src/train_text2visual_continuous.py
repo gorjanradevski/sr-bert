@@ -134,35 +134,35 @@ def train(
                 max_ids_text = ids_text.size()[1]
                 x_real_loss = (
                     real_distance(
-                        x_scores.squeeze(-1)[:, max_ids_text:],
+                        x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 0.02
+                ) * 0.05
                 y_real_loss = (
                     real_distance(
-                        y_scores.squeeze(-1)[:, max_ids_text:],
+                        y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                ) * 0.02
+                ) * 0.05
                 x_relative_loss = (
                     relative_distance(
                         x_scores.squeeze(-1)[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
-                    * 0.1
+                    * 0.002
                 )
                 y_relative_loss = (
                     relative_distance(
-                        y_scores.squeeze(-1)[:, max_ids_text:],
+                        y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
-                    * 0.1
+                    * 0.002
                 )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward

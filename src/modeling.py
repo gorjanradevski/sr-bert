@@ -112,9 +112,8 @@ class Text2VisualContinuousBert(nn.Module):
         )
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         # Change config for the positions
-        config.vocab_size = 1
-        self.x_head = BertOnlyMLMHead(config)
-        self.y_head = BertOnlyMLMHead(config)
+        config.vocab_size = 2
+        self.xy_head = BertOnlyMLMHead(config)
         config.vocab_size = F_PAD + 1
         self.f_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=-1)
@@ -154,7 +153,7 @@ class Text2VisualContinuousBert(nn.Module):
         )[0]
 
         return (
-            torch.sigmoid(self.x_head(sequence_output)) * (X_PAD - 2),
-            torch.sigmoid(self.y_head(sequence_output)) * (Y_PAD - 2),
+            torch.sigmoid(self.xy_head(sequence_output))[:, :, 0] * (X_PAD - 2),
+            torch.sigmoid(self.y_head(sequence_output))[:, :, 1] * (Y_PAD - 2),
             self.log_softmax(self.f_head(sequence_output)),
         )

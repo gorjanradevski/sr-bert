@@ -12,7 +12,7 @@ def real_distance(inds, labs, attn_mask):
     dist = dist * attn_mask
     # Remove the distance for the masked tokens (During training)
     mask_masked = torch.ones_like(inds)
-    mask_masked[torch.where(inds < 0)] = 0.0
+    mask_masked[torch.where(labs < 0)] = 0.0
     dist = dist * mask_masked
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / attn_mask.sum(-1)
