@@ -154,6 +154,6 @@ class Text2VisualContinuousBert(nn.Module):
 
         return (
             torch.sigmoid(self.xy_head(sequence_output))[:, :, 0] * (X_PAD - 2),
-            torch.sigmoid(self.y_head(sequence_output))[:, :, 1] * (Y_PAD - 2),
+            torch.sigmoid(self.xy_head(sequence_output))[:, :, 1] * (Y_PAD - 2),
             self.log_softmax(self.f_head(sequence_output)),
         )
