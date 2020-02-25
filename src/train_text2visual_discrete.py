@@ -197,50 +197,43 @@ def train(
                 x_ind[:, :] = X_MASK
                 y_ind[:, :] = Y_MASK
                 f_ind[:, :] = F_MASK
-                for iteration in range(2):
-                    first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
-                    for i in range(ids_vis.size()[1]):
-                        # forward
-                        ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
-                            ids_text.to(device),
-                            ids_vis.to(device),
-                            pos_text.to(device),
-                            x_ind.to(device),
-                            y_ind.to(device),
-                            f_ind.to(device),
-                            x_lab.to(device),
-                            y_lab.to(device),
-                            f_lab.to(device),
-                            t_types.to(device),
-                            attn_mask.to(device),
-                        )
-                        x_ind[:, i] = X_MASK
-                        y_ind[:, i] = Y_MASK
-                        f_ind[:, i] = F_MASK
-                        max_ids_text = ids_text.size()[1]
-                        x_scores, y_scores, f_scores = model(
-                            ids_text,
-                            ids_vis,
-                            pos_text,
-                            x_ind,
-                            y_ind,
-                            f_ind,
-                            t_types,
-                            attn_mask,
-                        )
-                        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][
-                            :, i
-                        ]
-                        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][
-                            :, i
-                        ]
-                        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][
-                            :, i
-                        ]
-                    # Check for termination
-                    last = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
-                    if torch.all(torch.eq(first, last)):
-                        break
+                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                    ids_text.to(device),
+                    ids_vis.to(device),
+                    pos_text.to(device),
+                    x_ind.to(device),
+                    y_ind.to(device),
+                    f_ind.to(device),
+                    x_lab.to(device),
+                    y_lab.to(device),
+                    f_lab.to(device),
+                    t_types.to(device),
+                    attn_mask.to(device),
+                )
+                max_ids_text = ids_text.size()[1]
+                x_scores, y_scores, f_scores = model(
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+                )
+                x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
+                y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
+                f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
+                for i in range(ids_vis.size()[1]):
+                    x_ind[:, i] = X_MASK
+                    y_ind[:, i] = Y_MASK
+                    f_ind[:, i] = F_MASK
+                    x_scores, y_scores, f_scores = model(
+                        ids_text,
+                        ids_vis,
+                        pos_text,
+                        x_ind,
+                        y_ind,
+                        f_ind,
+                        t_types,
+                        attn_mask,
+                    )
+                    x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
+                    y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
+                    f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
                 total_dist_x_relative += relative_distance(
                     x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
