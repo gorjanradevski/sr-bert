@@ -256,13 +256,13 @@ def train(
                     last = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
                     if torch.all(torch.eq(first, last)):
                         break
-
-                total_dist_x_relative += relative_distance(
-                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                ).item()
-                total_dist_y_relative += relative_distance(
-                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                ).item()
+                if use_relative:
+                    total_dist_x_relative += relative_distance(
+                        x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    ).item()
+                    total_dist_y_relative += relative_distance(
+                        y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    ).item()
                 total_dist_x_real += real_distance(
                     x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
@@ -284,26 +284,26 @@ def train(
                     + total_dist_x_real
                     + total_dist_y_real
                 )
-                / 4,
+                / 4
+                if use_relative
+                else (total_dist_x_real + total_dist_y_real) / 2,
                 2,
             )
             if cur_avg_distance < best_avg_distance:
                 best_avg_distance = cur_avg_distance
                 print("====================================================")
-                print(
-                    "Found new best with average distances per scene:\n"
-                    f"- X relative distance: {round(total_dist_x_relative, 2)}\n"
-                    f"- Y relative distance: {round(total_dist_y_relative, 2)}\n"
-                    f"- X real distance: {round(total_dist_x_real, 2)}\n"
-                    f"- Y real distance: {round(total_dist_y_real, 2)}\n"
-                    f"on epoch {epoch+1}. Saving model!!!"
-                )
-                # torch.save(model.state_dict(), save_model_path)
+                print("Found new best with average distances per scene:")
+                if use_relative:
+                    print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
+                    print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
+                print(f"- X real distance: {round(total_dist_x_real, 2)}")
+                print(f"- Y real distance: {round(total_dist_y_real, 2)}")
+                print(f"on epoch {epoch+1}. Saving model!!!")
+                torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
             else:
                 print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
             print("Saving intermediate checkpoint...")
-            """
             torch.save(
                 {
                     "epoch": epoch,
@@ -313,7 +313,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-            """
 
 
 def parse_args():
