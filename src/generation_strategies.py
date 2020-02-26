@@ -187,10 +187,13 @@ def highest_probability(
     return x_ind, y_ind, f_ind
 
 
+def entropy(inputs: torch.Tensor):
+    return -torch.sum(torch.exp(inputs) * torch.log2(torch.exp(inputs)), dim=-1)
+
+
 def lowest_entropy(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # TODO: Needs to be implemented
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
@@ -211,15 +214,15 @@ def lowest_entropy(
             y_scores[list(range(batch_size)), predicted_indices_y] = 0
             f_scores[list(range(batch_size)), predicted_indices_f] = 0
 
-        # Obtain the probabilities and the prediction for all elements
-        prob_x, pred_x = torch.max(x_scores, dim=-1)
-        prob_y, pred_y = torch.max(y_scores, dim=-1)
-        prob_f, pred_f = torch.max(f_scores, dim=-1)
+        # Compute entropies
+        entropies_x = entropy(x_scores)
+        entropies_y = entropy(y_scores)
+        entropies_f = entropy(f_scores)
 
         # Obtain the the indexes of the elements with the highest probability
-        index_x = torch.argmax(prob_x[:, max_ids_text:], dim=-1)
-        index_y = torch.argmax(prob_y[:, max_ids_text:], dim=-1)
-        index_f = torch.argmax(prob_f[:, max_ids_text:], dim=-1)
+        index_x = torch.argmin(entropies_x[:, max_ids_text:], dim=-1)
+        index_y = torch.argmin(entropies_y[:, max_ids_text:], dim=-1)
+        index_f = torch.argmin(entropies_f[:, max_ids_text:], dim=-1)
 
         # Remember the chosen indices
         predicted_indices_x.append(index_x.tolist())
@@ -227,9 +230,9 @@ def lowest_entropy(
         predicted_indices_f.append(index_f.tolist())
 
         # Change the index with the max probability with its prediction
-        x_ind[:, index_x] = pred_x[:, index_x]
-        y_ind[:, index_y] = pred_y[:, index_y]
-        f_ind[:, index_f] = pred_f[:, index_f]
+        x_ind[:, index_x] = torch.argmax(x_scores, dim=-1)[:, index_x]
+        y_ind[:, index_y] = torch.argmax(y_scores, dim=-1)[:, index_y]
+        f_ind[:, index_f] = torch.argmax(f_scores, dim=-1)[:, index_f]
 
     return x_ind, y_ind, f_ind
 
@@ -272,6 +275,10 @@ def generation_strategy_factory(
         )
     elif gen_strategy == "highest_probability":
         return highest_probability(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+        )
+    elif gen_strategy == "lowest_entropy":
+        return lowest_entropy(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
     else:
