@@ -91,7 +91,7 @@ class Text2VisualDataset:
 
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
 
-    def masking(self, indexes: torch.Tensor, mask_token: int):
+    def masking_bert(self, indexes: torch.Tensor, mask_token: int):
         # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
         # Create clone
         labels = indexes.clone()
@@ -116,6 +116,19 @@ class Text2VisualDataset:
             low=0, high=mask_token, size=labels.shape, dtype=torch.long
         )
         indexes[indices_random] = random_pos[indices_random]
+
+        return indexes, labels
+
+    def masking(self, indexes: torch.Tensor, mask_token: int):
+        # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
+        # Create clone
+        labels = indexes.clone()
+        # Get probability matrix
+        probability_matrix = torch.full(indexes.shape, self.mask_probability)
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+        # We only compute loss on masked tokens
+        labels[~masked_indices] = -100
+        indexes[masked_indices] = mask_token
 
         return indexes, labels
 
