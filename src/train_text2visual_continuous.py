@@ -207,6 +207,7 @@ def train(
                 t_types,
                 attn_mask,
             ) in tqdm(val_loader):
+                max_ids_text = ids_text.size()[1]
                 x_out, y_out, f_out = generation_strategy_factory(
                     gen_strategy,
                     ids_text,
@@ -223,7 +224,6 @@ def train(
                     model,
                     device,
                 )
-
                 total_dist_x_relative += relative_distance(
                     x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
