@@ -9,6 +9,7 @@ import logging
 import json
 from transformers import BertConfig
 from utils import relative_distance, real_distance
+from generation_strategies import generation_strategy_factory
 
 from datasets import (
     Text2VisualDiscreteDataset,
@@ -16,9 +17,6 @@ from datasets import (
     X_PAD,
     Y_PAD,
     F_PAD,
-    X_MASK,
-    Y_MASK,
-    F_MASK,
 )
 from modeling import Text2VisualDiscreteBert
 
@@ -33,6 +31,7 @@ def train(
     val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
+    gen_strategy: str,
     batch_size: int,
     learning_rate: float,
     epochs: int,
@@ -40,6 +39,12 @@ def train(
     save_model_path: str,
     intermediate_save_checkpoint_path: str,
 ):
+    assert gen_strategy in [
+        "one_step_all_discrete",
+        "left_to_right_discrete",
+        "one_step_all_left_to_right_discrete",
+        "highest_probability",
+    ]
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
@@ -192,10 +197,6 @@ def train(
                 t_types,
                 attn_mask,
             ) in tqdm(val_loader):
-                # Set all indices to MASK tokens
-                x_ind[:, :] = X_MASK
-                y_ind[:, :] = Y_MASK
-                f_ind[:, :] = F_MASK
                 ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
@@ -210,44 +211,33 @@ def train(
                     attn_mask.to(device),
                 )
                 max_ids_text = ids_text.size()[1]
-                x_scores, y_scores, f_scores = model(
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+                x_out, y_out, f_out = generation_strategy_factory(
+                    gen_strategy,
+                    ids_text,
+                    ids_vis,
+                    pos_text,
+                    x_ind,
+                    y_ind,
+                    f_ind,
+                    t_types,
+                    attn_mask,
+                    model,
                 )
-                x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
-                y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
-                f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
-                for i in range(ids_vis.size()[1]):
-                    x_ind[:, i] = X_MASK
-                    y_ind[:, i] = Y_MASK
-                    f_ind[:, i] = F_MASK
-                    x_scores, y_scores, f_scores = model(
-                        ids_text,
-                        ids_vis,
-                        pos_text,
-                        x_ind,
-                        y_ind,
-                        f_ind,
-                        t_types,
-                        attn_mask,
-                    )
-                    x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-                    y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-                    f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
                 total_dist_x_relative += relative_distance(
-                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
                 total_dist_y_relative += relative_distance(
-                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
                 total_dist_x_real += real_distance(
-                    x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
                 total_dist_y_real += real_distance(
-                    y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
                 total_acc_f += (
-                    f_ind == f_lab[:, max_ids_text:]
+                    f_out == f_lab[:, max_ids_text:]
                 ).sum().item() / f_ind.size()[1]
 
             total_dist_x_relative /= len(val_dataset)
@@ -273,11 +263,12 @@ def train(
                 print(f"- X real distance: {round(total_dist_x_real, 2)}")
                 print(f"- Y real distance: {round(total_dist_y_real, 2)}")
                 print(f"on epoch {epoch+1}. Saving model!!!")
-                torch.save(model.state_dict(), save_model_path)
+                # torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
             else:
                 print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
             print("Saving intermediate checkpoint...")
+            """
             torch.save(
                 {
                     "epoch": epoch,
@@ -287,6 +278,7 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
+            """
 
 
 def parse_args():
@@ -344,6 +336,12 @@ def parse_args():
         default="models/intermediate.pt",
         help="Where to save the intermediate checkpoint.",
     )
+    parser.add_argument(
+        "--gen_strategy",
+        type=str,
+        default="one_step_all_left_to_right",
+        help="How to generate the positions during inference",
+    )
 
     return parser.parse_args()
 
@@ -356,6 +354,7 @@ def main():
         args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
+        args.gen_strategy,
         args.batch_size,
         args.learning_rate,
         args.epochs,

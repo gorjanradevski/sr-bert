@@ -38,9 +38,9 @@ def train(
     intermediate_save_checkpoint_path: str,
 ):
     assert gen_strategy in [
-        "one_step_all",
-        "left_to_right",
-        "one_step_all_left_to_right",
+        "one_step_all_continuous",
+        "left_to_right_continuous",
+        "one_step_all_left_to_right_continuous",
     ]
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -233,7 +233,6 @@ def train(
                     t_types,
                     attn_mask,
                     model,
-                    device,
                 )
                 total_dist_x_relative += relative_distance(
                     x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
