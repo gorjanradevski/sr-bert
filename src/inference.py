@@ -7,14 +7,9 @@ import logging
 import json
 from transformers import BertConfig
 from utils import real_distance, relative_distance
+from generation_strategies import generation_strategy_factory
 
-from datasets import (
-    Text2VisualDiscreteDataset,
-    collate_pad_discrete_text2visual_batch,
-    X_MASK,
-    Y_MASK,
-    F_MASK,
-)
+from datasets import Text2VisualDiscreteDataset, collate_pad_discrete_text2visual_batch
 from modeling import Text2VisualDiscreteBert
 
 
@@ -26,7 +21,7 @@ def inference(
     checkpoint_path: str,
     test_dataset_path: str,
     visual2index_path: str,
-    num_iter: int,
+    gen_strategy: str,
     batch_size: int,
     without_text: bool,
 ):
@@ -84,64 +79,49 @@ def inference(
             t_types,
             attn_mask,
         ) in tqdm(test_loader):
-            # Set all indices to MASK tokens
-            x_ind[:, :] = X_MASK
-            y_ind[:, :] = Y_MASK
-            f_ind[:, :] = F_MASK
-            for iteration in range(num_iter):
-                first = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
-                for i in range(ids_vis.size()[1]):
-                    # forward
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
-                        ids_text.to(device),
-                        ids_vis.to(device),
-                        pos_text.to(device),
-                        x_ind.to(device),
-                        y_ind.to(device),
-                        f_ind.to(device),
-                        x_lab.to(device),
-                        y_lab.to(device),
-                        f_lab.to(device),
-                        t_types.to(device),
-                        attn_mask.to(device),
-                    )
-                    x_ind[:, i] = X_MASK
-                    y_ind[:, i] = Y_MASK
-                    f_ind[:, i] = F_MASK
-                    max_ids_text = ids_text.size()[1]
-                    x_scores, y_scores, f_scores = model(
-                        ids_text,
-                        ids_vis,
-                        pos_text,
-                        x_ind,
-                        y_ind,
-                        f_ind,
-                        t_types,
-                        attn_mask,
-                    )
-                    x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-                    y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-                    f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
-                # Check for termination
-                last = torch.cat([x_ind, y_ind, f_ind], dim=1).cpu()
-                if torch.all(torch.eq(first, last)):
-                    break
+            # forward
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                ids_text.to(device),
+                ids_vis.to(device),
+                pos_text.to(device),
+                x_ind.to(device),
+                y_ind.to(device),
+                f_ind.to(device),
+                x_lab.to(device),
+                y_lab.to(device),
+                f_lab.to(device),
+                t_types.to(device),
+                attn_mask.to(device),
+            )
+            max_ids_text = ids_text.size()[1]
+            x_out, y_out, f_out = generation_strategy_factory(
+                gen_strategy,
+                ids_text,
+                ids_vis,
+                pos_text,
+                x_ind,
+                y_ind,
+                f_ind,
+                t_types,
+                attn_mask,
+                model,
+            )
 
             total_dist_x_relative += relative_distance(
-                x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             )
             total_dist_y_relative += relative_distance(
-                y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             )
             total_dist_x_real += real_distance(
-                x_ind, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             )
             total_dist_y_real += real_distance(
-                y_ind, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             )
             total_acc_f += (
-                f_ind == f_lab[:, max_ids_text:]
-            ).sum().item() / f_ind.size()[1]
+                f_out == f_lab[:, max_ids_text:]
+            ).sum().item() / f_out.size()[1]
 
         total_dist_x_relative /= len(test_dataset)
         total_dist_y_relative /= len(test_dataset)
@@ -200,6 +180,12 @@ def parse_args():
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
     )
+    parser.add_argument(
+        "--gen_strategy",
+        type=str,
+        default="one_step_all_left_to_right",
+        help="How to generate the positions during inference",
+    )
 
     return parser.parse_args()
 
@@ -210,6 +196,7 @@ def main():
         args.checkpoint_path,
         args.test_dataset_path,
         args.visual2index_path,
+        args.gen_strategy,
         args.num_iter,
         args.batch_size,
         args.without_text,
