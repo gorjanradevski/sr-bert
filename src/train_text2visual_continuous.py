@@ -207,6 +207,20 @@ def train(
                 t_types,
                 attn_mask,
             ) in tqdm(val_loader):
+                # forward
+                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                    ids_text.to(device),
+                    ids_vis.to(device),
+                    pos_text.to(device),
+                    x_ind.to(device),
+                    y_ind.to(device),
+                    f_ind.to(device),
+                    x_lab.to(device),
+                    y_lab.to(device),
+                    f_lab.to(device),
+                    t_types.to(device),
+                    attn_mask.to(device),
+                )
                 max_ids_text = ids_text.size()[1]
                 x_out, y_out, f_out = generation_strategy_factory(
                     gen_strategy,
@@ -216,9 +230,6 @@ def train(
                     x_ind,
                     y_ind,
                     f_ind,
-                    x_lab,
-                    y_lab,
-                    f_lab,
                     t_types,
                     attn_mask,
                     model,
