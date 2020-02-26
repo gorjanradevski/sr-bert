@@ -40,7 +40,6 @@ def train(
     save_model_path: str,
     intermediate_save_checkpoint_path: str,
 ):
-    # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
