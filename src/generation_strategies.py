@@ -158,6 +158,53 @@ def highest_probability(
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
+        # If there are indices which are already chosen, change to a small number
+        if len(predicted_indices_x) > 0:
+            x_scores[list(range(batch_size)), predicted_indices_x] = -1e15
+            y_scores[list(range(batch_size)), predicted_indices_y] = -1e15
+            f_scores[list(range(batch_size)), predicted_indices_f] = -1e15
+
+        # Obtain the probabilities and the prediction for all elements
+        prob_x, pred_x = torch.max(x_scores, dim=-1)
+        prob_y, pred_y = torch.max(y_scores, dim=-1)
+        prob_f, pred_f = torch.max(f_scores, dim=-1)
+
+        # Obtain the the indexes of the elements with the highest probability
+        index_x = torch.argmax(prob_x[:, max_ids_text:], dim=-1)
+        index_y = torch.argmax(prob_y[:, max_ids_text:], dim=-1)
+        index_f = torch.argmax(prob_f[:, max_ids_text:], dim=-1)
+
+        # Remember the chosen indices
+        predicted_indices_x.append(index_x.tolist())
+        predicted_indices_y.append(index_y.tolist())
+        predicted_indices_f.append(index_f.tolist())
+
+        # Change the index with the max probability with its prediction
+        x_ind[:, index_x] = pred_x[:, index_x]
+        y_ind[:, index_y] = pred_y[:, index_y]
+        f_ind[:, index_f] = pred_f[:, index_f]
+
+    return x_ind, y_ind, f_ind
+
+
+def lowest_entropy(
+    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+):
+    # TODO: Needs to be implemented
+    # Set all indices to MASK tokens
+    x_ind[:, :] = X_MASK
+    y_ind[:, :] = Y_MASK
+    f_ind[:, :] = F_MASK
+    batch_size = ids_text.size()[0]
+    max_ids_text = ids_text.size()[1]
+    predicted_indices_x = []
+    predicted_indices_y = []
+    predicted_indices_f = []
+    for _ in range(ids_vis.size()[1]):
+        # Obtain model outputs
+        x_scores, y_scores, f_scores = model(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
         # If there are indices which are already chosen, change their value to 0
         if len(predicted_indices_x) > 0:
             x_scores[list(range(batch_size)), predicted_indices_x] = 0
