@@ -39,7 +39,10 @@ class Text2VisualDataset:
         x_movement = torch.randint(low=-10, high=10, size=x_indexes.size())
         y_movement = torch.randint(low=-10, high=10, size=y_indexes.size())
 
-        return torch.abs(x_indexes - x_movement), torch.abs(y_indexes - y_movement)
+        return (
+            torch.clamp(x_indexes - x_movement, min=0, max=X_MASK - 1),
+            torch.clamp(y_indexes - y_movement, min=0, max=Y_MASK - 1),
+        )
 
     def __len__(self):
         return len(self.dataset_file)
