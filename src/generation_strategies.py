@@ -219,7 +219,7 @@ def entropy(inputs: torch.Tensor):
 
 
 def lowest_entropy(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model, device
 ):
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
@@ -238,13 +238,13 @@ def lowest_entropy(
         if len(predicted_indices_x) > 0:
             x_scores[:, max_ids_text:][
                 batch_indices, predicted_indices_x
-            ] = F.log_softmax(torch.ones(1, x_scores.size()[-1]), dim=-1)
+            ] = F.log_softmax(torch.ones(1, x_scores.size()[-1]).to(device), dim=-1)
             y_scores[:, max_ids_text:][
                 batch_indices, predicted_indices_y
-            ] = F.log_softmax(torch.ones(1, y_scores.size()[-1]), dim=-1)
+            ] = F.log_softmax(torch.ones(1, y_scores.size()[-1]).to(device), dim=-1)
             f_scores[:, max_ids_text:][
                 batch_indices, predicted_indices_f
-            ] = F.log_softmax(torch.ones(1, f_scores.size()[-1]), dim=-1)
+            ] = F.log_softmax(torch.ones(1, f_scores.size()[-1]).to(device), dim=-1)
 
         # Compute entropies
         entropies_x = entropy(x_scores)
@@ -286,6 +286,7 @@ def generation_strategy_factory(
     t_types,
     attn_mask,
     model,
+    device,
 ):
     if gen_strategy == "one_step_all_left_to_right_continuous":
         return one_step_all_left_to_right_continuous(
@@ -317,7 +318,16 @@ def generation_strategy_factory(
         )
     elif gen_strategy == "lowest_entropy":
         return lowest_entropy(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
+            device,
         )
     elif gen_strategy == "random_discrete":
         return random_discrete(

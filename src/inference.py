@@ -105,6 +105,7 @@ def inference(
                 t_types,
                 attn_mask,
                 model,
+                device,
             )
 
             total_dist_x_relative += relative_distance(
