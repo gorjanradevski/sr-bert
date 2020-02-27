@@ -141,31 +141,8 @@ def train(
                 x_real_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_real_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
                 f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
-                # Get losses for the relative distances as regression losses
-                x_relative_loss = (
-                    relative_distance(
-                        torch.argmax(x_scores[:, max_ids_text:], dim=-1),
-                        x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                )
-                y_relative_loss = (
-                    relative_distance(
-                        torch.argmax(y_scores[:, max_ids_text:], dim=-1),
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                )
                 # Comibine losses and backward
-                loss = (
-                    x_real_loss
-                    + y_real_loss
-                    + f_loss
-                    + x_relative_loss
-                    + y_relative_loss
-                )
+                loss = x_real_loss + y_real_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
