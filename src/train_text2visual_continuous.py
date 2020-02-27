@@ -347,7 +347,7 @@ def parse_args():
     parser.add_argument(
         "--gen_strategy",
         type=str,
-        default="one_step_all_left_to_right",
+        default="left_to_right_continuous",
         help="How to generate the positions during inference",
     )
 

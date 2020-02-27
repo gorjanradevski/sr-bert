@@ -170,12 +170,6 @@ def parse_args():
         default="data/visual2index.json",
         help="Path to the visual2index mapping json.",
     )
-    parser.add_argument(
-        "--num_iter",
-        type=int,
-        default=5,
-        help="Number of iterations for the inference.",
-    )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
@@ -183,7 +177,7 @@ def parse_args():
     parser.add_argument(
         "--gen_strategy",
         type=str,
-        default="one_step_all_left_to_right",
+        default="left_to_right_discrete",
         help="How to generate the positions during inference",
     )
 
@@ -197,7 +191,6 @@ def main():
         args.test_dataset_path,
         args.visual2index_path,
         args.gen_strategy,
-        args.num_iter,
         args.batch_size,
         args.without_text,
     )
