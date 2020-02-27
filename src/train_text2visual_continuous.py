@@ -74,7 +74,7 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
-    config = BertConfig.from_pretrained("bert-large-uncased")
+    config = BertConfig.from_pretrained("bert-base-uncased")
     config.vocab_size = len(visual2index) + 3
     model = nn.DataParallel(Text2VisualContinuousBert(config, device)).to(device)
     # Loss and optimizer

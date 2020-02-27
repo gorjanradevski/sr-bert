@@ -32,7 +32,7 @@ class Text2VisualDiscreteBert(nn.Module):
             embedding_dim=config.hidden_size,
             padding_idx=F_PAD,
         )
-        self.bert = BertModel.from_pretrained("bert-large-uncased")
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
         # Change config for the positions
         config.vocab_size = X_PAD + 1
         self.x_head = BertOnlyMLMHead(config)
@@ -110,7 +110,7 @@ class Text2VisualContinuousBert(nn.Module):
             embedding_dim=config.hidden_size,
             padding_idx=F_PAD,
         )
-        self.bert = BertModel.from_pretrained("bert-large-uncased")
+        self.bert = BertModel.from_pretrained("bert-base-uncased")
         # Change config for the positions
         config.vocab_size = 2
         self.xy_head = BertOnlyMLMHead(config)

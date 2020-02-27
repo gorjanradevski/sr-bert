@@ -26,7 +26,7 @@ class Text2VisualDataset:
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
         self.mask_probability = mask_probability
-        self.tokenizer = BertTokenizer.from_pretrained("bert-large-uncased")
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.train = train
         self.without_text = without_text
 

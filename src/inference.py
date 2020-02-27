@@ -50,7 +50,7 @@ def inference(
         sampler=test_sampler,
     )
     # Prepare model
-    config = BertConfig.from_pretrained("bert-large-uncased")
+    config = BertConfig.from_pretrained("bert-base-uncased")
     config.vocab_size = len(visual2index) + 3
     model = nn.DataParallel(Text2VisualDiscreteBert(config, device)).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
