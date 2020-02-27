@@ -44,6 +44,8 @@ def train(
         "left_to_right_discrete",
         "one_step_all_left_to_right_discrete",
         "highest_probability",
+        "lowest_entropy",
+        "random_discrete"
     ]
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
