@@ -59,20 +59,15 @@ class Text2VisualDataset:
             sentences = np.random.permutation(all_sentences)
         else:
             sentences = all_sentences
-        # Prepare sentences
-        first = torch.tensor(self.tokenizer.encode(sentences[0]))
-        rest = [
-            torch.tensor(self.tokenizer.encode(sentence))[1:]
-            for sentence in sentences[1:]
-        ]
-        rest.insert(0, first)
-        input_ids_sentence = torch.cat(rest, dim=-1)
+
+        input_ids_sentence = torch.tensor(
+            self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
+        )
         if self.without_text:
             input_ids_sentence = torch.tensor(
                 [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
             )
         # Prepare visuals
-        # TODO:  Think about adding a SEP token at the end
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
         )
@@ -104,6 +99,7 @@ class Text2VisualDataset:
         if self.train and np.random.randint(low=0, high=2) == 1:
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
 
+        # Readjust scene [-5, 5] pixels in all directions
         if self.train:
             x_indexes, y_indexes = self.move_scene(x_indexes, y_indexes)
 
