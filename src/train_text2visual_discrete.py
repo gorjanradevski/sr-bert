@@ -45,7 +45,7 @@ def train(
         "one_step_all_left_to_right_discrete",
         "highest_probability",
         "lowest_entropy",
-        "random_discrete"
+        "random_discrete",
     ]
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -85,6 +85,7 @@ def train(
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     cur_epoch = 0
     best_avg_distance = sys.maxsize
     if checkpoint_path is not None:
@@ -153,6 +154,9 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
+
+        # Adjust the learning rate
+        lr_scheduler.step()
 
         # Set model in evaluation mode
         model.train(False)

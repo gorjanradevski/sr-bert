@@ -72,6 +72,7 @@ class Text2VisualDataset:
                 [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
             )
         # Prepare visuals
+        # TODO:  Think about adding a SEP token at the end
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
         )
