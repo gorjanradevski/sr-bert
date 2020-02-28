@@ -87,6 +87,7 @@ def train(
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
         cur_epoch = checkpoint["epoch"]
         best_avg_distance = checkpoint["distance"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
@@ -288,6 +289,7 @@ def train(
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
+                    "lr_scheduler_state_dict": lr_scheduler.state_dict(),
                     "distance": best_avg_distance,
                 },
                 intermediate_save_checkpoint_path,

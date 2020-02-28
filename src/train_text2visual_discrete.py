@@ -92,6 +92,7 @@ def train(
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
         cur_epoch = checkpoint["epoch"]
         best_avg_distance = checkpoint["distance"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
@@ -141,11 +142,11 @@ def train(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
                 # Get losses for the real distances as classification losses
-                x_real_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
-                y_real_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
+                x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
+                y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
                 f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
-                loss = x_real_loss + y_real_loss + f_loss
+                loss = x_loss + y_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -258,6 +259,7 @@ def train(
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "distance": best_avg_distance,
+                    "lr_scheduler_state_dict": lr_scheduler.state_dict(),
                 },
                 intermediate_save_checkpoint_path,
             )
