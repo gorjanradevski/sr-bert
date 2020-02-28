@@ -60,9 +60,13 @@ class Text2VisualDataset:
         else:
             sentences = all_sentences
         # Prepare sentences
-        input_ids_sentence = torch.tensor(
-            self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
-        )
+        first = torch.tensor(self.tokenizer.encode(sentences[0]))
+        rest = [
+            torch.tensor(self.tokenizer.encode(sentence))[1:]
+            for sentence in sentences[1:]
+        ]
+        rest.insert(0, first)
+        input_ids_sentence = torch.cat(rest, dim=-1)
         if self.without_text:
             input_ids_sentence = torch.tensor(
                 [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
