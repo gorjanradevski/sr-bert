@@ -9,8 +9,13 @@ from transformers import BertConfig
 from utils import real_distance, relative_distance
 from generation_strategies import generation_strategy_factory
 
-from datasets import Text2VisualDiscreteDataset, collate_pad_discrete_text2visual_batch
-from modeling import Text2VisualDiscreteBert
+from datasets import (
+    Text2VisualDiscreteDataset,
+    collate_pad_discrete_text2visual_batch,
+    Text2VisualContinuousDataset,
+    collate_pad_continuous_text2visual_batch,
+)
+from modeling import Text2VisualDiscreteBert, Text2VisualContinuousBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 def inference(
     checkpoint_path: str,
+    model_type: str,
     test_dataset_path: str,
     visual2index_path: str,
     gen_strategy: str,
@@ -30,13 +36,24 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
+    assert model_type in ["discrete", "continuous"]
     visual2index = json.load(open(visual2index_path))
-    test_dataset = Text2VisualDiscreteDataset(
-        test_dataset_path,
-        visual2index,
-        mask_probability=1.0,
-        train=False,
-        without_text=without_text,
+    test_dataset = (
+        Text2VisualDiscreteDataset(
+            test_dataset_path,
+            visual2index,
+            mask_probability=1.0,
+            train=False,
+            without_text=without_text,
+        )
+        if model_type == "discrete"
+        else Text2VisualContinuousDataset(
+            test_dataset_path,
+            visual2index,
+            mask_probability=1.0,
+            train=False,
+            without_text=without_text,
+        )
     )
     logger.info(f"Testing on {len(test_dataset)}")
     # Create samplers
@@ -46,13 +63,19 @@ def inference(
         test_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_discrete_text2visual_batch,
+        collate_fn=collate_pad_discrete_text2visual_batch
+        if model_type == "discrete"
+        else collate_pad_continuous_text2visual_batch,
         sampler=test_sampler,
     )
     # Prepare model
     config = BertConfig.from_pretrained("bert-base-uncased")
     config.vocab_size = len(visual2index) + 3
-    model = nn.DataParallel(Text2VisualDiscreteBert(config, device)).to(device)
+    model = nn.DataParallel(
+        Text2VisualDiscreteBert(config, device)
+        if model_type == "discrete"
+        else Text2VisualContinuousBert(config, device)
+    ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
     # Criterion
@@ -154,6 +177,12 @@ def parse_args():
         description="Performs inference with a Text2Position model."
     )
     parser.add_argument(
+        "--model_type",
+        type=str,
+        default="discrete",
+        help="The type of the model used to perform inference",
+    )
+    parser.add_argument(
         "--checkpoint_path",
         type=str,
         default=None,
@@ -189,6 +218,7 @@ def main():
     args = parse_args()
     inference(
         args.checkpoint_path,
+        args.model_type,
         args.test_dataset_path,
         args.visual2index_path,
         args.gen_strategy,
