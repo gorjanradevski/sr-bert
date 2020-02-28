@@ -32,8 +32,6 @@ def parse_sentences(
             if sentence_index not in index2sentences[scene_index]:
                 index2sentences[scene_index][sentence_index] = []
             sentence = line.split("\t")[-1].rstrip("\n").rstrip().lower()
-            if not sentence.endswith((".", "!", "?", '"')):
-                sentence += "."
             index2sentences[scene_index][sentence_index].append(sentence)
 
     return index2sentences
