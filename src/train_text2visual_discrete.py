@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -52,14 +52,8 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Subset(
-        Text2VisualDiscreteDataset(
-            train_dataset_path,
-            visual2index,
-            mask_probability=mask_probability,
-            train=False,
-        ),
-        [0, 1, 2],
+    train_dataset = Text2VisualDiscreteDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
     )
     val_dataset = Text2VisualDiscreteDataset(
         val_dataset_path, visual2index, mask_probability=1.0, train=False
@@ -91,14 +85,12 @@ def train(
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     cur_epoch = 0
     best_avg_distance = sys.maxsize
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
         cur_epoch = checkpoint["epoch"]
         best_avg_distance = checkpoint["distance"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
@@ -150,11 +142,6 @@ def train(
                 x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
                 f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
-                print(torch.argmax(x_scores, dim=-1)[:, ids_text.size()[1] :])
-                print(x_lab[:, ids_text.size()[1] :])
-                print("------------------------------")
-                print(torch.argmax(y_scores, dim=-1)[:, ids_text.size()[1] :])
-                print(y_lab[:, ids_text.size()[1] :])
                 # Comibine losses and backward
                 loss = x_loss + y_loss + f_loss
                 loss.backward()
@@ -165,10 +152,6 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-        """
-        # Adjust the learning rate
-        lr_scheduler.step()
-
 
         # Set model in evaluation mode
         model.train(False)
@@ -270,11 +253,9 @@ def train(
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "distance": best_avg_distance,
-                    "lr_scheduler_state_dict": lr_scheduler.state_dict(),
                 },
                 intermediate_save_checkpoint_path,
             )
-    """
 
 
 def parse_args():

@@ -80,14 +80,12 @@ def train(
     # Loss and optimizer
     criterion_f = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
     cur_epoch = 0
     best_avg_distance = sys.maxsize
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        lr_scheduler.load_state_dict(checkpoint["lr_scheduler_state_dict"])
         cur_epoch = checkpoint["epoch"]
         best_avg_distance = checkpoint["distance"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
@@ -186,9 +184,6 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-
-        # Adjust the learning rate
-        lr_scheduler.step()
 
         # Set model in evaluation mode
         model.train(False)
@@ -289,7 +284,6 @@ def train(
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                    "lr_scheduler_state_dict": lr_scheduler.state_dict(),
                     "distance": best_avg_distance,
                 },
                 intermediate_save_checkpoint_path,

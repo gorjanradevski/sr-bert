@@ -96,12 +96,8 @@ class Text2VisualDataset:
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
         # Flip scene with 50% prob during training
-        if self.train and np.random.randint(low=0, high=2) == 1:
+        if self.train and torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
-
-        # Readjust scene [-5, 5] pixels in all directions
-        if self.train:
-            x_indexes, y_indexes = self.move_scene(x_indexes, y_indexes)
 
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
 
