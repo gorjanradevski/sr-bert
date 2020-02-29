@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -52,8 +52,14 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDiscreteDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Subset(
+        Text2VisualDiscreteDataset(
+            train_dataset_path,
+            visual2index,
+            mask_probability=mask_probability,
+            train=False,
+        ),
+        [0, 1, 2],
     )
     val_dataset = Text2VisualDiscreteDataset(
         val_dataset_path, visual2index, mask_probability=1.0, train=False
@@ -137,7 +143,6 @@ def train(
                     t_types.to(device),
                     attn_mask.to(device),
                 )
-                max_ids_text = ids_text.size()[1]
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
@@ -145,6 +150,11 @@ def train(
                 x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
                 f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                print(torch.argmax(x_scores, dim=-1)[:, ids_text.size()[1] :])
+                print(x_lab[:, ids_text.size()[1] :])
+                print("------------------------------")
+                print(torch.argmax(y_scores, dim=-1)[:, ids_text.size()[1] :])
+                print(y_lab[:, ids_text.size()[1] :])
                 # Comibine losses and backward
                 loss = x_loss + y_loss + f_loss
                 loss.backward()
@@ -155,9 +165,10 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-
+        """
         # Adjust the learning rate
         lr_scheduler.step()
+
 
         # Set model in evaluation mode
         model.train(False)
@@ -263,6 +274,7 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
+    """
 
 
 def parse_args():
