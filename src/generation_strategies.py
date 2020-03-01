@@ -2,23 +2,28 @@ import torch
 import numpy as np
 from torch.nn import functional as F
 
-from datasets import X_MASK, Y_MASK, F_MASK
+from datasets import X_MASK, Y_MASK, F_MASK, X_SEP, Y_SEP, F_SEP, X_PAD, Y_PAD, F_PAD
 
 
 def one_step_all_left_to_right_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
     max_ids_text = ids_text.size()[1]
     x_scores, y_scores, f_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
     )
-    x_ind[:, :] = torch.ceil(x_scores[:, max_ids_text:])
-    y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
+    x_ind[x_indices] = torch.ceil(x_scores[:, max_ids_text:][x_indices])
+    y_ind[y_indices] = torch.ceil(y_scores[:, max_ids_text:][y_indices])
+    f_ind[f_indices] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][f_indices]
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
@@ -36,17 +41,22 @@ def one_step_all_left_to_right_continuous(
 def one_step_all_left_to_right_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
     max_ids_text = ids_text.size()[1]
     x_scores, y_scores, f_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
     )
-    x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
-    y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
+    x_ind[x_indices] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][x_indices]
+    y_ind[y_indices] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][y_indices]
+    f_ind[f_indices] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][f_indices]
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
@@ -64,17 +74,22 @@ def one_step_all_left_to_right_discrete(
 def one_step_all_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
     max_ids_text = ids_text.size()[1]
     x_scores, y_scores, f_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
     )
-    x_ind[:, :] = torch.ceil(x_scores[:, max_ids_text:])
-    y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
+    x_ind[x_indices] = torch.ceil(x_scores[:, max_ids_text:][x_indices])
+    y_ind[y_indices] = torch.ceil(y_scores[:, max_ids_text:][y_indices])
+    f_ind[f_indices] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][f_indices]
 
     return x_ind, y_ind, f_ind
 
@@ -82,17 +97,22 @@ def one_step_all_continuous(
 def one_step_all_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
     max_ids_text = ids_text.size()[1]
     x_scores, y_scores, f_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
     )
-    x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
-    y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
+    x_ind[x_indices] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][x_indices]
+    y_ind[y_indices] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][y_indices]
+    f_ind[f_indices] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][f_indices]
 
     return x_ind, y_ind, f_ind
 
@@ -100,10 +120,20 @@ def one_step_all_discrete(
 def left_to_right_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
+
+    # Obtain SEP indices
+    x_sep_idx = torch.where(x_ind == X_SEP)
+    y_sep_idx = torch.where(y_ind == Y_SEP)
+    f_sep_idx = torch.where(f_ind == F_SEP)
     max_ids_text = ids_text.size()[1]
     for _ in range(2):
         for i in range(ids_vis.size()[1]):
@@ -117,16 +147,30 @@ def left_to_right_continuous(
             y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
             f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
+        x_ind[x_sep_idx] = X_SEP
+        y_ind[y_sep_idx] = Y_SEP
+        f_ind[f_sep_idx] = F_SEP
+
     return x_ind, y_ind, f_ind
 
 
 def left_to_right_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
+
+    # Obtain SEP indices
+    x_sep_idx = torch.where(x_ind == X_SEP)
+    y_sep_idx = torch.where(y_ind == Y_SEP)
+    f_sep_idx = torch.where(f_ind == F_SEP)
     max_ids_text = ids_text.size()[1]
     for _ in range(2):
         for i in range(ids_vis.size()[1]):
@@ -140,16 +184,30 @@ def left_to_right_discrete(
             y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
             f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
+        x_ind[x_sep_idx] = X_SEP
+        y_ind[y_sep_idx] = Y_SEP
+        f_ind[f_sep_idx] = F_SEP
+
     return x_ind, y_ind, f_ind
 
 
 def random_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
+
+    # Obtain SEP indices
+    x_sep_idx = torch.where(x_ind == X_SEP)
+    y_sep_idx = torch.where(y_ind == Y_SEP)
+    f_sep_idx = torch.where(f_ind == F_SEP)
     max_ids_text = ids_text.size()[1]
     for _ in range(2):
         indices = np.random.permutation(list(range(ids_vis.size()[1])))
@@ -164,16 +222,25 @@ def random_discrete(
             y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
             f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
+        x_ind[x_sep_idx] = X_SEP
+        y_ind[y_sep_idx] = Y_SEP
+        f_ind[f_sep_idx] = F_SEP
+
     return x_ind, y_ind, f_ind
 
 
 def highest_probability(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
 
@@ -207,9 +274,15 @@ def highest_probability(
         predicted_indices_f.append(index_f.tolist())
 
         # Change the index with the max probability with its prediction
-        x_ind[batch_indices, index_x] = pred_x[:, max_ids_text:][batch_indices, index_x]
-        y_ind[batch_indices, index_y] = pred_y[:, max_ids_text:][batch_indices, index_y]
-        f_ind[batch_indices, index_f] = pred_f[:, max_ids_text:][batch_indices, index_f]
+        x_ind[batch_indices, index_x] = pred_x[:, max_ids_text:][
+            batch_indices, index_x
+        ]
+        y_ind[batch_indices, index_y] = pred_y[:, max_ids_text:][
+            batch_indices, index_y
+        ]
+        f_ind[batch_indices, index_f] = pred_f[:, max_ids_text:][
+            batch_indices, index_f
+        ]
 
     return x_ind, y_ind, f_ind
 
@@ -221,10 +294,15 @@ def entropy(inputs: torch.Tensor):
 def lowest_entropy(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model, device
 ):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    # Obtain non-SEP and non-PAD indices
+    x_indices = torch.where((x_ind != X_SEP) & (x_ind != X_PAD))
+    y_indices = torch.where((y_ind != Y_SEP) & (y_ind != Y_PAD))
+    f_indices = torch.where((f_ind != F_SEP) & (f_ind != F_PAD))
+
+    # Set everything except the SEP and PAD tokens to MASK
+    x_ind[x_indices] = X_MASK
+    y_ind[y_indices] = Y_MASK
+    f_ind[f_indices] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     predicted_indices_x = []

@@ -6,11 +6,14 @@ import numpy as np
 from typing import Tuple, Dict
 
 X_MASK = 501
-X_PAD = 502
+X_SEP = 502
+X_PAD = 503
 Y_MASK = 401
-Y_PAD = 402
+Y_SEP = 402
+Y_PAD = 403
 F_MASK = 2
-F_PAD = 3
+F_SEP = 3
+F_PAD = 4
 SCENE_WIDTH = 500
 
 
@@ -70,6 +73,7 @@ class Text2VisualDataset:
         # Prepare visuals
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
+            + [1]  # Append the VIS SEP token at the end
         )
         # Obtain X-indexes
         x_indexes = torch.tensor(
@@ -99,6 +103,11 @@ class Text2VisualDataset:
         if self.train and torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
 
+        # Add SEP tokens
+        x_indexes = torch.cat([x_indexes, torch.tensor([X_SEP])], dim=-1)
+        y_indexes = torch.cat([y_indexes, torch.tensor([Y_SEP])], dim=-1)
+        f_indexes = torch.cat([f_indexes, torch.tensor([F_SEP])], dim=-1)
+
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
 
     def masking(
@@ -111,6 +120,8 @@ class Text2VisualDataset:
         f_labels = f_indexes.clone()
         # Get probability matrix
         probability_matrix = torch.full(x_indexes.shape, self.mask_probability)
+        special_tokens_mask = x_indexes == X_SEP
+        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
         masked_indices = torch.bernoulli(probability_matrix).bool()
         # We only compute loss on masked tokens
         x_labels[~masked_indices] = -100
