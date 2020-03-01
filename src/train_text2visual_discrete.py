@@ -248,12 +248,11 @@ def train(
                 print(f"- X real distance: {round(total_dist_x_real, 2)}")
                 print(f"- Y real distance: {round(total_dist_y_real, 2)}")
                 print(f"on epoch {epoch+1}. Saving model!!!")
-                # torch.save(model.state_dict(), save_model_path)
+                torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
             else:
                 print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
             print("Saving intermediate checkpoint...")
-            """
             torch.save(
                 {
                     "epoch": epoch,
@@ -263,7 +262,6 @@ def train(
                 },
                 intermediate_save_checkpoint_path,
             )
-            """
 
 
 def parse_args():
