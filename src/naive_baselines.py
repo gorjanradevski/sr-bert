@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import logging
 import json
-from inference_utils import relative_distance
+from utils import relative_distance, real_distance
 from datasets import (
     Text2VisualDiscreteDataset,
     collate_pad_discrete_text2visual_batch,
@@ -17,9 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def naive_inference(
-    test_dataset_path: str, visual2index_path: str, naive_type: str, metric_type: str
-):
+def naive_inference(test_dataset_path: str, visual2index_path: str, naive_type: str):
     # Create datasets
     visual2index = json.load(open(visual2index_path))
     test_dataset = Text2VisualDiscreteDataset(
@@ -37,8 +35,10 @@ def naive_inference(
         sampler=test_sampler,
     )
     # Metrics
-    total_dist_x = 0
-    total_dist_y = 0
+    total_dist_x_real = 0
+    total_dist_y_real = 0
+    total_dist_x_relative = 0
+    total_dist_y_relative = 0
     total_acc_f = 0
     # Set model in evaluation mode
     with torch.no_grad():
@@ -58,21 +58,31 @@ def naive_inference(
             else:
                 raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
-            if metric_type == "real_distance":
-                total_dist_x += torch.mean(torch.abs(x_ind - x_lab).float())
-                total_dist_y += torch.mean(torch.abs(y_ind - y_lab).float())
-                total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
-            elif metric_type == "relative_distance":
-                total_dist_x += relative_distance(x_ind, x_lab, torch.ones_like(x_ind))
-                total_dist_y += relative_distance(y_ind, y_lab, torch.ones_like(x_ind))
-            else:
-                raise ValueError(f"{metric_type} not recognized")
+            total_dist_x_real += real_distance(
+                x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
+            )
+            total_dist_y_real += real_distance(
+                y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
+            )
+            total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
+            total_dist_x_relative += relative_distance(
+                x_ind, x_lab, torch.ones_like(x_ind), check_flipped=True
+            )
+            total_dist_y_relative += relative_distance(
+                y_ind, y_lab, torch.ones_like(x_ind), check_flipped=False
+            )
 
         print(
-            f"The average distance per scene for X is: {total_dist_x/len(test_dataset)}"
+            f"The average real distance per scene for X is: {total_dist_x_real/len(test_dataset)}"
         )
         print(
-            f"The average distance per scene for Y is: {total_dist_y/len(test_dataset)}"
+            f"The average real distance per scene for Y is: {total_dist_y_real/len(test_dataset)}"
+        )
+        print(
+            f"The average relative distance per scene for X is: {total_dist_x_relative/len(test_dataset)}"
+        )
+        print(
+            f"The average relative distance per scene for Y is: {total_dist_y_relative/len(test_dataset)}"
         )
         print(
             f"The average accuracy per scene for F is: {total_acc_f/len(test_dataset)}"
@@ -102,21 +112,13 @@ def parse_args():
         default="random",
         help="Type of naive inference: random or center",
     )
-    parser.add_argument(
-        "--metric_type", type=str, default="relative_distance", help="The metric type"
-    )
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    naive_inference(
-        args.test_dataset_path,
-        args.visual2index_path,
-        args.naive_type,
-        args.metric_type,
-    )
+    naive_inference(args.test_dataset_path, args.visual2index_path, args.naive_type)
 
 
 if __name__ == "__main__":
