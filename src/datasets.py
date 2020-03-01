@@ -39,8 +39,8 @@ class Text2VisualDataset:
 
     @staticmethod
     def move_scene(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
-        x_movement = torch.randint(low=-10, high=10, size=x_indexes.size())
-        y_movement = torch.randint(low=-10, high=10, size=y_indexes.size())
+        x_movement = torch.randint(low=-3, high=3, size=x_indexes.size())
+        y_movement = torch.randint(low=-3, high=3, size=y_indexes.size())
 
         return (
             torch.clamp(x_indexes - x_movement, min=0, max=X_MASK - 1),
@@ -102,6 +102,9 @@ class Text2VisualDataset:
         # Flip scene with 50% prob during training
         if self.train and torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
+
+        if self.train:
+            x_indexes, y_indexes = self.move_scene(x_indexes, y_indexes)
 
         # Add SEP tokens
         x_indexes = torch.cat([x_indexes, torch.tensor([X_SEP])], dim=-1)
