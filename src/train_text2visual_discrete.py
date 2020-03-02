@@ -81,7 +81,11 @@ def train(
     # Define training specifics
     config = BertConfig.from_pretrained("bert-base-uncased")
     config.vocab_size = len(visual2index) + 3
-    model = nn.DataParallel(Text2VisualDiscreteBert(config, device)).to(device)
+    model = nn.DataParallel(
+        Text2VisualDiscreteBert(
+            config, device, finetune=True if checkpoint_path is not None else False
+        )
+    ).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
