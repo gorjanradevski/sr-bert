@@ -144,7 +144,7 @@ def train(
                         l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.01
+                ) * 0.003
                 y_real_loss = (
                     real_distance(
                         y_scores[:, max_ids_text:],
@@ -153,7 +153,7 @@ def train(
                         l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.01
+                ) * 0.003
                 x_relative_loss = (
                     relative_distance(
                         x_scores[:, max_ids_text:],
@@ -163,7 +163,7 @@ def train(
                         l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.1
+                ) * 0.003
                 y_relative_loss = (
                     relative_distance(
                         y_scores[:, max_ids_text:],
@@ -172,7 +172,7 @@ def train(
                         l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.1
+                ) * 0.003
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (

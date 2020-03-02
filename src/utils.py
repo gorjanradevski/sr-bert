@@ -39,7 +39,7 @@ def real_distance_single(inds, labs, attn_mask, l_type):
     # Obtain the distance matrix
     dist = (
         torch.pow(inds - labs, 2).float()
-        if type == "mse"
+        if l_type == "mse"
         else torch.abs(inds - labs).float()
     )
     # Remove the distance for the padding tokens
