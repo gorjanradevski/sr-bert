@@ -130,32 +130,9 @@ class Text2VisualDataset:
         x_labels[~masked_indices] = -100
         y_labels[~masked_indices] = -100
         f_labels[~masked_indices] = -100
-        # 80% we replace with a mask token
-        indices_replaced = (
-            torch.bernoulli(torch.full(x_indexes.shape, 0.8)).bool() & masked_indices
-        )
-        x_indexes[indices_replaced] = X_MASK
-        y_indexes[indices_replaced] = Y_MASK
-        f_indexes[indices_replaced] = F_MASK
-
-        # 10% of the time, we replace masked input tokens with random word
-        indices_random = (
-            torch.bernoulli(torch.full(x_labels.shape, 0.5)).bool()
-            & masked_indices
-            & ~indices_replaced
-        )
-        random_x = torch.randint(
-            low=0, high=X_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
-        random_y = torch.randint(
-            low=0, high=Y_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
-        random_f = torch.randint(
-            low=0, high=F_MASK - 1, size=x_labels.shape, dtype=torch.long
-        )
-        x_indexes[indices_random] = random_x[indices_random]
-        y_indexes[indices_random] = random_y[indices_random]
-        f_indexes[indices_random] = random_f[indices_random]
+        x_indexes[masked_indices] = X_MASK
+        y_indexes[masked_indices] = Y_MASK
+        f_indexes[masked_indices] = F_MASK
 
         return x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels
 
