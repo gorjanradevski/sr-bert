@@ -25,7 +25,6 @@ def naive_inference(
 ):
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    index2visual = {v: k for k, v in visual2index.items()}
     train_dataset = Text2VisualDiscreteDataset(
         train_dataset_path, visual2index, mask_probability=1.0, train=False
     )
