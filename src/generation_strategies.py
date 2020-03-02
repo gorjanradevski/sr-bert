@@ -274,15 +274,9 @@ def highest_probability(
         predicted_indices_f.append(index_f.tolist())
 
         # Change the index with the max probability with its prediction
-        x_ind[batch_indices, index_x] = pred_x[:, max_ids_text:][
-            batch_indices, index_x
-        ]
-        y_ind[batch_indices, index_y] = pred_y[:, max_ids_text:][
-            batch_indices, index_y
-        ]
-        f_ind[batch_indices, index_f] = pred_f[:, max_ids_text:][
-            batch_indices, index_f
-        ]
+        x_ind[batch_indices, index_x] = pred_x[:, max_ids_text:][batch_indices, index_x]
+        y_ind[batch_indices, index_y] = pred_y[:, max_ids_text:][batch_indices, index_y]
+        f_ind[batch_indices, index_f] = pred_f[:, max_ids_text:][batch_indices, index_f]
 
     return x_ind, y_ind, f_ind
 
