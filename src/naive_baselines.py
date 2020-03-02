@@ -119,17 +119,17 @@ def naive_inference(
                 raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
             total_dist_x_real += real_distance(
-                x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True, l_type="mae"
+                x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
             )
             total_dist_y_real += real_distance(
-                y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False, l_type="mae"
+                y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
             )
             total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
             total_dist_x_relative += relative_distance(
-                x_ind, x_lab, torch.ones_like(x_ind), check_flipped=True, l_type="mae"
+                x_ind, x_lab, torch.ones_like(x_ind), check_flipped=True
             )
             total_dist_y_relative += relative_distance(
-                y_ind, y_lab, torch.ones_like(x_ind), check_flipped=False, l_type="mae"
+                y_ind, y_lab, torch.ones_like(x_ind), check_flipped=False
             )
 
         print(

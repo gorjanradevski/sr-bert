@@ -141,38 +141,34 @@ def train(
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                         check_flipped=True,
-                        l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.003
+                ) * 0.15
                 y_real_loss = (
                     real_distance(
                         y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
-                        l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.003
+                ) * 0.15
                 x_relative_loss = (
                     relative_distance(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                         check_flipped=True,
-                        l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.003
+                ) * 0.3
                 y_relative_loss = (
                     relative_distance(
                         y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
-                        l_type="mse",
                     )
                     / ids_text.size()[0]
-                ) * 0.003
+                ) * 0.3
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (
@@ -246,26 +242,18 @@ def train(
                     x_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
                     check_flipped=True,
-                    l_type="mae",
                 ).item()
                 total_dist_y_relative += relative_distance(
-                    y_out,
-                    y_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
-                    l_type="mae",
+                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
                 total_dist_x_real += real_distance(
                     x_out,
                     x_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
                     check_flipped=True,
-                    l_type="mae",
                 ).item()
                 total_dist_y_real += real_distance(
-                    y_out,
-                    y_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
-                    l_type="mae",
+                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
                 total_acc_f += (
                     f_out == f_lab[:, max_ids_text:]
