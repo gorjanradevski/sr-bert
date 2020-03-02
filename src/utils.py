@@ -2,8 +2,12 @@ import torch
 from datasets import SCENE_WIDTH
 
 
-def elementwise_distances(X: torch.Tensor):
-    return torch.triu(torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2)))
+def elementwise_distances(X: torch.Tensor, l_type: str):
+    return (
+        torch.triu(torch.pow(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2), 2))
+        if l_type == "mse"
+        else torch.triu(torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2)))
+    )
 
 
 def flip_scene(labs):
@@ -15,23 +19,29 @@ def flip_scene(labs):
     return labs_flipped
 
 
-def real_distance(inds, labs, attn_mask, check_flipped: bool = False):
+def real_distance(
+    inds, labs, attn_mask, check_flipped: bool = False, l_type: str = "mse"
+):
     # Obtain normal dist
-    dist_normal = real_distance_single(inds, labs, attn_mask)
+    dist_normal = real_distance_single(inds, labs, attn_mask, l_type)
     if check_flipped is False:
         return dist_normal.sum()
 
     labs_flipped = flip_scene(labs)
-    dist_flipped = real_distance_single(inds, labs_flipped, attn_mask)
+    dist_flipped = real_distance_single(inds, labs_flipped, attn_mask, l_type)
 
     dist = torch.min(dist_normal, dist_flipped)
 
     return dist.sum()
 
 
-def real_distance_single(inds, labs, attn_mask):
+def real_distance_single(inds, labs, attn_mask, l_type):
     # Obtain the distance matrix
-    dist = torch.abs(inds - labs).float()
+    dist = (
+        torch.pow(inds - labs, 2).float()
+        if type == "mse"
+        else torch.abs(inds - labs).float()
+    )
     # Remove the distance for the padding tokens
     dist = dist * attn_mask
     # Remove the distance for the masked tokens (During training)
@@ -45,21 +55,25 @@ def real_distance_single(inds, labs, attn_mask):
     return dist
 
 
-def relative_distance(inds, labs, attn_mask, check_flipped: bool = False):
-    dist_normal = relative_distance_single(inds, labs, attn_mask)
+def relative_distance(
+    inds, labs, attn_mask, check_flipped: bool = False, l_type: str = "mse"
+):
+    dist_normal = relative_distance_single(inds, labs, attn_mask, l_type)
     if check_flipped is False:
         return dist_normal.sum()
 
     labs_flipped = flip_scene(labs)
-    dist_flipped = relative_distance_single(inds, labs_flipped, attn_mask)
+    dist_flipped = relative_distance_single(inds, labs_flipped, attn_mask, l_type)
 
     dist = torch.min(dist_normal, dist_flipped)
 
     return dist.sum()
 
 
-def relative_distance_single(inds, labs, attn_mask):
-    dist = torch.abs(elementwise_distances(inds) - elementwise_distances(labs)).float()
+def relative_distance_single(inds, labs, attn_mask, l_type):
+    dist = torch.abs(
+        elementwise_distances(inds, l_type) - elementwise_distances(labs, l_type)
+    ).float()
     # Remove the distance for the padding tokens - Both columns and rows
     dist = (
         dist
