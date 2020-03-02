@@ -116,6 +116,10 @@ class Text2VisualContinuousBert(nn.Module):
             embedding_dim=config.hidden_size,
             padding_idx=F_PAD,
         )
+        self.pos_layer_norm = torch.nn.LayerNorm(
+            config.hidden_size, eps=config.layer_norm_eps
+        )
+        self.pos_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.bert = BertModel.from_pretrained("bert-base-uncased")
         # Change config for the positions
         config.vocab_size = 2
@@ -150,6 +154,8 @@ class Text2VisualContinuousBert(nn.Module):
             + self.y_embeddings(y_ind)
             + self.f_embeddings(f_ind)
         )
+        vis_embed = self.pos_layer_norm(vis_embed)
+        vis_embed = self.pos_dropout(vis_embed)
         position_embeddings = torch.cat([text_embed, vis_embed], dim=1).to(self.device)
         sequence_output = self.bert(
             inputs_embeds=input_embeddings,
