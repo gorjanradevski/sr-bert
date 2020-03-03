@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging

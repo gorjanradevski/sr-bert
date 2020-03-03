@@ -34,16 +34,6 @@ class Text2VisualDataset:
     def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
         return torch.abs(SCENE_WIDTH - x_indexes), torch.abs(1 - f_indexes)
 
-    @staticmethod
-    def move_scene(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
-        x_movement = torch.randint(low=-3, high=3, size=x_indexes.size())
-        y_movement = torch.randint(low=-3, high=3, size=y_indexes.size())
-
-        return (
-            torch.clamp(x_indexes - x_movement, min=0, max=X_MASK - 1),
-            torch.clamp(y_indexes - y_movement, min=0, max=Y_MASK - 1),
-        )
-
     def __len__(self):
         return len(self.dataset_file)
 
@@ -99,9 +89,6 @@ class Text2VisualDataset:
         # Flip scene with 50% prob during training
         if self.train and torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
-
-        if self.train:
-            x_indexes, y_indexes = self.move_scene(x_indexes, y_indexes)
 
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
 
