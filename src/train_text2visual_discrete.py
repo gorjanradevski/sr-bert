@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 
 def train(
-    finetune: bool,
     checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
@@ -82,9 +81,7 @@ def train(
     # Define training specifics
     config = BertConfig.from_pretrained("bert-base-uncased")
     config.vocab_size = len(visual2index) + 3
-    model = nn.DataParallel(
-        Text2VisualDiscreteBert(config, device, finetune=finetune)
-    ).to(device)
+    model = nn.DataParallel(Text2VisualDiscreteBert(config, device)).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -273,7 +270,6 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a Text2Position model.")
-    parser.add_argument("--finetune", action="store_true", help="Whether to finetune.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,
@@ -336,7 +332,6 @@ def parse_args():
 def main():
     args = parse_args()
     train(
-        args.finetune,
         args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,

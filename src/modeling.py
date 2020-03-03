@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Text2VisualDiscreteBert(nn.Module):
-    def __init__(self, config: BertConfig, device, finetune: bool = False):
+    def __init__(self, config: BertConfig, device):
         super(Text2VisualDiscreteBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding(
             num_embeddings=config.vocab_size,
@@ -47,35 +47,6 @@ class Text2VisualDiscreteBert(nn.Module):
         # Change config for the depth
         self.log_softmax = nn.LogSoftmax(dim=-1)
         self.device = device
-        self.finetune = finetune
-
-        for param in self.bert.parameters():
-            param.requires_grad = finetune
-
-    def train(self, mode: bool):
-        if self.finetune and mode:
-            self.bert.train(True)
-        if mode:
-            self.cliparts_embeddings.train(True)
-            self.x_embeddings.train(True)
-            self.y_embeddings.train(True)
-            self.f_embeddings.train(True)
-            self.pos_dropout.train(True)
-            self.pos_layer_norm.train(True)
-            self.x_head.train(True)
-            self.y_head.train(True)
-            self.f_head.train(True)
-        else:
-            self.bert.train(False)
-            self.cliparts_embeddings.train(False)
-            self.x_embeddings.train(False)
-            self.y_embeddings.train(False)
-            self.f_embeddings.train(False)
-            self.pos_dropout.train(False)
-            self.pos_layer_norm.train(False)
-            self.x_head.train(False)
-            self.y_head.train(False)
-            self.f_head.train(False)
 
     def forward(
         self,
@@ -101,7 +72,7 @@ class Text2VisualDiscreteBert(nn.Module):
             self.x_embeddings(x_ind)
             + self.y_embeddings(y_ind)
             + self.f_embeddings(f_ind)
-        )
+        ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
         position_embeddings = torch.cat([text_embed, vis_embed], dim=1).to(self.device)
@@ -123,7 +94,7 @@ class Text2VisualDiscreteBert(nn.Module):
 
 
 class Text2VisualContinuousBert(nn.Module):
-    def __init__(self, config: BertConfig, device, finetune: bool = False):
+    def __init__(self, config: BertConfig, device):
         super(Text2VisualContinuousBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding(
             num_embeddings=config.vocab_size,
@@ -157,30 +128,6 @@ class Text2VisualContinuousBert(nn.Module):
         self.f_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=-1)
         self.device = device
-        self.finetune = finetune
-
-    def train(self, mode: bool):
-        if self.finetune and mode:
-            self.bert.train(True)
-        if mode:
-            self.cliparts_embeddings.train(True)
-            self.x_embeddings.train(True)
-            self.y_embeddings.train(True)
-            self.f_embeddings.train(True)
-            self.pos_dropout.train(True)
-            self.pos_layer_norm.train(True)
-            self.xy_head.train(True)
-            self.f_head.train(True)
-        else:
-            self.bert.train(False)
-            self.cliparts_embeddings.train(False)
-            self.x_embeddings.train(False)
-            self.y_embeddings.train(False)
-            self.f_embeddings.train(False)
-            self.pos_dropout.train(False)
-            self.pos_layer_norm.train(False)
-            self.xy_head.train(False)
-            self.f_head.train(False)
 
     def forward(
         self,
