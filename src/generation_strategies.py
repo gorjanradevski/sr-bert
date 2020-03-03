@@ -8,8 +8,7 @@ from datasets import X_MASK, Y_MASK, F_MASK
 def one_step_all_left_to_right_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-
-    # Set everything except the PAD tokens to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -37,8 +36,7 @@ def one_step_all_left_to_right_continuous(
 def one_step_all_left_to_right_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -66,8 +64,7 @@ def one_step_all_left_to_right_discrete(
 def one_step_all_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -85,7 +82,7 @@ def one_step_all_continuous(
 def one_step_all_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -103,7 +100,7 @@ def one_step_all_discrete(
 def left_to_right_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -126,11 +123,10 @@ def left_to_right_continuous(
 def left_to_right_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
-
     max_ids_text = ids_text.size()[1]
     for _ in range(2):
         for i in range(ids_vis.size()[1]):
@@ -150,8 +146,7 @@ def left_to_right_discrete(
 def random_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -175,7 +170,7 @@ def random_discrete(
 def highest_probability(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -226,8 +221,7 @@ def entropy(inputs: torch.Tensor):
 def lowest_entropy(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model, device
 ):
-
-    # Set everything except to MASK
+    # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
