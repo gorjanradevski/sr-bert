@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
 from tqdm import tqdm
 import sys
 import logging
@@ -52,11 +52,20 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDiscreteDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Subset(
+        Text2VisualDiscreteDataset(
+            train_dataset_path,
+            visual2index,
+            mask_probability=mask_probability,
+            train=True,
+        ),
+        [0, 1, 2],
     )
-    val_dataset = Text2VisualDiscreteDataset(
-        val_dataset_path, visual2index, mask_probability=1.0, train=False
+    val_dataset = Subset(
+        Text2VisualDiscreteDataset(
+            val_dataset_path, visual2index, mask_probability=1.0, train=False
+        ),
+        [0, 1, 2],
     )
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")
