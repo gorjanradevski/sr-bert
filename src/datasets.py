@@ -63,13 +63,32 @@ class Text2VisualDataset:
         else:
             sentences = all_sentences
 
-        input_ids_sentence = torch.tensor(
-            self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
-        )
+        # Add the first sentence
+        encoded_sentence = self.tokenizer.encode(sentences[0], add_special_tokens=True)[
+            :-1
+        ]
+        sentences_encoded = encoded_sentence
+        pos_text = list(range(len(encoded_sentence)))
+        # Add all sentences from the second to the second to last
+        for sentence in sentences[1:-1]:
+            encoded_sentence = self.tokenizer.encode(sentence, add_special_tokens=False)
+            sentences_encoded += encoded_sentence
+            pos_text += list(range(len(encoded_sentence)))
+        # Add the last sentence
+        encoded_sentence = self.tokenizer.encode(
+            sentences[-1], add_special_tokens=True
+        )[1:]
+        sentences_encoded += encoded_sentence
+        pos_text += list(range(len(encoded_sentence)))
+
+        input_ids_sentence = torch.tensor(sentences_encoded)
+        pos_text = torch.tensor(pos_text)
+
         if self.without_text:
             input_ids_sentence = torch.tensor(
                 [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
             )
+            pos_text = torch.tensor([0, 1])
         # Prepare visuals
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
@@ -173,7 +192,7 @@ class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int):
-        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes = super().__getitem__(
+        input_ids_sentence, pos_text, input_ids_visuals, x_indexes, y_indexes, f_indexes = super().__getitem__(
             idx
         )
 
@@ -184,6 +203,7 @@ class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
 
         return (
             input_ids_sentence,
+            pos_text,
             input_ids_visuals,
             x_indexes,
             y_indexes,
@@ -211,7 +231,7 @@ class Text2VisualDiscreteDataset(Text2VisualDataset, TorchDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int):
-        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes = super().__getitem__(
+        input_ids_sentence, pos_text, input_ids_visuals, x_indexes, y_indexes, f_indexes = super().__getitem__(
             idx
         )
 
@@ -222,6 +242,7 @@ class Text2VisualDiscreteDataset(Text2VisualDataset, TorchDataset):
 
         return (
             input_ids_sentence,
+            pos_text,
             input_ids_visuals,
             x_indexes,
             y_indexes,
