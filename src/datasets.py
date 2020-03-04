@@ -5,13 +5,14 @@ import torch
 import numpy as np
 from typing import Tuple, Dict
 
-X_MASK = 501
-X_PAD = 502
-Y_MASK = 401
-Y_PAD = 402
+X_MASK = 51
+X_PAD = 52
+Y_MASK = 41
+Y_PAD = 42
 F_MASK = 2
 F_PAD = 3
-SCENE_WIDTH = 500
+BUCKET_SIZE = 10
+SCENE_WIDTH = 500 // BUCKET_SIZE
 
 
 class Text2VisualDataset:
@@ -62,27 +63,25 @@ class Text2VisualDataset:
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
         )
+        # Bucket x-indexes
+        x_indexes = [
+            np.around(np.around(element["x"] / BUCKET_SIZE, decimals=0))
+            for element in scene["elements"]
+        ]
         # Obtain X-indexes
         x_indexes = torch.tensor(
-            [
-                0
-                if element["x"] < 0
-                else X_MASK - 1
-                if element["x"] > X_MASK - 1
-                else element["x"]
-                for element in scene["elements"]
-            ]
+            [0 if e < 0 else X_MASK - 1 if e > X_MASK - 1 else e for e in x_indexes],
+            dtype=torch.long,
         )
+        # Bucket x-indexes
+        y_indexes = [
+            np.around(np.around(element["y"] / BUCKET_SIZE, decimals=0))
+            for element in scene["elements"]
+        ]
         # Obtain Y-indexes
         y_indexes = torch.tensor(
-            [
-                0
-                if element["y"] < 0
-                else Y_MASK - 1
-                if element["y"] > Y_MASK - 1
-                else element["y"]
-                for element in scene["elements"]
-            ]
+            [0 if e < 0 else Y_MASK - 1 if e > Y_MASK - 1 else e for e in y_indexes],
+            dtype=torch.long,
         )
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
