@@ -10,10 +10,11 @@ from utils import real_distance, relative_distance
 from generation_strategies import generation_strategy_factory
 
 from datasets import (
-    Text2VisualDiscreteDataset,
+    Text2VisualDiscreteTestDataset,
     collate_pad_discrete_text2visual_batch,
-    Text2VisualContinuousDataset,
+    Text2VisualContinuousTestDataset,
     collate_pad_continuous_text2visual_batch,
+    BUCKET_SIZE,
 )
 from modeling import Text2VisualDiscreteBert, Text2VisualContinuousBert
 
@@ -39,20 +40,12 @@ def inference(
     assert model_type in ["discrete", "continuous"]
     visual2index = json.load(open(visual2index_path))
     test_dataset = (
-        Text2VisualDiscreteDataset(
-            test_dataset_path,
-            visual2index,
-            mask_probability=1.0,
-            train=False,
-            without_text=without_text,
+        Text2VisualDiscreteTestDataset(
+            test_dataset_path, visual2index, without_text=without_text
         )
         if model_type == "discrete"
-        else Text2VisualContinuousDataset(
-            test_dataset_path,
-            visual2index,
-            mask_probability=1.0,
-            train=False,
-            without_text=without_text,
+        else Text2VisualContinuousTestDataset(
+            test_dataset_path, visual2index, without_text=without_text
         )
     )
     logger.info(f"Testing on {len(test_dataset)}")
@@ -130,6 +123,7 @@ def inference(
                 model,
                 device,
             )
+            x_out, y_out = x_out * BUCKET_SIZE, y_out * BUCKET_SIZE
 
             total_dist_x_relative += relative_distance(
                 x_out,

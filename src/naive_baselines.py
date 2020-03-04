@@ -6,7 +6,7 @@ import logging
 import json
 from utils import relative_distance, real_distance
 from datasets import (
-    Text2VisualDiscreteDataset,
+    Text2VisualDiscreteTestDataset,
     collate_pad_discrete_text2visual_batch,
     X_MASK,
     Y_MASK,
@@ -25,12 +25,8 @@ def naive_inference(
 ):
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDiscreteDataset(
-        train_dataset_path, visual2index, mask_probability=1.0, train=False
-    )
-    test_dataset = Text2VisualDiscreteDataset(
-        test_dataset_path, visual2index, mask_probability=1.0, train=False
-    )
+    train_dataset = Text2VisualDiscreteTestDataset(train_dataset_path, visual2index)
+    test_dataset = Text2VisualDiscreteTestDataset(test_dataset_path, visual2index)
     logger.info(f"Testing on {len(test_dataset)}")
     # Create samplers
     train_sampler = SequentialSampler(train_dataset)

@@ -5,11 +5,11 @@ import torch
 import numpy as np
 from typing import Tuple, Dict
 
-BUCKET_SIZE = 10
-X_MASK = 51
-X_PAD = 52
-Y_MASK = 41
-Y_PAD = 42
+BUCKET_SIZE = 20
+X_MASK = 500 // BUCKET_SIZE + 1
+X_PAD = 500 // BUCKET_SIZE + 2
+Y_MASK = 400 // BUCKET_SIZE + 1
+Y_PAD = 400 // BUCKET_SIZE + 2
 F_MASK = 2
 F_PAD = 3
 SCENE_WIDTH = 500 // BUCKET_SIZE
