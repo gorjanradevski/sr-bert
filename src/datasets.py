@@ -5,31 +5,24 @@ import torch
 import numpy as np
 from typing import Tuple, Dict
 
-X_MASK = 51
-X_PAD = 52
-Y_MASK = 41
-Y_PAD = 42
+BUCKET_SIZE = 10
+X_MASK = 501 // BUCKET_SIZE
+X_PAD = 502 // BUCKET_SIZE
+Y_MASK = 401 // BUCKET_SIZE
+Y_PAD = 402 // BUCKET_SIZE
 F_MASK = 2
 F_PAD = 3
-BUCKET_SIZE = 10
 SCENE_WIDTH = 500 // BUCKET_SIZE
 
 
-class Text2VisualDataset:
+class Text2VisualTrainDataset:
     def __init__(
-        self,
-        dataset_file_path: str,
-        visual2index: Dict,
-        mask_probability: float,
-        train: bool,
-        without_text: bool = False,
+        self, dataset_file_path: str, visual2index: Dict, mask_probability: float
     ):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
         self.mask_probability = mask_probability
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        self.train = train
-        self.without_text = without_text
 
     @staticmethod
     def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
@@ -43,50 +36,45 @@ class Text2VisualDataset:
         scene = self.dataset_file[idx]
         # Prepare sentences
         nested_sentences = [sentences for sentences in scene["sentences"].values()]
-        all_sentences = np.array(
-            [sentence for sublist in nested_sentences for sentence in sublist]
+        sentences = np.random.permutation(
+            np.array([sentence for sublist in nested_sentences for sentence in sublist])
         )
-        if self.train:
-            sentences = np.random.permutation(all_sentences)
-        else:
-            sentences = all_sentences
 
         input_ids_sentence = torch.tensor(
             self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
         )
-
-        if self.without_text:
-            input_ids_sentence = torch.tensor(
-                [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
-            )
         # Prepare visuals
         input_ids_visuals = torch.tensor(
             [self.visual2index[element["visual_name"]] for element in scene["elements"]]
         )
-        # Bucket x-indexes
-        x_indexes = [
-            np.around(np.around(element["x"] / BUCKET_SIZE, decimals=0))
-            for element in scene["elements"]
-        ]
         # Obtain X-indexes
         x_indexes = torch.tensor(
-            [0 if e < 0 else X_MASK - 1 if e > X_MASK - 1 else e for e in x_indexes],
+            [
+                0
+                if element["x"] < 0
+                else X_MASK - 1
+                if element["x"] > (X_MASK - 1) * BUCKET_SIZE
+                else np.around(np.around(element["x"] / BUCKET_SIZE, decimals=0))
+                for element in scene["elements"]
+            ],
             dtype=torch.long,
         )
-        # Bucket x-indexes
-        y_indexes = [
-            np.around(np.around(element["y"] / BUCKET_SIZE, decimals=0))
-            for element in scene["elements"]
-        ]
         # Obtain Y-indexes
         y_indexes = torch.tensor(
-            [0 if e < 0 else Y_MASK - 1 if e > Y_MASK - 1 else e for e in y_indexes],
+            [
+                0
+                if element["y"] < 0
+                else Y_MASK - 1
+                if element["y"] > (Y_MASK - 1) * BUCKET_SIZE
+                else np.around(np.around(element["y"] / BUCKET_SIZE, decimals=0))
+                for element in scene["elements"]
+            ],
             dtype=torch.long,
         )
         # Obtain flips
         f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
-        # Flip scene with 50% prob during training
-        if self.train and torch.bernoulli(torch.tensor([0.5])).bool().item():
+        # Flip scene with 50% prob
+        if torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
 
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
@@ -134,7 +122,98 @@ class Text2VisualDataset:
         return x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels
 
 
-class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
+class Text2VisualTestDataset:
+    def __init__(self, dataset_file_path: str, visual2index: Dict, without_text: bool):
+        self.dataset_file = json.load(open(dataset_file_path))
+        self.visual2index = visual2index
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        self.without_text = without_text
+
+    def __len__(self):
+        return len(self.dataset_file)
+
+    def __getitem__(self, idx: int):
+        # Obtain elements
+        scene = self.dataset_file[idx]
+        # Prepare sentences
+        nested_sentences = [sentences for sentences in scene["sentences"].values()]
+        sentences = np.array(
+            [sentence for sublist in nested_sentences for sentence in sublist]
+        )
+
+        input_ids_sentence = torch.tensor(
+            self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
+        )
+
+        if self.without_text:
+            input_ids_sentence = torch.tensor(
+                [self.tokenizer.cls_token_id, self.tokenizer.sep_token_id]
+            )
+        # Prepare visuals
+        input_ids_visuals = torch.tensor(
+            [self.visual2index[element["visual_name"]] for element in scene["elements"]]
+        )
+        # Obtain X-indexes
+        x_indexes = torch.tensor(
+            [
+                0
+                if element["x"] < 0
+                else X_MASK - 1
+                if element["x"] > (X_MASK - 1) * BUCKET_SIZE
+                else np.around(np.around(element["x"] / BUCKET_SIZE, decimals=0))
+                for element in scene["elements"]
+            ],
+            dtype=torch.long,
+        )
+        x_labels = torch.tensor(
+            [
+                0
+                if element["x"] < 0
+                else (X_MASK - 1) * BUCKET_SIZE
+                if element["x"] > (X_MASK - 1) * BUCKET_SIZE
+                else element["x"]
+                for element in scene["elements"]
+            ],
+            dtype=torch.long,
+        )
+        # Obtain Y-indexes
+        y_indexes = torch.tensor(
+            [
+                0
+                if element["y"] < 0
+                else Y_MASK - 1
+                if element["y"] > (Y_MASK - 1) * BUCKET_SIZE
+                else np.around(np.around(element["y"] / BUCKET_SIZE, decimals=0))
+                for element in scene["elements"]
+            ],
+            dtype=torch.long,
+        )
+        y_labels = torch.tensor(
+            [
+                0
+                if element["y"] < 0
+                else (Y_MASK - 1) * BUCKET_SIZE
+                if element["y"] > (Y_MASK - 1) * BUCKET_SIZE
+                else element["y"]
+                for element in scene["elements"]
+            ],
+            dtype=torch.long,
+        )
+        # Obtain flips
+        f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
+
+        return (
+            input_ids_sentence,
+            input_ids_visuals,
+            x_indexes,
+            y_indexes,
+            f_indexes,
+            x_labels,
+            y_labels,
+        )
+
+
+class Text2VisualContinuousDataset(Text2VisualTrainDataset, TorchDataset):
     def __init__(
         self,
         dataset_file_path: str,
@@ -172,18 +251,11 @@ class Text2VisualContinuousDataset(Text2VisualDataset, TorchDataset):
         )
 
 
-class Text2VisualDiscreteDataset(Text2VisualDataset, TorchDataset):
+class Text2VisualDiscreteTrainDataset(Text2VisualTrainDataset, TorchDataset):
     def __init__(
-        self,
-        dataset_file_path: str,
-        visual2index: str,
-        mask_probability: float,
-        train: bool,
-        without_text: bool = False,
+        self, dataset_file_path: str, visual2index: str, mask_probability: float
     ):
-        super().__init__(
-            dataset_file_path, visual2index, mask_probability, train, without_text
-        )
+        super().__init__(dataset_file_path, visual2index, mask_probability)
 
     def __len__(self):
         return super().__len__()
@@ -207,6 +279,32 @@ class Text2VisualDiscreteDataset(Text2VisualDataset, TorchDataset):
             x_labels,
             y_labels,
             f_labels,
+        )
+
+
+class Text2VisualDiscreteTestDataset(Text2VisualTestDataset, TorchDataset):
+    def __init__(
+        self, dataset_file_path: str, visual2index: str, without_text: bool = False
+    ):
+        super().__init__(dataset_file_path, visual2index, without_text)
+
+    def __len__(self):
+        return super().__len__()
+
+    def __getitem__(self, idx: int):
+        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes, x_labels, y_labels = super().__getitem__(
+            idx
+        )
+
+        return (
+            input_ids_sentence,
+            input_ids_visuals,
+            x_indexes,
+            y_indexes,
+            f_indexes,
+            x_labels,
+            y_labels,
+            f_indexes,
         )
 
 

@@ -12,11 +12,13 @@ from utils import relative_distance, real_distance
 from generation_strategies import generation_strategy_factory
 
 from datasets import (
-    Text2VisualDiscreteDataset,
+    Text2VisualDiscreteTrainDataset,
+    Text2VisualDiscreteTestDataset,
     collate_pad_discrete_text2visual_batch,
     X_PAD,
     Y_PAD,
     F_PAD,
+    BUCKET_SIZE,
 )
 from modeling import Text2VisualDiscreteBert
 
@@ -52,12 +54,10 @@ def train(
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDiscreteDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability, train=True
+    train_dataset = Text2VisualDiscreteTrainDataset(
+        train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = Text2VisualDiscreteDataset(
-        val_dataset_path, visual2index, mask_probability=1.0, train=False
-    )
+    val_dataset = Text2VisualDiscreteTestDataset(val_dataset_path, visual2index)
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
@@ -202,7 +202,7 @@ def train(
                     model,
                     device,
                 )
-
+                x_out, y_out = x_out * BUCKET_SIZE, y_out * BUCKET_SIZE
                 total_dist_x_relative += relative_distance(
                     x_out,
                     x_lab[:, max_ids_text:],
