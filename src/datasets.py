@@ -6,10 +6,10 @@ import numpy as np
 from typing import Tuple, Dict
 
 BUCKET_SIZE = 10
-X_MASK = 501 // BUCKET_SIZE
-X_PAD = 502 // BUCKET_SIZE
-Y_MASK = 401 // BUCKET_SIZE
-Y_PAD = 402 // BUCKET_SIZE
+X_MASK = 51
+X_PAD = 52
+Y_MASK = 41
+Y_PAD = 42
 F_MASK = 2
 F_PAD = 3
 SCENE_WIDTH = 500 // BUCKET_SIZE
@@ -213,18 +213,11 @@ class Text2VisualTestDataset:
         )
 
 
-class Text2VisualContinuousDataset(Text2VisualTrainDataset, TorchDataset):
+class Text2VisualContinuousTrainDataset(Text2VisualTrainDataset, TorchDataset):
     def __init__(
-        self,
-        dataset_file_path: str,
-        visual2index: Dict,
-        mask_probability: float,
-        train: bool,
-        without_text: bool = False,
+        self, dataset_file_path: str, visual2index: Dict, mask_probability: float
     ):
-        super().__init__(
-            dataset_file_path, visual2index, mask_probability, train, without_text
-        )
+        super().__init__(dataset_file_path, visual2index, mask_probability)
 
     def __len__(self):
         return super().__len__()
@@ -248,6 +241,32 @@ class Text2VisualContinuousDataset(Text2VisualTrainDataset, TorchDataset):
             x_labels.float(),
             y_labels.float(),
             f_labels,
+        )
+
+
+class Text2VisualContinuousTestDataset(Text2VisualTrainDataset, TorchDataset):
+    def __init__(
+        self, dataset_file_path: str, visual2index: Dict, without_text: bool = False
+    ):
+        super().__init__(dataset_file_path, visual2index, without_text)
+
+    def __len__(self):
+        return super().__len__()
+
+    def __getitem__(self, idx: int):
+        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes, x_labels, y_labels = super().__getitem__(
+            idx
+        )
+
+        return (
+            input_ids_sentence,
+            input_ids_visuals,
+            x_indexes,
+            y_indexes,
+            f_indexes,
+            x_labels.float(),
+            y_labels.float(),
+            f_indexes,
         )
 
 
