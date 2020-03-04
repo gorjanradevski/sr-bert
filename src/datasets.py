@@ -381,4 +381,3 @@ def collate_pad_continuous_text2visual_batch(
         t_types,
         attn_mask,
     )
-

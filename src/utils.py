@@ -39,8 +39,7 @@ def real_distance_single(inds, labs, attn_mask):
     mask_masked[torch.where(labs < 0)] = 0.0
     dist = dist * mask_masked
     # Obtain average distance for each scene without considering the padding tokens
-    # and the sep token
-    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
+    dist = dist.sum(-1) / attn_mask.sum(-1)
 
     return dist
 
@@ -74,8 +73,7 @@ def relative_distance_single(inds, labs, attn_mask):
         * mask_masked.unsqueeze(1).expand(dist.size())
         * mask_masked.unsqueeze(-1).expand(dist.size())
     )
-    # Obtain average distance for each scene without considering the padding tokens and
-    # the sep token
-    dist = dist.sum(-1).sum(-1) / (attn_mask.sum(-1) - 1)
+    # Obtain average distance for each scene without considering the padding tokens
+    dist = dist.sum(-1).sum(-1) / attn_mask.sum(-1)
 
     return dist
