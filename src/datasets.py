@@ -244,7 +244,7 @@ class Text2VisualContinuousTrainDataset(Text2VisualTrainDataset, TorchDataset):
         )
 
 
-class Text2VisualContinuousTestDataset(Text2VisualTrainDataset, TorchDataset):
+class Text2VisualContinuousTestDataset(Text2VisualTestDataset, TorchDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: Dict, without_text: bool = False
     ):
