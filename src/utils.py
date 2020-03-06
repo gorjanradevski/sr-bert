@@ -46,7 +46,6 @@ def real_distance_single(inds, labs, attn_mask):
 
 def relative_distance(inds, labs, attn_mask):
     dist = torch.abs(elementwise_distances(inds) - elementwise_distances(labs)).float()
-    print(dist)
     # Remove the distance for the padding tokens - Both columns and rows
     dist = (
         dist
