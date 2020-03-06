@@ -140,7 +140,6 @@ def train(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
-                        check_flipped=True,
                     )
                     / ids_text.size()[0]
                 )
@@ -157,7 +156,6 @@ def train(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
-                        check_flipped=True,
                     )
                     / ids_text.size()[0]
                 ) * 2.0
