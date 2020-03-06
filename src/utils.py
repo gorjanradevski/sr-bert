@@ -1,5 +1,5 @@
 import torch
-from datasets import SCENE_WIDTH
+from datasets import SCENE_WIDTH_TEST
 
 
 def elementwise_distances(X: torch.Tensor):
@@ -9,7 +9,7 @@ def elementwise_distances(X: torch.Tensor):
 def flip_scene(labs):
     # Get flipped indices
     pad_ids = torch.where(labs < 0)
-    labs_flipped = torch.abs(SCENE_WIDTH - labs)
+    labs_flipped = torch.abs(SCENE_WIDTH_TEST - labs)
     labs_flipped[pad_ids] = -100
 
     return labs_flipped

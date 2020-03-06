@@ -160,7 +160,7 @@ def train(
                         check_flipped=True,
                     )
                     / ids_text.size()[0]
-                )
+                ) * 2.0
                 y_relative_loss = (
                     relative_distance(
                         y_scores[:, max_ids_text:],
@@ -168,7 +168,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                )
+                ) * 2.0
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = (

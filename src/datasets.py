@@ -12,7 +12,8 @@ Y_MASK = 400 // BUCKET_SIZE + 1
 Y_PAD = 400 // BUCKET_SIZE + 2
 F_MASK = 2
 F_PAD = 3
-SCENE_WIDTH = 500 // BUCKET_SIZE
+SCENE_WIDTH_TRAIN = 500 // BUCKET_SIZE
+SCENE_WIDTH_TEST = 500
 
 
 class Text2VisualTrainDataset:
@@ -26,7 +27,7 @@ class Text2VisualTrainDataset:
 
     @staticmethod
     def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
-        return torch.abs(SCENE_WIDTH - x_indexes), torch.abs(1 - f_indexes)
+        return torch.abs(SCENE_WIDTH_TRAIN - x_indexes), torch.abs(1 - f_indexes)
 
     def __len__(self):
         return len(self.dataset_file)

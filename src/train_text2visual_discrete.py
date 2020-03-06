@@ -210,7 +210,10 @@ def train(
                     check_flipped=True,
                 ).item()
                 total_dist_y_relative += relative_distance(
-                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    y_out,
+                    y_lab[:, max_ids_text:],
+                    attn_mask[:, max_ids_text:],
+                    check_flipped=False,
                 ).item()
                 total_dist_x_real += real_distance(
                     x_out,
@@ -219,7 +222,10 @@ def train(
                     check_flipped=True,
                 ).item()
                 total_dist_y_real += real_distance(
-                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                    y_out,
+                    y_lab[:, max_ids_text:],
+                    attn_mask[:, max_ids_text:],
+                    check_flipped=False,
                 ).item()
                 total_acc_f += (
                     f_out == f_lab[:, max_ids_text:]
