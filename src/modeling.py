@@ -72,7 +72,7 @@ class Text2VisualDiscreteBert(nn.Module):
             self.x_embeddings(x_ind)
             + self.y_embeddings(y_ind)
             + self.f_embeddings(f_ind)
-        )
+        ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
         position_embeddings = torch.cat([text_embed, vis_embed], dim=1).to(self.device)
@@ -153,7 +153,7 @@ class Text2VisualContinuousBert(nn.Module):
             self.x_embeddings(x_ind)
             + self.y_embeddings(y_ind)
             + self.f_embeddings(f_ind)
-        )
+        ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
         position_embeddings = torch.cat([text_embed, vis_embed], dim=1).to(self.device)
