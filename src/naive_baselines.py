@@ -10,6 +10,7 @@ from datasets import (
     collate_pad_discrete_text2visual_batch,
     X_MASK,
     Y_MASK,
+    BUCKET_SIZE,
 )
 
 
@@ -85,12 +86,16 @@ def naive_inference(
             y_lab = y_lab[:, max_ids_text:]
             f_lab = f_lab[:, max_ids_text:]
             if naive_type == "random":
-                x_ind = torch.randint_like(x_lab, low=0, high=X_MASK)
-                y_ind = torch.randint_like(y_lab, low=0, high=Y_MASK)
+                x_ind = torch.randint_like(
+                    x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE)
+                )
+                y_ind = torch.randint_like(
+                    y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE)
+                )
                 f_ind = torch.randint_like(f_lab, low=0, high=2)
             elif naive_type == "center":
-                x_ind = torch.ones_like(x_lab) * (X_MASK // 2)
-                y_ind = torch.ones_like(y_lab) * (Y_MASK // 2)
+                x_ind = torch.ones_like(x_lab) * ((X_MASK - 1) * BUCKET_SIZE // 2)
+                y_ind = torch.ones_like(y_lab) * ((Y_MASK - 1) * BUCKET_SIZE // 2)
                 f_ind = torch.zeros_like(f_lab)
             elif naive_type == "avg":
                 x_ind = torch.tensor(
@@ -115,32 +120,32 @@ def naive_inference(
 
             total_dist_x_real += real_distance(
                 x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
-            )
+            ).item()
             total_dist_y_real += real_distance(
                 y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
-            )
+            ).item()
             total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
             total_dist_x_relative += relative_distance(
                 x_ind, x_lab, torch.ones_like(x_ind)
-            )
+            ).item()
             total_dist_y_relative += relative_distance(
                 y_ind, y_lab, torch.ones_like(x_ind)
-            )
+            ).item()
 
         print(
-            f"The average real distance per scene for X is: {total_dist_x_real/len(test_dataset)}"
+            f"The average real distance per scene for X is: {round(total_dist_x_real/len(test_dataset), 2)}"
         )
         print(
-            f"The average real distance per scene for Y is: {total_dist_y_real/len(test_dataset)}"
+            f"The average real distance per scene for Y is: {round(total_dist_y_real/len(test_dataset), 2)}"
         )
         print(
-            f"The average relative distance per scene for X is: {total_dist_x_relative/len(test_dataset)}"
+            f"The average relative distance per scene for X is: {round(total_dist_x_relative/len(test_dataset), 2)}"
         )
         print(
-            f"The average relative distance per scene for Y is: {total_dist_y_relative/len(test_dataset)}"
+            f"The average relative distance per scene for Y is: {round(total_dist_y_relative/len(test_dataset), 2)}"
         )
         print(
-            f"The average accuracy per scene for F is: {total_acc_f/len(test_dataset)}"
+            f"The average accuracy per scene for F is: {round(total_acc_f/len(test_dataset), 2)}"
         )
 
 

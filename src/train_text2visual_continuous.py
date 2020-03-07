@@ -235,7 +235,10 @@ def train(
                     model,
                     device,
                 )
-                x_out, y_out = x_out * BUCKET_SIZE, y_out * BUCKET_SIZE
+                x_out, y_out = (
+                    x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+                    y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+                )
                 total_dist_x_relative += relative_distance(
                     x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()

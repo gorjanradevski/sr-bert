@@ -55,7 +55,7 @@ class Text2VisualTrainDataset:
                 if element["x"] < 0
                 else X_MASK - 1
                 if element["x"] > (X_MASK - 1) * BUCKET_SIZE
-                else np.around(np.around(element["x"] / BUCKET_SIZE, decimals=0))
+                else np.floor(element["x"] / BUCKET_SIZE)
                 for element in scene["elements"]
             ],
             dtype=torch.long,
@@ -67,7 +67,7 @@ class Text2VisualTrainDataset:
                 if element["y"] < 0
                 else Y_MASK - 1
                 if element["y"] > (Y_MASK - 1) * BUCKET_SIZE
-                else np.around(np.around(element["y"] / BUCKET_SIZE, decimals=0))
+                else np.floor(element["y"] / BUCKET_SIZE)
                 for element in scene["elements"]
             ],
             dtype=torch.long,
@@ -161,7 +161,7 @@ class Text2VisualTestDataset:
                 if element["x"] < 0
                 else X_MASK - 1
                 if element["x"] > (X_MASK - 1) * BUCKET_SIZE
-                else np.around(np.around(element["x"] / BUCKET_SIZE, decimals=0))
+                else np.floor(element["x"] / BUCKET_SIZE)
                 for element in scene["elements"]
             ],
             dtype=torch.long,
@@ -184,7 +184,7 @@ class Text2VisualTestDataset:
                 if element["y"] < 0
                 else Y_MASK - 1
                 if element["y"] > (Y_MASK - 1) * BUCKET_SIZE
-                else np.around(np.around(element["y"] / BUCKET_SIZE, decimals=0))
+                else np.floor(element["y"] / BUCKET_SIZE)
                 for element in scene["elements"]
             ],
             dtype=torch.long,
