@@ -31,6 +31,7 @@ def inference(
     gen_strategy: str,
     batch_size: int,
     without_text: bool,
+    num_iter: int,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -81,6 +82,7 @@ def inference(
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
     # Set model in evaluation mode
+    logger.info(f"Using {gen_strategy}! If applies, {num_iter} is the number of iters.")
     with torch.no_grad():
         for (
             ids_text,
@@ -121,7 +123,7 @@ def inference(
                 t_types,
                 attn_mask,
                 model,
-                device,
+                num_iter,
             )
             x_out, y_out = (
                 x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
@@ -213,6 +215,7 @@ def parse_args():
         default="left_to_right_discrete",
         help="How to generate the positions during inference",
     )
+    parser.add_argument("--num_iter", type=int, default=2, help="Number of iterations.")
 
     return parser.parse_args()
 
@@ -227,6 +230,7 @@ def main():
         args.gen_strategy,
         args.batch_size,
         args.without_text,
+        args.num_iter,
     )
 
 
