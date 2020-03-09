@@ -169,18 +169,17 @@ def random_discrete(
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
-    for _ in range(2):
-        indices = np.random.permutation(list(range(ids_vis.size()[1])))
-        for i in indices:
-            x_ind[:, i] = X_MASK
-            y_ind[:, i] = Y_MASK
-            f_ind[:, i] = F_MASK
-            x_scores, y_scores, f_scores = model(
-                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-            )
-            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-            f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
+    indices = np.random.permutation(list(range(ids_vis.size()[1])))
+    for i in indices:
+        x_ind[:, i] = X_MASK
+        y_ind[:, i] = Y_MASK
+        f_ind[:, i] = F_MASK
+        x_scores, y_scores, f_scores = model(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
+        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
+        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
     return x_ind, y_ind, f_ind
 
