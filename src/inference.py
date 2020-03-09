@@ -123,6 +123,7 @@ def inference(
                 t_types,
                 attn_mask,
                 model,
+                device,
                 num_iter,
             )
             x_out, y_out = (
