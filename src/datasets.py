@@ -88,37 +88,55 @@ class Text2VisualTrainDataset:
         f_labels = f_indexes.clone()
         # Get probability matrix
         probability_matrix = torch.full(x_indexes.shape, self.mask_probability)
-        masked_indices = torch.bernoulli(probability_matrix).bool()
+        masked_indices_x = torch.bernoulli(probability_matrix).bool()
+        masked_indices_y = torch.bernoulli(probability_matrix).bool()
+        masked_indices_f = torch.bernoulli(probability_matrix).bool()
         # We only compute loss on masked tokens
-        x_labels[~masked_indices] = -100
-        y_labels[~masked_indices] = -100
-        f_labels[~masked_indices] = -100
+        x_labels[~masked_indices_x] = -100
+        y_labels[~masked_indices_y] = -100
+        f_labels[~masked_indices_f] = -100
         # 80% we replace with a mask token
-        indices_replaced = (
-            torch.bernoulli(torch.full(x_indexes.shape, 0.8)).bool() & masked_indices
+        indices_replaced_x = (
+            torch.bernoulli(torch.full(x_indexes.shape, 0.8)).bool() & masked_indices_x
         )
-        x_indexes[indices_replaced] = X_MASK
-        y_indexes[indices_replaced] = Y_MASK
-        f_indexes[indices_replaced] = F_MASK
+        indices_replaced_y = (
+            torch.bernoulli(torch.full(y_indexes.shape, 0.8)).bool() & masked_indices_y
+        )
+        indices_replaced_f = (
+            torch.bernoulli(torch.full(f_indexes.shape, 0.8)).bool() & masked_indices_f
+        )
+        x_indexes[indices_replaced_x] = X_MASK
+        y_indexes[indices_replaced_y] = Y_MASK
+        f_indexes[indices_replaced_f] = F_MASK
 
         # 10% of the time, we replace masked input tokens with random word
-        indices_random = (
+        indices_random_x = (
             torch.bernoulli(torch.full(x_labels.shape, 0.5)).bool()
-            & masked_indices
-            & ~indices_replaced
+            & masked_indices_x
+            & ~indices_replaced_x
+        )
+        indices_random_y = (
+            torch.bernoulli(torch.full(y_labels.shape, 0.5)).bool()
+            & masked_indices_y
+            & ~indices_replaced_y
+        )
+        indices_random_f = (
+            torch.bernoulli(torch.full(f_labels.shape, 0.5)).bool()
+            & masked_indices_f
+            & ~indices_replaced_f
         )
         random_x = torch.randint(
             low=0, high=X_MASK - 1, size=x_labels.shape, dtype=torch.long
         )
         random_y = torch.randint(
-            low=0, high=Y_MASK - 1, size=x_labels.shape, dtype=torch.long
+            low=0, high=Y_MASK - 1, size=y_labels.shape, dtype=torch.long
         )
         random_f = torch.randint(
-            low=0, high=F_MASK - 1, size=x_labels.shape, dtype=torch.long
+            low=0, high=F_MASK - 1, size=f_labels.shape, dtype=torch.long
         )
-        x_indexes[indices_random] = random_x[indices_random]
-        y_indexes[indices_random] = random_y[indices_random]
-        f_indexes[indices_random] = random_f[indices_random]
+        x_indexes[indices_random_x] = random_x[indices_random_x]
+        y_indexes[indices_random_y] = random_y[indices_random_y]
+        f_indexes[indices_random_f] = random_f[indices_random_f]
 
         return x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels
 
