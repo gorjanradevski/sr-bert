@@ -193,15 +193,20 @@ def highest_probability(
     f_ind[:, :] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
+    pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
 
     predicted_indices_x = []
     predicted_indices_y = []
     predicted_indices_f = []
     for _ in range(ids_vis.size()[1]):
+
         # Obtain model outputs
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
+        x_scores[:, max_ids_text:][pad_indices] = -1e15
+        y_scores[:, max_ids_text:][pad_indices] = -1e15
+        f_scores[:, max_ids_text:][pad_indices] = -1e15
         # If there are indices which are already chosen, change to a small number
         if len(predicted_indices_x) > 0:
             x_scores[:, max_ids_text:][batch_indices, predicted_indices_x] = -1e15
@@ -244,6 +249,7 @@ def lowest_entropy(
     f_ind[:, :] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
+    pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
     predicted_indices_x = []
     predicted_indices_y = []
     predicted_indices_f = []
@@ -251,6 +257,15 @@ def lowest_entropy(
         # Obtain model outputs
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
+        x_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
+            torch.ones(1, x_scores.size()[-1]).to(device), dim=-1
+        )
+        y_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
+            torch.ones(1, y_scores.size()[-1]).to(device), dim=-1
+        )
+        f_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
+            torch.ones(1, f_scores.size()[-1]).to(device), dim=-1
         )
         if len(predicted_indices_x) > 0:
             x_scores[:, max_ids_text:][

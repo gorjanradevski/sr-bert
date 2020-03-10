@@ -77,7 +77,6 @@ def inference(
     total_dist_y_relative = 0
     total_dist_x_real = 0
     total_dist_y_real = 0
-    total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
@@ -130,7 +129,6 @@ def inference(
                 x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
                 y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
-
             total_dist_x_relative += relative_distance(
                 x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             ).item()
@@ -149,9 +147,6 @@ def inference(
                 attn_mask[:, max_ids_text:],
                 check_flipped=False,
             ).item()
-            total_acc_f += (
-                f_out == f_lab[:, max_ids_text:]
-            ).sum().item() / f_out.size()[1]
 
         total_dist_x_relative /= len(test_dataset)
         total_dist_y_relative /= len(test_dataset)
@@ -168,9 +163,6 @@ def inference(
         )
         print(
             f"The average real distance per scene for Y is: {round(total_dist_y_real, 2)}"
-        )
-        print(
-            f"The average accuracy per scene for F is: {total_acc_f/len(test_dataset)}"
         )
 
 
