@@ -158,7 +158,7 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                )
+                ) * 2.0
                 y_relative_loss = (
                     relative_distance(
                         y_scores[:, max_ids_text:],
@@ -166,32 +166,24 @@ def train(
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
-                )
+                ) * 2.0
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Backward
-                # https://stackoverflow.com/questions/46774641/what-does-the-parameter-retain-graph-mean-in-the-variables-backward-method
-                x_real_loss.backward(retain_graph=True)
-                y_real_loss.backward(retain_graph=True)
-                x_relative_loss.backward(retain_graph=True)
-                y_relative_loss.backward(retain_graph=True)
-                f_loss.backward()
+                loss = (
+                    x_real_loss
+                    + y_real_loss
+                    + x_relative_loss
+                    + y_relative_loss
+                    + f_loss
+                )
+                loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
                 # update weights
                 optimizer.step()
                 # Update progress bar
                 pbar.update(1)
-                pbar.set_postfix(
-                    {
-                        "Batch loss": (
-                            x_real_loss
-                            + y_real_loss
-                            + x_relative_loss
-                            + y_relative_loss
-                            + f_loss
-                        ).item()
-                    }
-                )
+                pbar.set_postfix({"Batch loss": loss.item()})
 
         # Set model in evaluation mode
         model.train(False)
