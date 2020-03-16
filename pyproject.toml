@@ -16,7 +16,7 @@ Pillow = "=6.2"
 transformers = {git = "https://github.com/gorjanradevski/transformers.git"}
 [tool.poetry.dev-dependencies]
 flake8 = "^3.7"
-black = {version = "^18.3-alpha.0", allows-prereleases = true}
+black = {version = "^18.3-alpha.0", allow-prereleases = true}
 rope = "^0.16.0"
 [build-system]
 requires = ["poetry>=0.12"]
