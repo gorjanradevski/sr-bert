@@ -4,8 +4,8 @@ from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import logging
 import json
-from utils import relative_distance, real_distance
-from datasets import (
+from scene_layouts.utils import relative_distance, real_distance
+from scene_layouts.datasets import (
     Text2VisualDiscreteTestDataset,
     collate_pad_discrete_text2visual_batch,
     X_MASK,
@@ -76,77 +76,69 @@ def naive_inference(
     total_dist_x_relative = 0
     total_dist_y_relative = 0
     total_acc_f = 0
-    # Set model in evaluation mode
-    with torch.no_grad():
-        for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, f_lab, _, _) in tqdm(
-            test_loader
-        ):
-            max_ids_text = ids_text.size()[1]
-            x_lab = x_lab[:, max_ids_text:]
-            y_lab = y_lab[:, max_ids_text:]
-            f_lab = f_lab[:, max_ids_text:]
-            if naive_type == "random":
-                x_ind = torch.randint_like(
-                    x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE)
-                )
-                y_ind = torch.randint_like(
-                    y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE)
-                )
-                f_ind = torch.randint_like(f_lab, low=0, high=2)
-            elif naive_type == "center":
-                x_ind = torch.ones_like(x_lab) * ((X_MASK - 1) * BUCKET_SIZE // 2)
-                y_ind = torch.ones_like(y_lab) * ((Y_MASK - 1) * BUCKET_SIZE // 2)
-                f_ind = torch.zeros_like(f_lab)
-            elif naive_type == "avg":
-                x_ind = torch.tensor(
+    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, f_lab, _, _) in tqdm(test_loader):
+        max_ids_text = ids_text.size()[1]
+        x_lab = x_lab[:, max_ids_text:]
+        y_lab = y_lab[:, max_ids_text:]
+        f_lab = f_lab[:, max_ids_text:]
+        if naive_type == "random":
+            x_ind = torch.randint_like(x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE))
+            y_ind = torch.randint_like(y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE))
+            f_ind = torch.randint_like(f_lab, low=0, high=2)
+        elif naive_type == "center":
+            x_ind = torch.ones_like(x_lab) * ((X_MASK - 1) * BUCKET_SIZE // 2)
+            y_ind = torch.ones_like(y_lab) * ((Y_MASK - 1) * BUCKET_SIZE // 2)
+            f_ind = torch.zeros_like(f_lab)
+        elif naive_type == "avg":
+            x_ind = torch.tensor(
+                [
                     [
-                        [
-                            visualindex2avgcoordinates[id_vis.item()][0]
-                            for id_vis in ids_vis[0]
-                        ]
+                        visualindex2avgcoordinates[id_vis.item()][0]
+                        for id_vis in ids_vis[0]
                     ]
-                )
-                y_ind = torch.tensor(
+                ]
+            )
+            y_ind = torch.tensor(
+                [
                     [
-                        [
-                            visualindex2avgcoordinates[id_vis.item()][1]
-                            for id_vis in ids_vis[0]
-                        ]
+                        visualindex2avgcoordinates[id_vis.item()][1]
+                        for id_vis in ids_vis[0]
                     ]
-                )
-                f_ind = torch.randint_like(f_lab, low=0, high=2)
-            else:
-                raise ValueError(f"Naive inference type {naive_type} not recognized!")
+                ]
+            )
+            f_ind = torch.randint_like(f_lab, low=0, high=2)
+        else:
+            raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
-            total_dist_x_real += real_distance(
-                x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
-            ).item()
-            total_dist_y_real += real_distance(
-                y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
-            ).item()
-            total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
-            total_dist_x_relative += relative_distance(
-                x_ind, x_lab, torch.ones_like(x_ind)
-            ).item()
-            total_dist_y_relative += relative_distance(
-                y_ind, y_lab, torch.ones_like(x_ind)
-            ).item()
+        total_dist_x_real += real_distance(
+            x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
+        ).item()
+        total_dist_y_real += real_distance(
+            y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
+        ).item()
+        total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
+        total_dist_x_relative += relative_distance(
+            x_ind, x_lab, torch.ones_like(x_ind)
+        ).item()
+        total_dist_y_relative += relative_distance(
+            y_ind, y_lab, torch.ones_like(x_ind)
+        ).item()
 
-        print(
-            f"The average real distance per scene for X is: {round(total_dist_x_real/len(test_dataset), 2)}"
-        )
-        print(
-            f"The average real distance per scene for Y is: {round(total_dist_y_real/len(test_dataset), 2)}"
-        )
-        print(
-            f"The average relative distance per scene for X is: {round(total_dist_x_relative/len(test_dataset), 2)}"
-        )
-        print(
-            f"The average relative distance per scene for Y is: {round(total_dist_y_relative/len(test_dataset), 2)}"
-        )
-        print(
-            f"The average accuracy per scene for F is: {round(total_acc_f/len(test_dataset), 2)}"
-        )
+    print(
+        f"The average real distance per scene for X is: {round(total_dist_x_real/len(test_dataset), 2)}"
+    )
+    print(
+        f"The average real distance per scene for Y is: {round(total_dist_y_real/len(test_dataset), 2)}"
+    )
+    print(
+        f"The average relative distance per scene for X is: {round(total_dist_x_relative/len(test_dataset), 2)}"
+    )
+    print(
+        f"The average relative distance per scene for Y is: {round(total_dist_y_relative/len(test_dataset), 2)}"
+    )
+    print(
+        f"The average accuracy per scene for F is: {round(total_acc_f/len(test_dataset), 2)}"
+    )
 
 
 def parse_args():

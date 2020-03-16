@@ -3,7 +3,7 @@ import torch
 from transformers import BertConfig, BertModel, BertOnlyMLMHead
 import logging
 
-from datasets import X_PAD, Y_PAD, F_PAD
+from scene_layouts.datasets import X_PAD, Y_PAD, F_PAD
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

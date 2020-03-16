@@ -6,17 +6,17 @@ from tqdm import tqdm
 import logging
 import json
 from transformers import BertConfig
-from utils import real_distance, relative_distance
-from generation_strategies import generation_strategy_factory
+from scene_layouts.utils import real_distance, relative_distance
+from scene_layouts.generation_strategies import generation_strategy_factory
 
-from datasets import (
+from scene_layouts.datasets import (
     Text2VisualDiscreteTestDataset,
     collate_pad_discrete_text2visual_batch,
     Text2VisualContinuousTestDataset,
     collate_pad_continuous_text2visual_batch,
     BUCKET_SIZE,
 )
-from modeling import Text2VisualDiscreteBert, Text2VisualContinuousBert
+from scene_layouts.modeling import Text2VisualDiscreteBert, Text2VisualContinuousBert
 
 
 logging.basicConfig(level=logging.INFO)

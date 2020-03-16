@@ -8,17 +8,17 @@ import sys
 import logging
 import json
 from transformers import BertConfig
-from utils import relative_distance, real_distance
-from generation_strategies import generation_strategy_factory
+from scene_layouts.utils import relative_distance, real_distance
+from scene_layouts.generation_strategies import generation_strategy_factory
 
-from datasets import (
+from scene_layouts.datasets import (
     Text2VisualContinuousTrainDataset,
     Text2VisualContinuousTestDataset,
     collate_pad_continuous_text2visual_batch,
     F_PAD,
     BUCKET_SIZE,
 )
-from modeling import Text2VisualContinuousBert
+from scene_layouts.modeling import Text2VisualContinuousBert
 
 
 logging.basicConfig(level=logging.INFO)

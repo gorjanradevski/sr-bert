@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.nn import functional as F
 
-from datasets import X_MASK, Y_MASK, F_MASK
+from scene_layouts.datasets import X_MASK, Y_MASK, F_MASK
 
 
 def one_step_all_left_to_right_continuous(

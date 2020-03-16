@@ -1,5 +1,5 @@
 import torch
-from datasets import SCENE_WIDTH_TEST
+from scene_layouts.datasets import SCENE_WIDTH_TEST
 
 
 def elementwise_distances(X: torch.Tensor):
