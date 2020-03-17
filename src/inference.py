@@ -37,7 +37,7 @@ def inference(
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
-    # Create datasets
+    # Create dataset
     assert model_type in ["discrete", "continuous"]
     visual2index = json.load(open(visual2index_path))
     test_dataset = (
@@ -50,9 +50,9 @@ def inference(
         )
     )
     logger.info(f"Testing on {len(test_dataset)}")
-    # Create samplers
+    # Create sampler
     test_sampler = SequentialSampler(test_dataset)
-    # Create loaders
+    # Create loader
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
@@ -72,7 +72,6 @@ def inference(
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
-    # Criterion
     total_dist_x_relative = 0
     total_dist_y_relative = 0
     total_dist_x_real = 0
@@ -80,7 +79,6 @@ def inference(
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
-    # Set model in evaluation mode
     logger.info(f"Using {gen_strategy}! If applies, {num_iter} is the number of iters.")
     with torch.no_grad():
         for (
