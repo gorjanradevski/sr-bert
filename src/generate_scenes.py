@@ -32,6 +32,7 @@ def dump_scene(
     y_indexes: torch.Tensor,
     f_indexes: torch.Tensor,
     dump_image_path: str,
+    bucketized: bool = False,
 ):
     background = Image.open(os.path.join(pngs_path, "background.png"))
     for visual_name, x_index, y_index, f_index in zip(
@@ -44,8 +45,12 @@ def dump_scene(
         background.paste(
             image,
             (
-                x_index * BUCKET_SIZE + BUCKET_SIZE // 2 - image.size[0] // 2,
-                y_index * BUCKET_SIZE + BUCKET_SIZE // 2 - image.size[1] // 2,
+                x_index * BUCKET_SIZE + BUCKET_SIZE // 2 - image.size[0] // 2
+                if bucketized
+                else x_index - image.size[0] // 2,
+                y_index * BUCKET_SIZE + BUCKET_SIZE // 2 - image.size[1] // 2
+                if bucketized
+                else y_index - image.size[1] // 2,
             ),
             image,
         )
@@ -127,38 +132,17 @@ def generation(
             attn_mask,
         ) in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 pos_text.to(device),
                 x_ind.to(device),
                 y_ind.to(device),
                 f_ind.to(device),
-                x_lab.to(device),
-                y_lab.to(device),
-                f_lab.to(device),
                 t_types.to(device),
                 attn_mask.to(device),
             )
-            # Dump original
-            for i in range(batch_size):
-                dump_image_path = os.path.join(
-                    dump_scenes_path, str(index_org) + "_original.png"
-                )
-                visual_names = [
-                    index2visual[index.item()]
-                    for index in ids_vis[i]
-                    if index.item() in index2visual
-                ]
-                dump_scene(
-                    pngs_path,
-                    visual_names,
-                    x_ind[i],
-                    y_ind[i],
-                    f_ind[i],
-                    dump_image_path,
-                )
-                index_org += 1
+            max_ids_text = ids_text.size()[1]
             x_out, y_out, f_out = generation_strategy_factory(
                 gen_strategy,
                 ids_text,
@@ -173,6 +157,28 @@ def generation(
                 device,
                 num_iter,
             )
+
+            x_out, y_out, f_out = x_out.cpu(), y_out.cpu(), f_out.cpu()
+            # Dump original
+            for i in range(batch_size):
+                dump_image_path = os.path.join(
+                    dump_scenes_path, str(index_org) + "_original.png"
+                )
+                visual_names = [
+                    index2visual[index.item()]
+                    for index in ids_vis[i]
+                    if index.item() in index2visual
+                ]
+                dump_scene(
+                    pngs_path,
+                    visual_names,
+                    x_lab[:, max_ids_text:][i],
+                    y_lab[:, max_ids_text:][i],
+                    f_lab[:, max_ids_text:][i],
+                    dump_image_path,
+                    bucketized=False,
+                )
+                index_org += 1
             # Dump model generated
             for i in range(batch_size):
                 dump_image_path = os.path.join(
@@ -190,6 +196,7 @@ def generation(
                     y_out[i],
                     f_out[i],
                     dump_image_path,
+                    bucketized=True,
                 )
                 index_gen += 1
 
