@@ -34,6 +34,7 @@ def train(
     visual2index_path: str,
     mask_probability: float,
     gen_strategy: str,
+    bert_name: str,
     batch_size: int,
     learning_rate: float,
     epochs: int,
@@ -79,9 +80,9 @@ def train(
         sampler=val_sampler,
     )
     # Define training specifics
-    config = BertConfig.from_pretrained("bert-base-uncased")
+    config = BertConfig.from_pretrained(bert_name)
     config.vocab_size = len(visual2index) + 3
-    model = nn.DataParallel(Text2VisualDiscreteBert(config, device)).to(device)
+    model = nn.DataParallel(Text2VisualDiscreteBert(config, bert_name)).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -328,6 +329,12 @@ def parse_args():
         default="left_to_right_discrete",
         help="How to generate the positions during inference",
     )
+    parser.add_argument(
+        "--bert_name",
+        type=str,
+        default="bert-base-uncased",
+        help="The bert model name.",
+    )
 
     return parser.parse_args()
 
@@ -341,6 +348,7 @@ def main():
         args.visual2index_path,
         args.mask_probability,
         args.gen_strategy,
+        args.bert_name,
         args.batch_size,
         args.learning_rate,
         args.epochs,

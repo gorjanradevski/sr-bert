@@ -29,6 +29,7 @@ def inference(
     test_dataset_path: str,
     visual2index_path: str,
     gen_strategy: str,
+    bert_name: str,
     batch_size: int,
     without_text: bool,
     num_iter: int,
@@ -63,12 +64,12 @@ def inference(
         sampler=test_sampler,
     )
     # Prepare model
-    config = BertConfig.from_pretrained("bert-base-uncased")
+    config = BertConfig.from_pretrained(bert_name)
     config.vocab_size = len(visual2index) + 3
     model = nn.DataParallel(
-        Text2VisualDiscreteBert(config, device)
+        Text2VisualDiscreteBert(config, bert_name)
         if model_type == "discrete"
-        else Text2VisualContinuousBert(config, device)
+        else Text2VisualContinuousBert(config, bert_name)
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
@@ -207,6 +208,12 @@ def parse_args():
         help="How to generate the positions during inference",
     )
     parser.add_argument("--num_iter", type=int, default=2, help="Number of iterations.")
+    parser.add_argument(
+        "--bert_name",
+        type=str,
+        default="bert-base-uncased",
+        help="The bert model name.",
+    )
 
     return parser.parse_args()
 
@@ -219,6 +226,7 @@ def main():
         args.test_dataset_path,
         args.visual2index_path,
         args.gen_strategy,
+        args.bert_name,
         args.batch_size,
         args.without_text,
         args.num_iter,

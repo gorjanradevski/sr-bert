@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Text2VisualDiscreteBert(nn.Module):
-    def __init__(self, config: BertConfig, device):
+    def __init__(self, config: BertConfig, bert_name: str):
         super(Text2VisualDiscreteBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding(
             num_embeddings=config.vocab_size,
@@ -36,7 +36,7 @@ class Text2VisualDiscreteBert(nn.Module):
             config.hidden_size, eps=config.layer_norm_eps
         )
         self.pos_dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.bert = BertModel.from_pretrained("bert-base-uncased")
+        self.bert = BertModel.from_pretrained(bert_name)
         # Change config for the positions
         config.vocab_size = X_PAD + 1
         self.x_head = BertOnlyMLMHead(config)
@@ -46,7 +46,6 @@ class Text2VisualDiscreteBert(nn.Module):
         self.f_head = BertOnlyMLMHead(config)
         # Change config for the depth
         self.log_softmax = nn.LogSoftmax(dim=-1)
-        self.device = device
 
     def forward(
         self,
@@ -62,9 +61,7 @@ class Text2VisualDiscreteBert(nn.Module):
         # Word and clipart embeddings
         word_embeddings = self.bert.embeddings.word_embeddings(input_ids_sen)
         vis_embeddings = self.cliparts_embeddings(input_ids_vis)
-        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1).to(
-            self.device
-        )
+        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1)
         # Text positions
         text_embed = self.bert.embeddings.position_embeddings(text_positions)
         # Visual positions
@@ -75,7 +72,7 @@ class Text2VisualDiscreteBert(nn.Module):
         ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
-        position_embeddings = torch.cat([text_embed, vis_embed], dim=1).to(self.device)
+        position_embeddings = torch.cat([text_embed, vis_embed], dim=1)
         sequence_output = self.bert(
             inputs_embeds=input_embeddings,
             position_embeddings=position_embeddings,
@@ -94,7 +91,7 @@ class Text2VisualDiscreteBert(nn.Module):
 
 
 class Text2VisualContinuousBert(nn.Module):
-    def __init__(self, config: BertConfig, device):
+    def __init__(self, config: BertConfig, bert_name: str):
         super(Text2VisualContinuousBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding(
             num_embeddings=config.vocab_size,
@@ -120,14 +117,13 @@ class Text2VisualContinuousBert(nn.Module):
             config.hidden_size, eps=config.layer_norm_eps
         )
         self.pos_dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.bert = BertModel.from_pretrained("bert-base-uncased")
+        self.bert = BertModel.from_pretrained(bert_name)
         # Change config for the positions
         config.vocab_size = 2
         self.xy_head = BertOnlyMLMHead(config)
         config.vocab_size = F_PAD + 1
         self.f_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=-1)
-        self.device = device
 
     def forward(
         self,
@@ -143,9 +139,7 @@ class Text2VisualContinuousBert(nn.Module):
         # Word and clipart embeddings
         word_embeddings = self.bert.embeddings.word_embeddings(input_ids_sen)
         vis_embeddings = self.cliparts_embeddings(input_ids_vis)
-        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1).to(
-            self.device
-        )
+        input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1)
         # Text positions
         text_embed = self.bert.embeddings.position_embeddings(text_positions)
         # Visual positions
@@ -156,7 +150,7 @@ class Text2VisualContinuousBert(nn.Module):
         ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
-        position_embeddings = torch.cat([text_embed, vis_embed], dim=1).to(self.device)
+        position_embeddings = torch.cat([text_embed, vis_embed], dim=1)
         sequence_output = self.bert(
             inputs_embeds=input_embeddings,
             position_embeddings=position_embeddings,
