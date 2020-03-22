@@ -161,7 +161,7 @@ def generation(
 
             x_out, y_out, f_out = x_out.cpu(), y_out.cpu(), f_out.cpu()
             # Dump original
-            for i in range(batch_size):
+            for i in range(ids_vis.size()[0]):
                 dump_image_path = os.path.join(
                     dump_scenes_path, str(index_org) + "_original.png"
                 )
@@ -181,7 +181,7 @@ def generation(
                 )
                 index_org += 1
             # Dump model generated
-            for i in range(batch_size):
+            for i in range(ids_vis.size()[0]):
                 dump_image_path = os.path.join(
                     dump_scenes_path, str(index_gen) + "_generated.png"
                 )

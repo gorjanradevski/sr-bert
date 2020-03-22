@@ -3,7 +3,7 @@ from scene_layouts.datasets import SCENE_WIDTH_TEST
 
 
 def elementwise_distances(X: torch.Tensor):
-    return torch.triu(torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2)))
+    return torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2))
 
 
 def flip_scene(labs):
@@ -60,7 +60,7 @@ def relative_distance(inds, labs, attn_mask):
         * mask_masked.unsqueeze(1).expand(dist.size())
         * mask_masked.unsqueeze(-1).expand(dist.size())
     )
+    dist = dist.sum(-1) / attn_mask.sum(-1).unsqueeze(-1)
     # Obtain average distance for each scene without considering the padding tokens
-    dist = dist.sum(-1).sum(-1) / attn_mask.sum(-1)
-
+    dist = dist.sum(-1) / attn_mask.sum(-1)
     return dist.sum()
