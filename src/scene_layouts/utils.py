@@ -26,7 +26,7 @@ def real_distance(inds, labs, attn_mask, check_flipped: bool = False):
 
     dist = torch.min(dist_normal, dist_flipped)
 
-    return dist.sum()
+    return dist.sum(), (dist == dist_flipped).float()
 
 
 def real_distance_single(inds, labs, attn_mask):
@@ -64,3 +64,8 @@ def relative_distance(inds, labs, attn_mask):
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / attn_mask.sum(-1)
     return dist.sum()
+
+
+def flip_acc(inds, labs, attn_mask, flips):
+    inds = torch.abs(inds - flips.unsqueeze(-1))
+    return ((inds == labs).sum(-1).float() / attn_mask.sum(-1)).sum()

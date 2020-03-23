@@ -6,7 +6,7 @@ from tqdm import tqdm
 import logging
 import json
 from transformers import BertConfig
-from scene_layouts.utils import real_distance, relative_distance
+from scene_layouts.utils import real_distance, relative_distance, flip_acc
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
@@ -77,6 +77,7 @@ def inference(
     total_dist_y_relative = 0
     total_dist_x_real = 0
     total_dist_y_real = 0
+    total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
@@ -134,23 +135,28 @@ def inference(
             total_dist_y_relative += relative_distance(
                 y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             ).item()
-            total_dist_x_real += real_distance(
+            dist_x_real, flips = real_distance(
                 x_out,
                 x_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
                 check_flipped=True,
-            ).item()
+            )
+            total_dist_x_real += dist_x_real.item()
             total_dist_y_real += real_distance(
                 y_out,
                 y_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
                 check_flipped=False,
             ).item()
+            total_acc_f += flip_acc(
+                f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
+            ).item()
 
         total_dist_x_relative /= len(test_dataset)
         total_dist_y_relative /= len(test_dataset)
         total_dist_x_real /= len(test_dataset)
         total_dist_y_real /= len(test_dataset)
+        total_acc_f /= len(test_dataset)
         print(
             f"The average relative distance per scene for X is: {round(total_dist_x_relative, 2)}"
         )
@@ -163,6 +169,7 @@ def inference(
         print(
             f"The average real distance per scene for Y is: {round(total_dist_y_real, 2)}"
         )
+        print(f"The average accuracy for the flip is: {round(total_acc_f * 100, 2)}")
 
 
 def parse_args():

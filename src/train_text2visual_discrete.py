@@ -8,7 +8,7 @@ import sys
 import logging
 import json
 from transformers import BertConfig
-from scene_layouts.utils import relative_distance, real_distance
+from scene_layouts.utils import relative_distance, real_distance, flip_acc
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
@@ -213,34 +213,37 @@ def train(
                 total_dist_y_relative += relative_distance(
                     y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
-                total_dist_x_real += real_distance(
+                dist_x_real, flips = real_distance(
                     x_out,
                     x_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
                     check_flipped=True,
-                ).item()
+                )
+                total_dist_x_real += dist_x_real.item()
                 total_dist_y_real += real_distance(
                     y_out,
                     y_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
                     check_flipped=False,
                 ).item()
-                total_acc_f += (
-                    f_out == f_lab[:, max_ids_text:]
-                ).sum().item() / f_ind.size()[1]
+                total_acc_f += flip_acc(
+                    f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
+                ).item()
 
             total_dist_x_relative /= len(val_dataset)
             total_dist_y_relative /= len(val_dataset)
             total_dist_x_real /= len(val_dataset)
             total_dist_y_real /= len(val_dataset)
+            total_acc_f /= len(val_dataset)
             cur_avg_distance = round(
                 (
                     total_dist_x_relative
                     + total_dist_y_relative
                     + total_dist_x_real
                     + total_dist_y_real
+                    + total_acc_f
                 )
-                / 4,
+                / 5,
                 2,
             )
             if cur_avg_distance < best_avg_distance:
@@ -251,6 +254,7 @@ def train(
                 print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
                 print(f"- X real distance: {round(total_dist_x_real, 2)}")
                 print(f"- Y real distance: {round(total_dist_y_real, 2)}")
+                print(f"- F accuracy: {round(total_acc_f * 100, 2)}")
                 print(f"on epoch {epoch+1}. Saving model!!!")
                 torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
