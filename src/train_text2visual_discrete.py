@@ -241,7 +241,7 @@ def train(
                     + total_dist_y_relative
                     + total_dist_x_real
                     + total_dist_y_real
-                    + total_acc_f
+                    - total_acc_f  # Taking the minus as is we want lower values
                 )
                 / 5,
                 2,
