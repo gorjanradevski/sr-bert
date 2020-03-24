@@ -30,9 +30,9 @@ def inference(
     visual2index_path: str,
     gen_strategy: str,
     bert_name: str,
-    batch_size: int,
     without_text: bool,
     num_iter: int,
+    ref_class,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -56,7 +56,7 @@ def inference(
     # Create loader
     test_loader = DataLoader(
         test_dataset,
-        batch_size=batch_size,
+        batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_discrete_text2visual_batch
         if model_type == "discrete"
@@ -82,6 +82,7 @@ def inference(
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
     logger.info(f"Using {gen_strategy}! If applies, {num_iter} is the number of iters.")
+    logger.info(f"The reference class is {ref_class}")
     with torch.no_grad():
         for (
             ids_text,
@@ -204,7 +205,6 @@ def parse_args():
         default="data/visual2index.json",
         help="Path to the visual2index mapping json.",
     )
-    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
     )
@@ -221,6 +221,9 @@ def parse_args():
         default="bert-base-uncased",
         help="The bert model name.",
     )
+    parser.add_argument(
+        "--ref_class", type=str, default=None, help="The reference class."
+    )
 
     return parser.parse_args()
 
@@ -234,9 +237,9 @@ def main():
         args.visual2index_path,
         args.gen_strategy,
         args.bert_name,
-        args.batch_size,
         args.without_text,
         args.num_iter,
+        args.ref_class,
     )
 
 

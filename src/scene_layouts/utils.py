@@ -1,5 +1,6 @@
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
+from typing import Dict
 
 
 def elementwise_distances(X: torch.Tensor):
@@ -69,3 +70,24 @@ def relative_distance(inds, labs, attn_mask):
 def flip_acc(inds, labs, attn_mask, flips):
     inds = torch.abs(inds - flips.unsqueeze(-1))
     return ((inds == labs).sum(-1).float() / attn_mask.sum(-1)).sum()
+
+
+def get_reference_indices(visual2index: Dict[str, int], reference_type: str):
+    if reference_type == "animals":
+        return [v for k, v in visual2index.items() if k.startswith("a")]
+    elif reference_type == "food":
+        return [v for k, v in visual2index.items() if k.startswith("e")]
+    elif reference_type == "toys":
+        return [v for k, v in visual2index.items() if k.startswith("t")]
+    elif reference_type == "people":
+        return [v for k, v in visual2index.items() if k.startswith("hb")]
+    elif reference_type == "sky":
+        return [v for k, v in visual2index.items() if k.startswith("s")]
+    elif reference_type == "large":
+        return [v for k, v in visual2index.items() if k.startswith("p")]
+    elif reference_type == "clothes":
+        return [v for k, v in visual2index.items() if k.startswith("c")]
+    elif reference_type is None:
+        return []
+    else:
+        raise ValueError(f"{reference_type} doesn't exist!")
