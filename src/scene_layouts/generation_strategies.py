@@ -107,24 +107,22 @@ def left_to_right_continuous(
     t_types,
     attn_mask,
     model,
-    num_iter,
 ):
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
-    for _ in range(num_iter):
-        for i in range(ids_vis.size()[1]):
-            x_ind[:, i] = X_MASK
-            y_ind[:, i] = Y_MASK
-            f_ind[:, i] = F_MASK
-            x_scores, y_scores, f_scores = model(
-                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-            )
-            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
-            f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
+    for i in range(ids_vis.size()[1]):
+        x_ind[:, i] = X_MASK
+        y_ind[:, i] = Y_MASK
+        f_ind[:, i] = F_MASK
+        x_scores, y_scores, f_scores = model(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
+        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
+        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
     return x_ind, y_ind, f_ind
 
@@ -193,24 +191,22 @@ def left_to_right_discrete(
     t_types,
     attn_mask,
     model,
-    num_iter,
 ):
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
-    for _ in range(num_iter):
-        for i in range(ids_vis.size()[1]):
-            x_ind[:, i] = X_MASK
-            y_ind[:, i] = Y_MASK
-            f_ind[:, i] = F_MASK
-            x_scores, y_scores, f_scores = model(
-                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-            )
-            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-            f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
+    for i in range(ids_vis.size()[1]):
+        x_ind[:, i] = X_MASK
+        y_ind[:, i] = Y_MASK
+        f_ind[:, i] = F_MASK
+        x_scores, y_scores, f_scores = model(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
+        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
+        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
     return x_ind, y_ind, f_ind
 
@@ -362,7 +358,6 @@ def generation_strategy_factory(
     attn_mask,
     model,
     device,
-    num_iter=2,
 ):
     if gen_strategy == "one_step_all_left_to_right_continuous":
         return one_step_all_left_to_right_continuous(
@@ -391,7 +386,6 @@ def generation_strategy_factory(
             t_types,
             attn_mask,
             model,
-            num_iter,
         )
     elif gen_strategy == "left_to_right_discrete":
         return left_to_right_discrete(
@@ -404,7 +398,6 @@ def generation_strategy_factory(
             t_types,
             attn_mask,
             model,
-            num_iter,
         )
     elif gen_strategy == "highest_probability":
         return highest_probability(

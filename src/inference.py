@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler
+from torch.utils.data import DataLoader, SequentialSampler, Subset
 from tqdm import tqdm
 import logging
 import json
@@ -31,7 +31,6 @@ def inference(
     gen_strategy: str,
     bert_name: str,
     without_text: bool,
-    num_iter: int,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -80,7 +79,7 @@ def inference(
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
-    logger.info(f"Using {gen_strategy}! If applies, {num_iter} is the number of iters.")
+    logger.info(f"Using {gen_strategy}!")
     with torch.no_grad():
         for (
             ids_text,
@@ -122,7 +121,6 @@ def inference(
                 attn_mask,
                 model,
                 device,
-                num_iter,
             )
             x_out, y_out = (
                 x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
@@ -212,7 +210,6 @@ def parse_args():
         default="left_to_right_discrete",
         help="How to generate the positions during inference",
     )
-    parser.add_argument("--num_iter", type=int, default=2, help="Number of iterations.")
     parser.add_argument(
         "--bert_name",
         type=str,
@@ -233,7 +230,6 @@ def main():
         args.gen_strategy,
         args.bert_name,
         args.without_text,
-        args.num_iter,
     )
 
 
