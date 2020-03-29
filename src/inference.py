@@ -32,7 +32,6 @@ def inference(
     bert_name: str,
     without_text: bool,
     num_iter: int,
-    ref_class,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -82,7 +81,6 @@ def inference(
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
     logger.info(f"Using {gen_strategy}! If applies, {num_iter} is the number of iters.")
-    logger.info(f"The reference class is {ref_class}")
     with torch.no_grad():
         for (
             ids_text,
@@ -221,9 +219,6 @@ def parse_args():
         default="bert-base-uncased",
         help="The bert model name.",
     )
-    parser.add_argument(
-        "--ref_class", type=str, default=None, help="The reference class."
-    )
 
     return parser.parse_args()
 
@@ -239,7 +234,6 @@ def main():
         args.bert_name,
         args.without_text,
         args.num_iter,
-        args.ref_class,
     )
 
 
