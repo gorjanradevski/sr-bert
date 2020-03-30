@@ -234,16 +234,15 @@ def train(
             total_dist_y_relative /= len(val_dataset)
             total_dist_x_real /= len(val_dataset)
             total_dist_y_real /= len(val_dataset)
-            total_acc_f = (total_acc_f / len(val_dataset)) * 100
+            total_acc_f /= len(val_dataset)
             cur_avg_distance = round(
                 (
                     total_dist_x_relative
                     + total_dist_y_relative
                     + total_dist_x_real
-                    + total_dist_y_real
-                    - total_acc_f  # Taking the minus as we want lower values
+                    + total_dist_y_real  # Taking the minus as we want lower values
                 )
-                / 5,
+                / 4,
                 2,
             )
             if cur_avg_distance < best_avg_distance:
@@ -254,7 +253,7 @@ def train(
                 print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
                 print(f"- X real distance: {round(total_dist_x_real, 2)}")
                 print(f"- Y real distance: {round(total_dist_y_real, 2)}")
-                print(f"- F accuracy: {round(total_acc_f, 2)}")
+                print(f"- F accuracy: {round(total_acc_f * 100, 2)}")
                 print(f"on epoch {epoch+1}. Saving model!!!")
                 torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
