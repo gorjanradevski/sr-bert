@@ -9,9 +9,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class Text2VisualDiscreteBert(nn.Module):
+class SpatialDiscreteBert(nn.Module):
     def __init__(self, config: BertConfig, bert_name: str):
-        super(Text2VisualDiscreteBert, self).__init__()
+        super(SpatialDiscreteBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding(
             num_embeddings=config.vocab_size,
             embedding_dim=config.hidden_size,
@@ -90,9 +90,9 @@ class Text2VisualDiscreteBert(nn.Module):
         )
 
 
-class Text2VisualContinuousBert(nn.Module):
+class SpatialContinuousBert(nn.Module):
     def __init__(self, config: BertConfig, bert_name: str):
-        super(Text2VisualContinuousBert, self).__init__()
+        super(SpatialContinuousBert, self).__init__()
         self.cliparts_embeddings = nn.Embedding(
             num_embeddings=config.vocab_size,
             embedding_dim=config.hidden_size,

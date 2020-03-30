@@ -16,7 +16,7 @@ SCENE_WIDTH_TRAIN = 500 // BUCKET_SIZE
 SCENE_WIDTH_TEST = 500
 
 
-class Text2VisualTrainDataset:
+class TrainDataset:
     def __init__(
         self, dataset_file_path: str, visual2index: Dict, mask_probability: float
     ):
@@ -122,7 +122,7 @@ class Text2VisualTrainDataset:
         return x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels
 
 
-class Text2VisualTestDataset:
+class InferenceDataset:
     def __init__(self, dataset_file_path: str, visual2index: Dict, without_text: bool):
         self.dataset_file = json.load(open(dataset_file_path))
         self.visual2index = visual2index
@@ -213,7 +213,7 @@ class Text2VisualTestDataset:
         )
 
 
-class Text2VisualContinuousTrainDataset(Text2VisualTrainDataset, TorchDataset):
+class ContinuousTrainDataset(TrainDataset, TorchDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: Dict, mask_probability: float
     ):
@@ -244,7 +244,7 @@ class Text2VisualContinuousTrainDataset(Text2VisualTrainDataset, TorchDataset):
         )
 
 
-class Text2VisualContinuousTestDataset(Text2VisualTestDataset, TorchDataset):
+class ContinuousInferenceDataset(InferenceDataset, TorchDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: Dict, without_text: bool = False
     ):
@@ -270,7 +270,7 @@ class Text2VisualContinuousTestDataset(Text2VisualTestDataset, TorchDataset):
         )
 
 
-class Text2VisualDiscreteTrainDataset(Text2VisualTrainDataset, TorchDataset):
+class DiscreteTrainDataset(TrainDataset, TorchDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: str, mask_probability: float
     ):
@@ -301,7 +301,7 @@ class Text2VisualDiscreteTrainDataset(Text2VisualTrainDataset, TorchDataset):
         )
 
 
-class Text2VisualDiscreteTestDataset(Text2VisualTestDataset, TorchDataset):
+class DiscreteInferenceDataset(InferenceDataset, TorchDataset):
     def __init__(
         self, dataset_file_path: str, visual2index: str, without_text: bool = False
     ):
@@ -327,7 +327,7 @@ class Text2VisualDiscreteTestDataset(Text2VisualTestDataset, TorchDataset):
         )
 
 
-def collate_pad_discrete_text2visual_batch(
+def collate_pad_discrete_batch(
     batch: Tuple[
         Tuple[torch.Tensor],
         Tuple[torch.tensor],
@@ -413,7 +413,7 @@ def collate_pad_discrete_text2visual_batch(
     )
 
 
-def collate_pad_continuous_text2visual_batch(
+def collate_pad_continuous_batch(
     batch: Tuple[
         Tuple[torch.Tensor],
         Tuple[torch.tensor],

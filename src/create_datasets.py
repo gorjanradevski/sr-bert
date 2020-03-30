@@ -41,10 +41,10 @@ def parse_sentences(
 
 def create_datasets(
     dump_train_dataset_path: str,
+    dump_val_dataset_path: str,
     dump_test_dataset_path: str,
     dump_visual2index_path: str,
     abstract_scenes_path: str,
-    test_size: int,
 ):
     index2sentences = parse_sentences(
         abstract_scenes_path, "SimpleSentences1_10020.txt"
@@ -56,9 +56,10 @@ def create_datasets(
     with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
         _ = scenes.readline()
         for i in range(10020):
-            scene = {}
+            index, num_visuals = scenes.readline().split()
+            index, num_visuals = int(index), int(num_visuals)
+            scene = {"index": index}
             scene["elements"] = []
-            num_visuals = int(scenes.readline().split()[-1])
             if num_visuals == 0:
                 print(f"Skipping scene {i}")
                 continue
@@ -85,14 +86,33 @@ def create_datasets(
         for index in index2scene.keys()
         if "sentences" in index2scene[index]
     ]
+    # Generate train-val-test datasets
+    cur_index = 0
+    train_dataset = []
+    val_dataset = []
+    test_dataset = []
+    same_index_scenes = []
+    for scene in dataset:
+        if scene["index"] != cur_index:
+            train_dataset += same_index_scenes[:-2]
+            val_dataset.append(same_index_scenes[-2])
+            test_dataset.append(same_index_scenes[-1])
+            same_index_scenes = []
+            cur_index += 1
+        same_index_scenes.append(scene)
+    # Add the remaining ones
+    train_dataset += same_index_scenes[:-2]
+    val_dataset.append(same_index_scenes[-2])
+    test_dataset.append(same_index_scenes[-1])
 
-    train_dataset = dataset[:-test_size]
-    test_dataset = dataset[-test_size:]
     # Delete the scenes that have no sentence available
     json.dump(train_dataset, open(dump_train_dataset_path, "w"))
     logger.info(f"Train dataset dumped {dump_train_dataset_path}")
+    json.dump(val_dataset, open(dump_val_dataset_path, "w"))
+    logger.info(f"Val dataset dumped {dump_val_dataset_path}")
     json.dump(test_dataset, open(dump_test_dataset_path, "w"))
     logger.info(f"Test dataset dumped {dump_test_dataset_path}")
+    json.dump(dataset, open("data/datasets_new/full_dataset.json", "w"))
 
     # Dump visual2index json file
     if dump_visual2index_path is not None:
@@ -131,6 +151,12 @@ def parse_args():
         help="Where to dump the train dataset file.",
     )
     parser.add_argument(
+        "--dump_val_dataset_path",
+        type=str,
+        default="data/val_dataset.json",
+        help="Where to dump the val dataset file.",
+    )
+    parser.add_argument(
         "--dump_test_dataset_path",
         type=str,
         default="data/test_dataset.json",
@@ -148,9 +174,6 @@ def parse_args():
         default="data/AbstractScenes_v1.1",
         help="Path to the abstract scenes dataset.",
     )
-    parser.add_argument(
-        "--test_size", type=int, default=500, help="Size of the test set."
-    )
 
     return parser.parse_args()
 
@@ -159,10 +182,10 @@ def main():
     args = parse_args()
     create_datasets(
         args.dump_train_dataset_path,
+        args.dump_val_dataset_path,
         args.dump_test_dataset_path,
         args.dump_visual2index_path,
         args.abstract_scenes_path,
-        args.test_size,
     )
 
 

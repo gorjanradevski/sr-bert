@@ -12,13 +12,15 @@ from scene_layouts.utils import relative_distance, real_distance, flip_acc
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
-    Text2VisualContinuousTrainDataset,
-    Text2VisualContinuousTestDataset,
-    collate_pad_continuous_text2visual_batch,
+    DiscreteTrainDataset,
+    DiscreteInferenceDataset,
+    collate_pad_discrete_batch,
+    X_PAD,
+    Y_PAD,
     F_PAD,
     BUCKET_SIZE,
 )
-from scene_layouts.modeling import Text2VisualContinuousBert
+from scene_layouts.modeling import SpatialDiscreteBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -41,19 +43,22 @@ def train(
     intermediate_save_checkpoint_path: str,
 ):
     assert gen_strategy in [
-        "one_step_all_continuous",
-        "left_to_right_continuous",
-        "one_step_all_left_to_right_continuous",
+        "one_step_all_discrete",
+        "left_to_right_discrete",
+        "one_step_all_left_to_right_discrete",
+        "highest_probability",
+        "lowest_entropy",
+        "random_discrete",
     ]
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualContinuousTrainDataset(
+    train_dataset = DiscreteTrainDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = Text2VisualContinuousTestDataset(val_dataset_path, visual2index)
+    val_dataset = DiscreteInferenceDataset(val_dataset_path, visual2index)
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
@@ -65,21 +70,21 @@ def train(
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_continuous_text2visual_batch,
+        collate_fn=collate_pad_discrete_batch,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_continuous_text2visual_batch,
+        collate_fn=collate_pad_discrete_batch,
         sampler=val_sampler,
     )
     # Define training specifics
     config = BertConfig.from_pretrained(bert_name)
     config.vocab_size = len(visual2index) + 3
-    model = nn.DataParallel(Text2VisualContinuousBert(config, bert_name)).to(device)
+    model = nn.DataParallel(SpatialDiscreteBert(config, bert_name)).to(device)
     # Loss and optimizer
-    criterion_f = nn.NLLLoss()
+    criterion = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
     best_avg_distance = sys.maxsize
@@ -134,49 +139,12 @@ def train(
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
-                # Get losses for the real distances
-                max_ids_text = ids_text.size()[1]
-                x_real_loss = (
-                    real_distance(
-                        x_scores[:, max_ids_text:],
-                        x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                )
-                y_real_loss = (
-                    real_distance(
-                        y_scores[:, max_ids_text:],
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                )
-                x_relative_loss = (
-                    relative_distance(
-                        x_scores[:, max_ids_text:],
-                        x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                ) * 2.0
-                y_relative_loss = (
-                    relative_distance(
-                        y_scores[:, max_ids_text:],
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                ) * 2.0
-                f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
-                # Backward
-                loss = (
-                    x_real_loss
-                    + y_real_loss
-                    + x_relative_loss
-                    + y_relative_loss
-                    + f_loss
-                )
+                # Get losses for the real distances as classification losses
+                x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
+                y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
+                f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                # Comibine losses and backward
+                loss = x_loss + y_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -208,7 +176,6 @@ def train(
                 t_types,
                 attn_mask,
             ) in tqdm(val_loader):
-                # forward
                 ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
@@ -273,7 +240,7 @@ def train(
                     total_dist_x_relative
                     + total_dist_y_relative
                     + total_dist_x_real
-                    + total_dist_y_real
+                    + total_dist_y_real  # Taking the minus as we want lower values
                 )
                 / 4,
                 2,
@@ -362,7 +329,7 @@ def parse_args():
     parser.add_argument(
         "--gen_strategy",
         type=str,
-        default="left_to_right_continuous",
+        default="left_to_right_discrete",
         help="How to generate the positions during inference",
     )
     parser.add_argument(

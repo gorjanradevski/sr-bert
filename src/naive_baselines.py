@@ -6,8 +6,8 @@ import logging
 import json
 from scene_layouts.utils import relative_distance, real_distance
 from scene_layouts.datasets import (
-    Text2VisualDiscreteTestDataset,
-    collate_pad_discrete_text2visual_batch,
+    DiscreteInferenceDataset,
+    collate_pad_discrete_batch,
     X_MASK,
     Y_MASK,
     BUCKET_SIZE,
@@ -26,8 +26,8 @@ def naive_inference(
 ):
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    train_dataset = Text2VisualDiscreteTestDataset(train_dataset_path, visual2index)
-    test_dataset = Text2VisualDiscreteTestDataset(test_dataset_path, visual2index)
+    train_dataset = DiscreteInferenceDataset(train_dataset_path, visual2index)
+    test_dataset = DiscreteInferenceDataset(test_dataset_path, visual2index)
     logger.info(f"Testing on {len(test_dataset)}")
     # Create samplers
     train_sampler = SequentialSampler(train_dataset)
@@ -37,14 +37,14 @@ def naive_inference(
         train_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_discrete_text2visual_batch,
+        collate_fn=collate_pad_discrete_batch,
         sampler=train_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_discrete_text2visual_batch,
+        collate_fn=collate_pad_discrete_batch,
         sampler=test_sampler,
     )
     print("Aggregating from training set")
@@ -112,7 +112,7 @@ def naive_inference(
 
         total_dist_x_real += real_distance(
             x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
-        ).item()
+        )[0].item()
         total_dist_y_real += real_distance(
             y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
         ).item()

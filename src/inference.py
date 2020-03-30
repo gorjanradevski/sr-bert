@@ -10,13 +10,13 @@ from scene_layouts.utils import real_distance, relative_distance, flip_acc
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
-    Text2VisualDiscreteTestDataset,
-    collate_pad_discrete_text2visual_batch,
-    Text2VisualContinuousTestDataset,
-    collate_pad_continuous_text2visual_batch,
+    DiscreteInferenceDataset,
+    collate_pad_discrete_batch,
+    ContinuousInferenceDataset,
+    collate_pad_continuous_batch,
     BUCKET_SIZE,
 )
-from scene_layouts.modeling import Text2VisualDiscreteBert, Text2VisualContinuousBert
+from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
 
 
 logging.basicConfig(level=logging.INFO)
@@ -40,11 +40,11 @@ def inference(
     assert model_type in ["discrete", "continuous"]
     visual2index = json.load(open(visual2index_path))
     test_dataset = (
-        Text2VisualDiscreteTestDataset(
+        DiscreteInferenceDataset(
             test_dataset_path, visual2index, without_text=without_text
         )
         if model_type == "discrete"
-        else Text2VisualContinuousTestDataset(
+        else ContinuousInferenceDataset(
             test_dataset_path, visual2index, without_text=without_text
         )
     )
@@ -56,18 +56,18 @@ def inference(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_discrete_text2visual_batch
+        collate_fn=collate_pad_discrete_batch
         if model_type == "discrete"
-        else collate_pad_continuous_text2visual_batch,
+        else collate_pad_continuous_batch,
         sampler=test_sampler,
     )
     # Prepare model
     config = BertConfig.from_pretrained(bert_name)
     config.vocab_size = len(visual2index) + 3
     model = nn.DataParallel(
-        Text2VisualDiscreteBert(config, bert_name)
+        SpatialDiscreteBert(config, bert_name)
         if model_type == "discrete"
-        else Text2VisualContinuousBert(config, bert_name)
+        else SpatialContinuousBert(config, bert_name)
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
