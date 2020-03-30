@@ -8,17 +8,13 @@ import sys
 import logging
 import json
 from transformers import BertConfig
-from scene_layouts.utils import relative_distance, real_distance, flip_acc
-from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
     DiscreteTrainDataset,
-    DiscreteInferenceDataset,
     collate_pad_discrete_batch,
     X_PAD,
     Y_PAD,
     F_PAD,
-    BUCKET_SIZE,
 )
 from scene_layouts.modeling import SpatialDiscreteBert
 
@@ -33,7 +29,6 @@ def train(
     val_dataset_path: str,
     visual2index_path: str,
     mask_probability: float,
-    gen_strategy: str,
     bert_name: str,
     batch_size: int,
     learning_rate: float,
@@ -42,14 +37,6 @@ def train(
     save_model_path: str,
     intermediate_save_checkpoint_path: str,
 ):
-    assert gen_strategy in [
-        "one_step_all_discrete",
-        "left_to_right_discrete",
-        "one_step_all_left_to_right_discrete",
-        "highest_probability",
-        "lowest_entropy",
-        "random_discrete",
-    ]
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.warning(f"--- Using device {device}! ---")
@@ -58,7 +45,9 @@ def train(
     train_dataset = DiscreteTrainDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = DiscreteInferenceDataset(val_dataset_path, visual2index)
+    val_dataset = DiscreteTrainDataset(
+        val_dataset_path, visual2index, mask_probability=mask_probability
+    )
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
@@ -81,13 +70,13 @@ def train(
     )
     # Define training specifics
     config = BertConfig.from_pretrained(bert_name)
-    config.vocab_size = len(visual2index) + 3
+    config.vocab_size = len(visual2index) + 1
     model = nn.DataParallel(SpatialDiscreteBert(config, bert_name)).to(device)
     # Loss and optimizer
-    criterion = nn.NLLLoss()
+    criterion = nn.NLLLoss(reduction="sum")
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     cur_epoch = 0
-    best_avg_distance = sys.maxsize
+    best_avg_loss = sys.maxsize
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -139,16 +128,26 @@ def train(
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
-                # Get losses for the real distances as classification losses
-                x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
-                y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
-                f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                # Get losses as classification losses
+                total_tokens = (x_lab > -1).sum()
+                x_loss = (
+                    criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
+                    / total_tokens
+                )
+                y_loss = (
+                    criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
+                    / total_tokens
+                )
+                f_loss = (
+                    criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                    / total_tokens
+                )
                 # Comibine losses and backward
                 loss = x_loss + y_loss + f_loss
                 loss.backward()
-                # clip the gradients
+                # Clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
-                # update weights
+                # Update weights
                 optimizer.step()
                 # Update progress bar
                 pbar.update(1)
@@ -156,116 +155,84 @@ def train(
 
         # Set model in evaluation mode
         model.train(False)
-        # Reset counters
-        total_dist_x_relative = 0
-        total_dist_y_relative = 0
-        total_dist_x_real = 0
-        total_dist_y_real = 0
-        total_acc_f = 0
+        total_x_loss = 0
+        total_y_loss = 0
+        total_f_loss = 0
+        total_tokens = 0
         with torch.no_grad():
-            for (
-                ids_text,
-                ids_vis,
-                pos_text,
-                x_ind,
-                y_ind,
-                f_ind,
-                x_lab,
-                y_lab,
-                f_lab,
-                t_types,
-                attn_mask,
-            ) in tqdm(val_loader):
-                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
-                    ids_text.to(device),
-                    ids_vis.to(device),
-                    pos_text.to(device),
-                    x_ind.to(device),
-                    y_ind.to(device),
-                    f_ind.to(device),
-                    x_lab.to(device),
-                    y_lab.to(device),
-                    f_lab.to(device),
-                    t_types.to(device),
-                    attn_mask.to(device),
-                )
-                max_ids_text = ids_text.size()[1]
-                x_out, y_out, f_out = generation_strategy_factory(
-                    gen_strategy,
+            for _ in tqdm(range(10)):
+                for (
                     ids_text,
                     ids_vis,
                     pos_text,
                     x_ind,
                     y_ind,
                     f_ind,
+                    x_lab,
+                    y_lab,
+                    f_lab,
                     t_types,
                     attn_mask,
-                    model,
-                    device,
-                )
-                x_out, y_out = (
-                    x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
-                    y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
-                )
-                total_dist_x_relative += relative_distance(
-                    x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                ).item()
-                total_dist_y_relative += relative_distance(
-                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                ).item()
-                dist_x_real, flips = real_distance(
-                    x_out,
-                    x_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
-                    check_flipped=True,
-                )
-                total_dist_x_real += dist_x_real.item()
-                total_dist_y_real += real_distance(
-                    y_out,
-                    y_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
-                    check_flipped=False,
-                ).item()
-                total_acc_f += flip_acc(
-                    f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
-                ).item()
+                ) in val_loader:
+                    # forward
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                        ids_text.to(device),
+                        ids_vis.to(device),
+                        pos_text.to(device),
+                        x_ind.to(device),
+                        y_ind.to(device),
+                        f_ind.to(device),
+                        x_lab.to(device),
+                        y_lab.to(device),
+                        f_lab.to(device),
+                        t_types.to(device),
+                        attn_mask.to(device),
+                    )
+                    x_scores, y_scores, f_scores = model(
+                        ids_text,
+                        ids_vis,
+                        pos_text,
+                        x_ind,
+                        y_ind,
+                        f_ind,
+                        t_types,
+                        attn_mask,
+                    )
+                    # Get losses as classification losses
+                    total_tokens += (x_lab > -1).sum().item()
+                    total_x_loss += criterion(
+                        x_scores.view(-1, X_PAD + 1), x_lab.view(-1)
+                    ).item()
+                    total_y_loss += criterion(
+                        y_scores.view(-1, Y_PAD + 1), y_lab.view(-1)
+                    ).item()
+                    total_f_loss += criterion(
+                        f_scores.view(-1, F_PAD + 1), f_lab.view(-1)
+                    ).item()
 
-            total_dist_x_relative /= len(val_dataset)
-            total_dist_y_relative /= len(val_dataset)
-            total_dist_x_real /= len(val_dataset)
-            total_dist_y_real /= len(val_dataset)
-            total_acc_f /= len(val_dataset)
-            cur_avg_distance = round(
-                (
-                    total_dist_x_relative
-                    + total_dist_y_relative
-                    + total_dist_x_real
-                    + total_dist_y_real  # Taking the minus as we want lower values
-                )
-                / 4,
-                2,
-            )
-            if cur_avg_distance < best_avg_distance:
-                best_avg_distance = cur_avg_distance
+            total_x_loss /= total_tokens
+            total_y_loss /= total_tokens
+            total_f_loss /= total_tokens
+            cur_avg_loss = (total_x_loss + total_y_loss + total_f_loss) / 3
+            if cur_avg_loss < best_avg_loss:
+                best_avg_loss = cur_avg_loss
                 print("====================================================")
-                print("Found new best with average distances per scene:")
-                print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
-                print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
-                print(f"- X real distance: {round(total_dist_x_real, 2)}")
-                print(f"- Y real distance: {round(total_dist_y_real, 2)}")
-                print(f"- F accuracy: {round(total_acc_f * 100, 2)}")
+                print("Found new best with average losses per scene:")
+                print(f"- X loss: {round(total_x_loss, 5)}")
+                print(f"- Y loss: {round(total_y_loss, 5)}")
+                print(f"- F loss: {round(total_f_loss, 5)}")
                 print(f"on epoch {epoch+1}. Saving model!!!")
                 torch.save(model.state_dict(), save_model_path)
                 print("====================================================")
             else:
-                print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
+                print(f"Avg distance on epoch {epoch+1} is: {round(cur_avg_loss, 2)}. ")
             print("Saving intermediate checkpoint...")
             torch.save(
                 {
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                    "distance": best_avg_distance,
+                    "distance": best_avg_loss,
                 },
                 intermediate_save_checkpoint_path,
             )
@@ -327,12 +294,6 @@ def parse_args():
         help="Where to save the intermediate checkpoint.",
     )
     parser.add_argument(
-        "--gen_strategy",
-        type=str,
-        default="left_to_right_discrete",
-        help="How to generate the positions during inference",
-    )
-    parser.add_argument(
         "--bert_name",
         type=str,
         default="bert-base-uncased",
@@ -350,7 +311,6 @@ def main():
         args.val_dataset_path,
         args.visual2index_path,
         args.mask_probability,
-        args.gen_strategy,
         args.bert_name,
         args.batch_size,
         args.learning_rate,
