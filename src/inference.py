@@ -63,7 +63,7 @@ def inference(
     )
     # Prepare model
     config = BertConfig.from_pretrained(bert_name)
-    config.vocab_size = len(visual2index) + 3
+    config.vocab_size = len(visual2index) + 1
     model = nn.DataParallel(
         SpatialDiscreteBert(config, bert_name)
         if model_type == "discrete"

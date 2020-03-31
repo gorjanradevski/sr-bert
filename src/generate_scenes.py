@@ -65,9 +65,7 @@ def generation(
     visual2index_path: str,
     gen_strategy: str,
     bert_name: str,
-    batch_size: int,
     without_text: bool,
-    num_iter: int,
     dump_scenes_path: str,
     pngs_path: str,
 ):
@@ -94,7 +92,7 @@ def generation(
     # Create loader
     test_loader = DataLoader(
         test_dataset,
-        batch_size=batch_size,
+        batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_discrete_batch
         if model_type == "discrete"
@@ -103,7 +101,7 @@ def generation(
     )
     # Prepare model
     config = BertConfig.from_pretrained(bert_name)
-    config.vocab_size = len(visual2index) + 3
+    config.vocab_size = len(visual2index) + 1
     model = nn.DataParallel(
         SpatialDiscreteBert(config, bert_name)
         if model_type == "discrete"
@@ -114,11 +112,9 @@ def generation(
     logger.warning(f"Starting generation from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to generate the scenes.")
-    logger.info(f"Using {gen_strategy}! If applies, {num_iter} is the number of iters.")
-    index_org = 1
-    index_gen = 1
+    logger.info(f"Using {gen_strategy}!")
+    index = 0
     with torch.no_grad():
-
         for (
             ids_text,
             ids_vis,
@@ -156,50 +152,41 @@ def generation(
                 attn_mask,
                 model,
                 device,
-                num_iter,
             )
 
             x_out, y_out, f_out = x_out.cpu(), y_out.cpu(), f_out.cpu()
+            visual_names = [
+                index2visual[index.item()]
+                for index in ids_vis[0]
+                if index.item() in index2visual
+            ]
             # Dump original
-            for i in range(ids_vis.size()[0]):
-                dump_image_path = os.path.join(
-                    dump_scenes_path, str(index_org) + "_original.png"
-                )
-                visual_names = [
-                    index2visual[index.item()]
-                    for index in ids_vis[i]
-                    if index.item() in index2visual
-                ]
-                dump_scene(
-                    pngs_path,
-                    visual_names,
-                    x_lab[:, max_ids_text:][i],
-                    y_lab[:, max_ids_text:][i],
-                    f_lab[:, max_ids_text:][i],
-                    dump_image_path,
-                    bucketized=False,
-                )
-                index_org += 1
+            dump_image_path = os.path.join(
+                dump_scenes_path, str(index) + "_original.png"
+            )
+            dump_scene(
+                pngs_path,
+                visual_names,
+                x_lab[0, max_ids_text:],
+                y_lab[0, max_ids_text:],
+                f_lab[0, max_ids_text:],
+                dump_image_path,
+                bucketized=False,
+            )
             # Dump model generated
-            for i in range(ids_vis.size()[0]):
-                dump_image_path = os.path.join(
-                    dump_scenes_path, str(index_gen) + "_generated.png"
-                )
-                visual_names = [
-                    index2visual[index.item()]
-                    for index in ids_vis[i]
-                    if index.item() in index2visual
-                ]
-                dump_scene(
-                    pngs_path,
-                    visual_names,
-                    x_out[i],
-                    y_out[i],
-                    f_out[i],
-                    dump_image_path,
-                    bucketized=True,
-                )
-                index_gen += 1
+            dump_image_path = os.path.join(
+                dump_scenes_path, str(index) + "_generated.png"
+            )
+            dump_scene(
+                pngs_path,
+                visual_names,
+                x_out[0],
+                y_out[0],
+                f_out[0],
+                dump_image_path,
+                bucketized=True,
+            )
+            index += 1
 
 
 def parse_args():
@@ -207,9 +194,7 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Performs inference with a Text2Position model."
-    )
+    parser = argparse.ArgumentParser(description="Generates scenes with a SpatialBERT.")
     parser.add_argument(
         "--model_type",
         type=str,
@@ -234,7 +219,6 @@ def parse_args():
         default="data/visual2index.json",
         help="Path to the visual2index mapping json.",
     )
-    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
     )
@@ -244,7 +228,6 @@ def parse_args():
         default="left_to_right_discrete",
         help="How to generate the positions during inference",
     )
-    parser.add_argument("--num_iter", type=int, default=2, help="Number of iterations.")
     parser.add_argument(
         "--dump_scenes_path",
         type=str,
@@ -276,9 +259,7 @@ def main():
         args.visual2index_path,
         args.gen_strategy,
         args.bert_name,
-        args.batch_size,
         args.without_text,
-        args.num_iter,
         args.dump_scenes_path,
         args.pngs_path,
     )

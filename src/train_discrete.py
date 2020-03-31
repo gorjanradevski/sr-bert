@@ -243,7 +243,7 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Trains a Text2Position model.")
+    parser = argparse.ArgumentParser(description="Trains a SpatialBERT model.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,

@@ -29,6 +29,38 @@ class TrainDataset:
     def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
         return torch.abs(SCENE_WIDTH_TRAIN - x_indexes), torch.abs(1 - f_indexes)
 
+    @staticmethod
+    def move_scene(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
+        # Left of right; True - left, False - right
+        if torch.bernoulli(torch.tensor([0.5])).bool().item():
+            # If left, check whether there is an index at 0; quit if there is
+            if (x_indexes == 0).sum().bool().item():
+                x_indexes_moved = x_indexes.clone()
+            else:
+                x_indexes_moved = x_indexes.clone() - 1
+        else:
+            # If right, check whether there is an index at max; quit if there is
+            if (x_indexes == 500 / BUCKET_SIZE).sum().bool().item():
+                x_indexes_moved = x_indexes.clone()
+            else:
+                x_indexes_moved = x_indexes.clone() + 1
+
+        # Up or down; True - up, False - down
+        if torch.bernoulli(torch.tensor([0.5])).bool().item():
+            # If top, check whether there is an index at 0; quit if there is
+            if (y_indexes == 0).sum().bool().item():
+                y_indexes_moved = y_indexes.clone()
+            else:
+                y_indexes_moved = y_indexes.clone() - 1
+        else:
+            # If down, check whether there is an index at max; quit if there is
+            if (y_indexes == 400 / BUCKET_SIZE).sum().bool().item():
+                y_indexes_moved = y_indexes.clone()
+            else:
+                y_indexes_moved = y_indexes.clone() + 1
+
+        return x_indexes_moved, y_indexes_moved
+
     def __len__(self):
         return len(self.dataset_file)
 
@@ -77,6 +109,10 @@ class TrainDataset:
         # Flip scene with 50% prob
         if torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
+
+        # Move scene with 50% prob
+        if torch.bernoulli(torch.tensor([0.5])).bool().item():
+            x_indexes, y_indexes = self.move_scene(x_indexes, y_indexes)
 
         return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
 
