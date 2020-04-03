@@ -11,11 +11,15 @@ from transformers import BertConfig
 
 from scene_layouts.datasets import (
     DiscreteTrainDataset,
+    DiscreteInferenceDataset,
     collate_pad_discrete_batch,
     X_PAD,
     Y_PAD,
     F_PAD,
+    BUCKET_SIZE,
 )
+from scene_layouts.utils import relative_distance, real_distance, flip_acc
+from scene_layouts.generation_strategies import generation_strategy_factory
 from scene_layouts.modeling import SpatialDiscreteBert
 
 
@@ -46,9 +50,7 @@ def train(
     train_dataset = DiscreteTrainDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
-    val_dataset = DiscreteTrainDataset(
-        val_dataset_path, visual2index, mask_probability=mask_probability
-    )
+    val_dataset = DiscreteInferenceDataset(val_dataset_path, visual2index)
     logger.info(f"Training on {len(train_dataset)}")
     logger.info(f"Validating on {len(val_dataset)}")
     # Create samplers
@@ -74,12 +76,12 @@ def train(
     config.vocab_size = len(visual2index) + 1
     model = nn.DataParallel(SpatialDiscreteBert(config, bert_name)).to(device)
     # Loss and optimizer
-    criterion = nn.NLLLoss(reduction="sum")
+    criterion = nn.NLLLoss()
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
     cur_epoch = 0
-    best_avg_loss = sys.maxsize
+    best_avg_distance = sys.maxsize
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
@@ -132,19 +134,9 @@ def train(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
                 # Get losses as classification losses
-                total_tokens = (x_lab > -1).sum()
-                x_loss = (
-                    criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
-                    / total_tokens
-                )
-                y_loss = (
-                    criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
-                    / total_tokens
-                )
-                f_loss = (
-                    criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
-                    / total_tokens
-                )
+                x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
+                y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
+                f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Comibine losses and backward
                 loss = x_loss + y_loss + f_loss
                 loss.backward()
@@ -158,87 +150,120 @@ def train(
 
         # Set model in evaluation mode
         model.train(False)
-        total_x_loss = 0
-        total_y_loss = 0
-        total_f_loss = 0
-        total_tokens = 0
+        total_dist_x_relative = 0
+        total_dist_y_relative = 0
+        total_dist_x_real = 0
+        total_dist_y_real = 0
+        total_acc_f = 0
         with torch.no_grad():
-            for _ in tqdm(range(10)):
-                for (
+            for (
+                ids_text,
+                ids_vis,
+                pos_text,
+                x_ind,
+                y_ind,
+                f_ind,
+                x_lab,
+                y_lab,
+                f_lab,
+                t_types,
+                attn_mask,
+            ) in tqdm(val_loader):
+                # forward
+                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                    ids_text.to(device),
+                    ids_vis.to(device),
+                    pos_text.to(device),
+                    x_ind.to(device),
+                    y_ind.to(device),
+                    f_ind.to(device),
+                    x_lab.to(device),
+                    y_lab.to(device),
+                    f_lab.to(device),
+                    t_types.to(device),
+                    attn_mask.to(device),
+                )
+                max_ids_text = ids_text.size()[1]
+                x_out, y_out, f_out = generation_strategy_factory(
+                    "cond_original_discrete",
                     ids_text,
                     ids_vis,
                     pos_text,
                     x_ind,
                     y_ind,
                     f_ind,
-                    x_lab,
-                    y_lab,
-                    f_lab,
                     t_types,
                     attn_mask,
-                ) in val_loader:
-                    # forward
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
-                        ids_text.to(device),
-                        ids_vis.to(device),
-                        pos_text.to(device),
-                        x_ind.to(device),
-                        y_ind.to(device),
-                        f_ind.to(device),
-                        x_lab.to(device),
-                        y_lab.to(device),
-                        f_lab.to(device),
-                        t_types.to(device),
-                        attn_mask.to(device),
-                    )
-                    x_scores, y_scores, f_scores = model(
-                        ids_text,
-                        ids_vis,
-                        pos_text,
-                        x_ind,
-                        y_ind,
-                        f_ind,
-                        t_types,
-                        attn_mask,
-                    )
-                    # Get losses as classification losses
-                    total_tokens += (x_lab > -1).sum().item()
-                    total_x_loss += criterion(
-                        x_scores.view(-1, X_PAD + 1), x_lab.view(-1)
-                    ).item()
-                    total_y_loss += criterion(
-                        y_scores.view(-1, Y_PAD + 1), y_lab.view(-1)
-                    ).item()
-                    total_f_loss += criterion(
-                        f_scores.view(-1, F_PAD + 1), f_lab.view(-1)
-                    ).item()
+                    model,
+                    device,
+                )
+                x_out, y_out = (
+                    x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+                    y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+                )
+                total_dist_x_relative += relative_distance(
+                    x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                ).item()
+                total_dist_y_relative += relative_distance(
+                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
+                ).item()
+                dist_x_real, flips = real_distance(
+                    x_out,
+                    x_lab[:, max_ids_text:],
+                    attn_mask[:, max_ids_text:],
+                    check_flipped=True,
+                )
+                total_dist_x_real += dist_x_real.item()
+                total_dist_y_real += real_distance(
+                    y_out,
+                    y_lab[:, max_ids_text:],
+                    attn_mask[:, max_ids_text:],
+                    check_flipped=False,
+                ).item()
+                total_acc_f += flip_acc(
+                    f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
+                ).item()
 
-            total_x_loss /= total_tokens
-            total_y_loss /= total_tokens
-            total_f_loss /= total_tokens
-            cur_avg_loss = (total_x_loss + total_y_loss + total_f_loss) / 3
-            if cur_avg_loss < best_avg_loss:
-                best_avg_loss = cur_avg_loss
-                print("====================================================")
-                print("Found new best with average losses per scene:")
-                print(f"- X loss: {round(total_x_loss, 5)}")
-                print(f"- Y loss: {round(total_y_loss, 5)}")
-                print(f"- F loss: {round(total_f_loss, 5)}")
-                print(f"on epoch {epoch+1}. Saving model!!!")
-                torch.save(model.state_dict(), save_model_path)
-                print("====================================================")
-            else:
-                print(f"Avg distance on epoch {epoch+1} is: {round(cur_avg_loss, 2)}. ")
-            print("Saving intermediate checkpoint...")
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "distance": best_avg_loss,
-                },
-                intermediate_save_checkpoint_path,
+        total_dist_x_relative /= len(val_dataset)
+        total_dist_y_relative /= len(val_dataset)
+        total_dist_x_real /= len(val_dataset)
+        total_dist_y_real /= len(val_dataset)
+        total_acc_f = (total_acc_f / len(val_dataset)) * 100
+        cur_avg_distance = round(
+            (
+                total_dist_x_relative
+                + total_dist_y_relative
+                + total_dist_x_real
+                + total_dist_y_real
+                - total_acc_f
             )
+            / 5,
+            2,
+        )
+        if cur_avg_distance < best_avg_distance:
+            best_avg_distance = cur_avg_distance
+            print("====================================================")
+            print("Found new best with average distances per scene:")
+            print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
+            print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
+            print(f"- X real distance: {round(total_dist_x_real, 2)}")
+            print(f"- Y real distance: {round(total_dist_y_real, 2)}")
+            print(f"- F accuracy: {round(total_acc_f, 2)}")
+            print(f"on epoch {epoch+1}. Saving model!!!")
+            torch.save(model.state_dict(), save_model_path)
+            print("====================================================")
+        else:
+            print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
+        print("Saving intermediate checkpoint...")
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "distance": best_avg_distance,
+            },
+            intermediate_save_checkpoint_path,
+        )
 
 
 def parse_args():

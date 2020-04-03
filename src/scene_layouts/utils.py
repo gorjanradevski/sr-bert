@@ -1,6 +1,7 @@
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
 from typing import Dict
+import re
 
 
 def elementwise_distances(X: torch.Tensor):
@@ -91,3 +92,52 @@ def get_reference_indices(visual2index: Dict[str, int], reference_type: str):
         return []
     else:
         raise ValueError(f"{reference_type} doesn't exist!")
+
+
+def contains_word(word, text):
+    # https://stackoverflow.com/a/45587730/3987085
+    pattern = r"(^|[^\w]){}([^\w]|$)".format(word)
+    pattern = re.compile(pattern, re.IGNORECASE)
+    matches = re.search(pattern, text)
+    return bool(matches)
+
+
+# https://academicguides.waldenu.edu/writingcenter/grammar/prepositions
+explicit_rels = [
+    "on",
+    "next to",
+    "above",
+    "over",
+    "below",
+    "behind",
+    "along",
+    "through",
+    "in",
+    "in front of",
+    "near",
+    "beyond",
+    "with",
+    "by",
+    "inside of",
+    "on top of",
+    "down",
+    "up",
+    "beneath",
+    "inside",
+    "left",
+    "right",
+    "under",
+    "across from",
+    "underneath",
+    "atop",
+    "across",
+    "beside",
+    "around",
+    "outside",
+    "next",
+    "against",
+    "at",
+    "between",
+    "front",
+    "aside",
+]

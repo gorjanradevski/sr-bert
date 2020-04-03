@@ -5,8 +5,15 @@ from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import logging
 import json
-from transformers import BertConfig
-from scene_layouts.utils import real_distance, relative_distance, flip_acc
+from transformers import BertConfig, BertTokenizer
+import nltk
+from scene_layouts.utils import (
+    real_distance,
+    relative_distance,
+    flip_acc,
+    explicit_rels,
+    contains_word,
+)
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
@@ -31,6 +38,7 @@ def inference(
     gen_strategy: str,
     bert_name: str,
     without_text: bool,
+    explicit_rels_ratio: float,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -70,6 +78,7 @@ def inference(
         else SpatialContinuousBert(config, bert_name)
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model.train(False)
     total_dist_x_relative = 0
     total_dist_y_relative = 0
@@ -80,6 +89,7 @@ def inference(
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
     logger.info(f"Using {gen_strategy}!")
+    total_instances = 0
     with torch.no_grad():
         for (
             ids_text,
@@ -108,6 +118,20 @@ def inference(
                 t_types.to(device),
                 attn_mask.to(device),
             )
+            total_sents = 0
+            with_exp_sents = 0
+            sentences = nltk.sent_tokenize(
+                tokenizer.decode(ids_text[0], skip_special_tokens=True)
+            )
+            for sentence in sentences:
+                total_sents += 1
+                for rel in explicit_rels:
+                    if contains_word(rel, sentence):
+                        with_exp_sents += 1
+                        break
+            if with_exp_sents / total_sents <= explicit_rels_ratio:
+                continue
+            total_instances += 1
             max_ids_text = ids_text.size()[1]
             x_out, y_out, f_out = generation_strategy_factory(
                 gen_strategy,
@@ -149,11 +173,12 @@ def inference(
                 f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
             ).item()
 
-        total_dist_x_relative /= len(test_dataset)
-        total_dist_y_relative /= len(test_dataset)
-        total_dist_x_real /= len(test_dataset)
-        total_dist_y_real /= len(test_dataset)
-        total_acc_f /= len(test_dataset)
+        total_dist_x_relative /= total_instances
+        total_dist_y_relative /= total_instances
+        total_dist_x_real /= total_instances
+        total_dist_y_real /= total_instances
+        total_acc_f /= total_instances
+        print(f"The total number of instances is: {total_instances}")
         print(
             f"The average relative distance per scene for X is: {round(total_dist_x_relative, 2)}"
         )
@@ -216,6 +241,12 @@ def parse_args():
         default="bert-base-uncased",
         help="The bert model name.",
     )
+    parser.add_argument(
+        "--explicit_rels_ratio",
+        type=float,
+        default=0.0,
+        help="The ratio of explicit relations. Default is normal inference.",
+    )
 
     return parser.parse_args()
 
@@ -230,6 +261,7 @@ def main():
         args.gen_strategy,
         args.bert_name,
         args.without_text,
+        args.explicit_rels_ratio,
     )
 
 

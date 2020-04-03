@@ -35,6 +35,7 @@ def train(
     bert_name: str,
     batch_size: int,
     learning_rate: float,
+    weight_decay: float,
     epochs: int,
     clip_val: float,
     save_model_path: str,
@@ -80,7 +81,9 @@ def train(
     model = nn.DataParallel(SpatialContinuousBert(config, bert_name)).to(device)
     # Loss and optimizer
     criterion_f = nn.NLLLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
     cur_epoch = 0
     best_avg_distance = sys.maxsize
     if checkpoint_path is not None:
@@ -224,7 +227,7 @@ def train(
                 )
                 max_ids_text = ids_text.size()[1]
                 x_out, y_out, f_out = generation_strategy_factory(
-                    gen_strategy,
+                    "cond_original_continuous",
                     ids_text,
                     ids_vis,
                     pos_text,
@@ -263,45 +266,46 @@ def train(
                     f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
                 ).item()
 
-            total_dist_x_relative /= len(val_dataset)
-            total_dist_y_relative /= len(val_dataset)
-            total_dist_x_real /= len(val_dataset)
-            total_dist_y_real /= len(val_dataset)
-            total_acc_f /= len(val_dataset)
-            cur_avg_distance = round(
-                (
-                    total_dist_x_relative
-                    + total_dist_y_relative
-                    + total_dist_x_real
-                    + total_dist_y_real
-                )
-                / 4,
-                2,
+        total_dist_x_relative /= len(val_dataset)
+        total_dist_y_relative /= len(val_dataset)
+        total_dist_x_real /= len(val_dataset)
+        total_dist_y_real /= len(val_dataset)
+        total_acc_f = (total_acc_f / len(val_dataset)) * 100
+        cur_avg_distance = round(
+            (
+                total_dist_x_relative
+                + total_dist_y_relative
+                + total_dist_x_real
+                + total_dist_y_real
+                - total_acc_f
             )
-            if cur_avg_distance < best_avg_distance:
-                best_avg_distance = cur_avg_distance
-                print("====================================================")
-                print("Found new best with average distances per scene:")
-                print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
-                print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
-                print(f"- X real distance: {round(total_dist_x_real, 2)}")
-                print(f"- Y real distance: {round(total_dist_y_real, 2)}")
-                print(f"- F accuracy: {round(total_acc_f * 100, 2)}")
-                print(f"on epoch {epoch+1}. Saving model!!!")
-                torch.save(model.state_dict(), save_model_path)
-                print("====================================================")
-            else:
-                print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
-            print("Saving intermediate checkpoint...")
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "distance": best_avg_distance,
-                },
-                intermediate_save_checkpoint_path,
-            )
+            / 5,
+            2,
+        )
+        if cur_avg_distance < best_avg_distance:
+            best_avg_distance = cur_avg_distance
+            print("====================================================")
+            print("Found new best with average distances per scene:")
+            print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
+            print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
+            print(f"- X real distance: {round(total_dist_x_real, 2)}")
+            print(f"- Y real distance: {round(total_dist_y_real, 2)}")
+            print(f"- F accuracy: {round(total_acc_f, 2)}")
+            print(f"on epoch {epoch+1}. Saving model!!!")
+            torch.save(model.state_dict(), save_model_path)
+            print("====================================================")
+        else:
+            print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
+        print("Saving intermediate checkpoint...")
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "distance": best_avg_distance,
+            },
+            intermediate_save_checkpoint_path,
+        )
 
 
 def parse_args():
@@ -366,6 +370,9 @@ def parse_args():
         help="How to generate the positions during inference",
     )
     parser.add_argument(
+        "--weight_decay", type=float, default=0.0, help="The weight decay."
+    )
+    parser.add_argument(
         "--bert_name",
         type=str,
         default="bert-base-uncased",
@@ -387,6 +394,7 @@ def main():
         args.bert_name,
         args.batch_size,
         args.learning_rate,
+        args.weight_decay,
         args.epochs,
         args.clip_val,
         args.save_model_path,
