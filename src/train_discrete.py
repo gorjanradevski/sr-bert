@@ -32,6 +32,7 @@ def train(
     bert_name: str,
     batch_size: int,
     learning_rate: float,
+    weight_decay: float,
     epochs: int,
     clip_val: float,
     save_model_path: str,
@@ -74,7 +75,9 @@ def train(
     model = nn.DataParallel(SpatialDiscreteBert(config, bert_name)).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss(reduction="sum")
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
     cur_epoch = 0
     best_avg_loss = sys.maxsize
     if checkpoint_path is not None:
@@ -282,6 +285,9 @@ def parse_args():
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
     )
     parser.add_argument(
+        "--weight_decay", type=float, default=0.0, help="The weight decay."
+    )
+    parser.add_argument(
         "--save_model_path",
         type=str,
         default="models/best.pt",
@@ -314,6 +320,7 @@ def main():
         args.bert_name,
         args.batch_size,
         args.learning_rate,
+        args.weight_decay,
         args.epochs,
         args.clip_val,
         args.save_model_path,
