@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from torch.nn import functional as F
+from typing import List
 
 from scene_layouts.datasets import X_MASK, Y_MASK, F_MASK
 
@@ -64,7 +65,7 @@ def left_to_right_continuous(
     return x_ind, y_ind, f_ind, []
 
 
-def cond_original_continuous(
+def train_cond_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     x_out = torch.ones_like(x_ind)
@@ -88,10 +89,10 @@ def cond_original_continuous(
         y_ind[:, i] = tmp_y.clone()
         f_ind[:, i] = tmp_f.clone()
 
-    return x_out, y_out, f_out, []
+    return x_out, y_out, f_out
 
 
-def cond_original_discrete(
+def train_cond_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     x_out = torch.ones_like(x_ind)
@@ -115,7 +116,7 @@ def cond_original_discrete(
         y_ind[:, i] = tmp_y.clone()
         f_ind[:, i] = tmp_f.clone()
 
-    return x_out, y_out, f_out, []
+    return x_out, y_out, f_out
 
 
 def left_to_right_discrete(
@@ -232,7 +233,6 @@ def highest_probability(
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
-
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
         if ids_vis[0, i].item() in ref_elements:
@@ -379,7 +379,7 @@ def lowest_entropy(
 
 
 def generation_strategy_factory(
-    ref_elements: str,
+    ref_elements: List[int],
     gen_strategy: str,
     ids_text,
     ids_vis,
@@ -452,12 +452,12 @@ def generation_strategy_factory(
         return random_continuous(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
-    elif gen_strategy == "cond_original_discrete":
-        return cond_original_discrete(
+    elif gen_strategy == "train_cond_discrete":
+        return train_cond_discrete(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
-    elif gen_strategy == "cond_original_continuous":
-        return cond_original_continuous(
+    elif gen_strategy == "train_cond_continuous":
+        return train_cond_continuous(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
     else:

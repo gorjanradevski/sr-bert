@@ -9,7 +9,7 @@ import logging
 import json
 from transformers import BertConfig
 from scene_layouts.utils import relative_distance, real_distance, flip_acc
-from scene_layouts.generation_strategies import generation_strategy_factory
+from scene_layouts.generation_strategies import train_cond_continuous
 
 from scene_layouts.datasets import (
     ContinuousTrainDataset,
@@ -226,8 +226,7 @@ def train(
                     attn_mask.to(device),
                 )
                 max_ids_text = ids_text.size()[1]
-                x_out, y_out, f_out = generation_strategy_factory(
-                    "cond_original_continuous",
+                x_out, y_out, f_out = train_cond_continuous(
                     ids_text,
                     ids_vis,
                     pos_text,
@@ -237,7 +236,6 @@ def train(
                     t_types,
                     attn_mask,
                     model,
-                    device,
                 )
                 x_out, y_out = (
                     x_out * BUCKET_SIZE + BUCKET_SIZE / 2,

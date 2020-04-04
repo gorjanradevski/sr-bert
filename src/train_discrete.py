@@ -19,7 +19,7 @@ from scene_layouts.datasets import (
     BUCKET_SIZE,
 )
 from scene_layouts.utils import relative_distance, real_distance, flip_acc
-from scene_layouts.generation_strategies import generation_strategy_factory
+from scene_layouts.generation_strategies import train_cond_discrete
 from scene_layouts.modeling import SpatialDiscreteBert
 
 
@@ -184,8 +184,7 @@ def train(
                     attn_mask.to(device),
                 )
                 max_ids_text = ids_text.size()[1]
-                x_out, y_out, f_out = generation_strategy_factory(
-                    "cond_original_discrete",
+                x_out, y_out, f_out = train_cond_discrete(
                     ids_text,
                     ids_vis,
                     pos_text,
@@ -195,7 +194,6 @@ def train(
                     t_types,
                     attn_mask,
                     model,
-                    device,
                 )
                 x_out, y_out = (
                     x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
