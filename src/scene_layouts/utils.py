@@ -1,7 +1,6 @@
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
 from typing import Dict
-import re
 
 
 def elementwise_distances(X: torch.Tensor):
@@ -73,7 +72,7 @@ def flip_acc(inds, labs, attn_mask, flips):
     return ((inds == labs).sum(-1).float() / attn_mask.sum(-1)).sum()
 
 
-def get_reference_indices(visual2index: Dict[str, int], reference_type: str):
+def get_reference_elements(visual2index: Dict[str, int], reference_type: str):
     if reference_type == "animals":
         return [v for k, v in visual2index.items() if k.startswith("a")]
     elif reference_type == "food":
@@ -86,59 +85,9 @@ def get_reference_indices(visual2index: Dict[str, int], reference_type: str):
         return [v for k, v in visual2index.items() if k.startswith("s")]
     elif reference_type == "large":
         return [v for k, v in visual2index.items() if k.startswith("p")]
-    elif reference_type == "clothes":
+    elif reference_type == "clothing":
         return [v for k, v in visual2index.items() if k.startswith("c")]
     elif reference_type is None:
         return []
     else:
         raise ValueError(f"{reference_type} doesn't exist!")
-
-
-def contains_word(word, text):
-    # https://stackoverflow.com/a/45587730/3987085
-    pattern = r"(^|[^\w]){}([^\w]|$)".format(word)
-    pattern = re.compile(pattern, re.IGNORECASE)
-    matches = re.search(pattern, text)
-    return bool(matches)
-
-
-# https://academicguides.waldenu.edu/writingcenter/grammar/prepositions
-# https://github.com/gcollell/spatial-commonsense/blob/master/code/pre-process_data.py#L32
-explicit_rels = [
-    "on",
-    "next to",
-    "above",
-    "over",
-    "below",
-    "behind",
-    "along",
-    "through",
-    "in",
-    "in front of",
-    "near",
-    "beyond",
-    "with",
-    "by",
-    "inside of",
-    "on top of",
-    "down",
-    "up",
-    "beneath",
-    "inside",
-    "left",
-    "right",
-    "under",
-    "across from",
-    "underneath",
-    "atop",
-    "across",
-    "beside",
-    "around",
-    "outside",
-    "next",
-    "against",
-    "at",
-    "between",
-    "front",
-    "aside",
-]

@@ -5,62 +5,6 @@ from torch.nn import functional as F
 from scene_layouts.datasets import X_MASK, Y_MASK, F_MASK
 
 
-def one_step_all_left_to_right_continuous(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
-    max_ids_text = ids_text.size()[1]
-    x_scores, y_scores, f_scores = model(
-        ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-    )
-    x_ind[:, :] = torch.ceil(x_scores[:, max_ids_text:])
-    y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
-    for i in range(ids_vis.size()[1]):
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        f_ind[:, i] = F_MASK
-        x_scores, y_scores, f_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-        )
-        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
-
-    return x_ind, y_ind, f_ind
-
-
-def one_step_all_left_to_right_discrete(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
-    max_ids_text = ids_text.size()[1]
-    x_scores, y_scores, f_scores = model(
-        ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-    )
-    x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
-    y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
-    for i in range(ids_vis.size()[1]):
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        f_ind[:, i] = F_MASK
-        x_scores, y_scores, f_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-        )
-        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
-
-    return x_ind, y_ind, f_ind
-
-
 def one_step_all_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
@@ -76,7 +20,7 @@ def one_step_all_continuous(
     y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
     f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
 
-    return x_ind, y_ind, f_ind
+    return x_ind, y_ind, f_ind, []
 
 
 def one_step_all_discrete(
@@ -94,12 +38,13 @@ def one_step_all_discrete(
     y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
     f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
 
-    return x_ind, y_ind, f_ind
+    return x_ind, y_ind, f_ind, []
 
 
 def left_to_right_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
+    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
@@ -116,7 +61,7 @@ def left_to_right_continuous(
         y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
-    return x_ind, y_ind, f_ind
+    return x_ind, y_ind, f_ind, []
 
 
 def cond_original_continuous(
@@ -143,7 +88,7 @@ def cond_original_continuous(
         y_ind[:, i] = tmp_y.clone()
         f_ind[:, i] = tmp_f.clone()
 
-    return x_out, y_out, f_out
+    return x_out, y_out, f_out, []
 
 
 def cond_original_discrete(
@@ -170,19 +115,37 @@ def cond_original_discrete(
         y_ind[:, i] = tmp_y.clone()
         f_ind[:, i] = tmp_f.clone()
 
-    return x_out, y_out, f_out
+    return x_out, y_out, f_out, []
 
 
 def left_to_right_discrete(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    ref_elements,
+    ids_text,
+    ids_vis,
+    pos_text,
+    x_ind,
+    y_ind,
+    f_ind,
+    t_types,
+    attn_mask,
+    model,
 ):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    ref_indices = torch.tensor(
+        [
+            True if ids_vis[0, index].item() in ref_elements else False
+            for index in range(ids_vis.size()[1])
+        ]
+    )
+    # Set all indices to MASK tokens
+    x_ind[0, ~ref_indices] = X_MASK
+    y_ind[0, ~ref_indices] = Y_MASK
+    f_ind[0, ~ref_indices] = F_MASK
     max_ids_text = ids_text.size()[1]
     for i in range(ids_vis.size()[1]):
+        if ids_vis[0, i].item() in ref_elements:
+            continue
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
@@ -193,7 +156,7 @@ def left_to_right_discrete(
         y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
-    return x_ind, y_ind, f_ind
+    return x_ind, y_ind, f_ind, []
 
 
 def random_discrete(
@@ -216,7 +179,7 @@ def random_discrete(
         y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
-    return x_ind, y_ind, f_ind
+    return x_ind, y_ind, f_ind, []
 
 
 def random_continuous(
@@ -239,29 +202,54 @@ def random_continuous(
         y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
-    return x_ind, y_ind, f_ind
+    return x_ind, y_ind, f_ind, []
 
 
 def highest_probability(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    ref_elements,
+    ids_text,
+    ids_vis,
+    pos_text,
+    x_ind,
+    y_ind,
+    f_ind,
+    t_types,
+    attn_mask,
+    model,
 ):
+    # --- NOTE: Assuming a batch size of 1 all the time ---
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    ref_indices = torch.tensor(
+        [
+            True if ids_vis[0, index].item() in ref_elements else False
+            for index in range(ids_vis.size()[1])
+        ]
+    )
+    # Set all indices to MASK tokens
+    x_ind[0, ~ref_indices] = X_MASK
+    y_ind[0, ~ref_indices] = Y_MASK
+    f_ind[0, ~ref_indices] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
 
     predicted_indices = []
-    for _ in range(ids_vis.size()[1]):
+    for i in range(ids_vis.size()[1]):
+        if ids_vis[0, i].item() in ref_elements:
+            continue
         # Obtain model outputs
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
+        # Set pad indices to low probs
         x_scores[:, max_ids_text:][pad_indices] = -1e15
         y_scores[:, max_ids_text:][pad_indices] = -1e15
         f_scores[:, max_ids_text:][pad_indices] = -1e15
+        # Set reference indices to low probs so that they are not selected
+        x_scores[:, max_ids_text:][0, ref_indices] = -1e15
+        y_scores[:, max_ids_text:][0, ref_indices] = -1e15
+        f_scores[:, max_ids_text:][0, ref_indices] = -1e15
+
         # If there are indices which are already chosen, change to a small number
         if len(predicted_indices) > 0:
             x_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
@@ -285,7 +273,9 @@ def highest_probability(
         y_ind[batch_indices, index] = pred_y[:, max_ids_text:][batch_indices, index]
         f_ind[batch_indices, index] = pred_f[:, max_ids_text:][batch_indices, index]
 
-    return x_ind, y_ind, f_ind
+    order = [ids_vis[0, index[0]].item() for index in predicted_indices]
+
+    return x_ind, y_ind, f_ind, order
 
 
 def entropy(inputs: torch.Tensor):
@@ -293,21 +283,42 @@ def entropy(inputs: torch.Tensor):
 
 
 def lowest_entropy(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model, device
+    ref_elements,
+    ids_text,
+    ids_vis,
+    pos_text,
+    x_ind,
+    y_ind,
+    f_ind,
+    t_types,
+    attn_mask,
+    model,
+    device,
 ):
+    # --- NOTE: Assuming a batch size of 1 all the time ---
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
+    ref_indices = torch.tensor(
+        [
+            True if ids_vis[0, index].item() in ref_elements else False
+            for index in range(ids_vis.size()[1])
+        ]
+    )
+    # Set all indices to MASK tokens
+    x_ind[0, ~ref_indices] = X_MASK
+    y_ind[0, ~ref_indices] = Y_MASK
+    f_ind[0, ~ref_indices] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
     predicted_indices = []
-    for _ in range(ids_vis.size()[1]):
+    for i in range(ids_vis.size()[1]):
+        if ids_vis[0, i].item() in ref_elements:
+            continue
         # Obtain model outputs
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
+        # Set pad indices to high entropy values
         x_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
             torch.ones(1, x_scores.size()[-1]).to(device), dim=-1
         )
@@ -317,6 +328,17 @@ def lowest_entropy(
         f_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
             torch.ones(1, f_scores.size()[-1]).to(device), dim=-1
         )
+        # Set ref indices to high entropy values
+        x_scores[:, max_ids_text:][0, ref_indices] = F.log_softmax(
+            torch.ones(1, x_scores.size()[-1]).to(device), dim=-1
+        )
+        y_scores[:, max_ids_text:][0, ref_indices] = F.log_softmax(
+            torch.ones(1, y_scores.size()[-1]).to(device), dim=-1
+        )
+        f_scores[:, max_ids_text:][0, ref_indices] = F.log_softmax(
+            torch.ones(1, f_scores.size()[-1]).to(device), dim=-1
+        )
+        # Set predicted indices to high entropy values
         if len(predicted_indices) > 0:
             x_scores[:, max_ids_text:][
                 batch_indices, predicted_indices
@@ -351,10 +373,13 @@ def lowest_entropy(
             batch_indices, index
         ]
 
-    return x_ind, y_ind, f_ind
+    order = [ids_vis[0, index[0]].item() for index in predicted_indices]
+
+    return x_ind, y_ind, f_ind, order
 
 
 def generation_strategy_factory(
+    ref_elements: str,
     gen_strategy: str,
     ids_text,
     ids_vis,
@@ -367,15 +392,7 @@ def generation_strategy_factory(
     model,
     device,
 ):
-    if gen_strategy == "one_step_all_left_to_right_continuous":
-        return one_step_all_left_to_right_continuous(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-        )
-    elif gen_strategy == "one_step_all_left_to_right_discrete":
-        return one_step_all_left_to_right_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-        )
-    elif gen_strategy == "one_step_all_continuous":
+    if gen_strategy == "one_step_all_continuous":
         return one_step_all_continuous(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
@@ -389,14 +406,33 @@ def generation_strategy_factory(
         )
     elif gen_strategy == "left_to_right_discrete":
         return left_to_right_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+            ref_elements,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
     elif gen_strategy == "highest_probability":
         return highest_probability(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+            ref_elements,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
     elif gen_strategy == "lowest_entropy":
         return lowest_entropy(
+            ref_elements,
             ids_text,
             ids_vis,
             pos_text,
