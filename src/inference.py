@@ -44,6 +44,7 @@ def inference(
     logger.warning(f"--- Using device {device}! ---")
     # Create dataset
     visual2index = json.load(open(visual2index_path))
+    index2visual = {v: k for k, v in visual2index.items()}
     ref_elements = get_reference_elements(visual2index, ref_class)
     test_dataset = (
         DiscreteInferenceDataset(
@@ -87,6 +88,17 @@ def inference(
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
     logger.info(f"Using {gen_strategy}!")
+    pos2groupcount = {}
+    pos2total = {}
+    group2total = {
+        "sky": 0,
+        "people": 0,
+        "toys": 0,
+        "clothing": 0,
+        "animals": 0,
+        "large": 0,
+        "food": 0,
+    }
     with torch.no_grad():
         for (
             ids_text,
@@ -116,7 +128,7 @@ def inference(
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out, _ = generation_strategy_factory(
+            x_out, y_out, f_out, order = generation_strategy_factory(
                 ref_elements,
                 gen_strategy,
                 ids_text,
@@ -156,6 +168,43 @@ def inference(
             total_acc_f += flip_acc(
                 f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
             ).item()
+            for i, element in enumerate(order):
+                if i not in pos2groupcount:
+                    pos2groupcount[i] = {
+                        "sky": 0,
+                        "people": 0,
+                        "toys": 0,
+                        "clothing": 0,
+                        "animals": 0,
+                        "large": 0,
+                        "food": 0,
+                    }
+                if i not in pos2total:
+                    pos2total[i] = 0
+                pos2total[i] += 1
+                if index2visual[element].startswith("a"):
+                    pos2groupcount[i]["animals"] += 1
+                    group2total["animals"] += 1
+                elif index2visual[element].startswith("e"):
+                    pos2groupcount[i]["food"] += 1
+                    group2total["food"] += 1
+                elif index2visual[element].startswith("t"):
+                    pos2groupcount[i]["toys"] += 1
+                    group2total["toys"] += 1
+                elif index2visual[element].startswith("hb"):
+                    pos2groupcount[i]["people"] += 1
+                    group2total["people"] += 1
+                elif index2visual[element].startswith("s"):
+                    pos2groupcount[i]["sky"] += 1
+                    group2total["sky"] += 1
+                elif index2visual[element].startswith("p"):
+                    pos2groupcount[i]["large"] += 1
+                    group2total["large"] += 1
+                elif index2visual[element].startswith("c"):
+                    pos2groupcount[i]["clothing"] += 1
+                    group2total["clothing"] += 1
+                else:
+                    raise ValueError("Can't be possible!")
 
         total_dist_x_relative /= len(test_dataset)
         total_dist_y_relative /= len(test_dataset)
@@ -175,6 +224,19 @@ def inference(
             f"The average real distance per scene for Y is: {round(total_dist_y_real, 2)}"
         )
         print(f"The average accuracy for the flip is: {round(total_acc_f * 100, 2)}")
+        for pos in pos2groupcount.keys():
+            print(
+                f"================== Percentages for group totals per position {pos} =================="
+            )
+            for group, count in pos2groupcount[pos].items():
+                print(
+                    f"{group}: {(pos2groupcount[pos][group] / group2total[group]) * 100}"
+                )
+            print(
+                f"================== Percentages for position totals per position {pos} =================="
+            )
+            for group, count in pos2groupcount[pos].items():
+                print(f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}")
 
 
 def parse_args():
