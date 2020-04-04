@@ -244,7 +244,7 @@ def parse_args():
     parser.add_argument(
         "--explicit_rels_ratio",
         type=float,
-        default=0.0,
+        default=-1.0,
         help="The ratio of explicit relations. Default is normal inference.",
     )
 

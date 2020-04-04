@@ -176,6 +176,7 @@ def cond_original_discrete(
 def left_to_right_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
+    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK

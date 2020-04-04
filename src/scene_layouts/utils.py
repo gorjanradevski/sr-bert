@@ -103,6 +103,7 @@ def contains_word(word, text):
 
 
 # https://academicguides.waldenu.edu/writingcenter/grammar/prepositions
+# https://github.com/gcollell/spatial-commonsense/blob/master/code/pre-process_data.py#L32
 explicit_rels = [
     "on",
     "next to",
