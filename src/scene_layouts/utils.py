@@ -16,21 +16,21 @@ def flip_scene(labs):
     return labs_flipped
 
 
-def real_distance(inds, labs, attn_mask, check_flipped: bool = False):
+def abs_distance(inds, labs, attn_mask, check_flipped: bool = False):
     # Obtain normal dist
-    dist_normal = real_distance_single(inds, labs, attn_mask)
+    dist_normal = abs_distance_single(inds, labs, attn_mask)
     if check_flipped is False:
         return dist_normal.sum()
 
     labs_flipped = flip_scene(labs)
-    dist_flipped = real_distance_single(inds, labs_flipped, attn_mask)
+    dist_flipped = abs_distance_single(inds, labs_flipped, attn_mask)
 
     dist = torch.min(dist_normal, dist_flipped)
 
     return dist.sum(), (dist == dist_flipped).float()
 
 
-def real_distance_single(inds, labs, attn_mask):
+def abs_distance_single(inds, labs, attn_mask):
     # Obtain the distance matrix
     dist = torch.abs(inds - labs).float()
     # Remove the distance for the padding tokens

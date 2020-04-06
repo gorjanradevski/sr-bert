@@ -42,7 +42,7 @@ def one_step_all_discrete(
     return x_ind, y_ind, f_ind, []
 
 
-def left_to_right_continuous(
+def human_order_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
@@ -119,7 +119,7 @@ def train_cond_discrete(
     return x_out, y_out, f_out
 
 
-def right_to_left_discrete(
+def rev_human_order_discrete(
     ref_elements,
     ids_text,
     ids_vis,
@@ -160,7 +160,7 @@ def right_to_left_discrete(
     return x_ind, y_ind, f_ind, []
 
 
-def left_to_right_discrete(
+def human_order_discrete(
     ref_elements,
     ids_text,
     ids_vis,
@@ -247,7 +247,7 @@ def random_continuous(
     return x_ind, y_ind, f_ind, []
 
 
-def highest_probability(
+def highest_confidence(
     ref_elements,
     ids_text,
     ids_vis,
@@ -441,12 +441,12 @@ def generation_strategy_factory(
         return one_step_all_discrete(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
-    elif gen_strategy == "left_to_right_continuous":
-        return left_to_right_continuous(
+    elif gen_strategy == "human_order_continuous":
+        return human_order_continuous(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
-    elif gen_strategy == "left_to_right_discrete":
-        return left_to_right_discrete(
+    elif gen_strategy == "human_order_discrete":
+        return human_order_discrete(
             ref_elements,
             ids_text,
             ids_vis,
@@ -458,8 +458,8 @@ def generation_strategy_factory(
             attn_mask,
             model,
         )
-    elif gen_strategy == "right_to_left_discrete":
-        return right_to_left_discrete(
+    elif gen_strategy == "rev_human_order_discrete":
+        return rev_human_order_discrete(
             ref_elements,
             ids_text,
             ids_vis,
@@ -471,8 +471,8 @@ def generation_strategy_factory(
             attn_mask,
             model,
         )
-    elif gen_strategy == "highest_probability":
-        return highest_probability(
+    elif gen_strategy == "highest_confidence":
+        return highest_confidence(
             ref_elements,
             ids_text,
             ids_vis,

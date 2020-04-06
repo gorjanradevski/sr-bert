@@ -7,7 +7,7 @@ import logging
 import json
 from transformers import BertConfig
 from scene_layouts.utils import (
-    real_distance,
+    abs_distance,
     relative_distance,
     flip_acc,
     get_reference_elements,
@@ -81,8 +81,8 @@ def inference(
     model.train(False)
     total_dist_x_relative = 0
     total_dist_y_relative = 0
-    total_dist_x_real = 0
-    total_dist_y_real = 0
+    total_dist_x_abs = 0
+    total_dist_y_abs = 0
     total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
@@ -152,14 +152,14 @@ def inference(
             total_dist_y_relative += relative_distance(
                 y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
             ).item()
-            dist_x_real, flips = real_distance(
+            dist_x_abs, flips = abs_distance(
                 x_out,
                 x_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
                 check_flipped=True,
             )
-            total_dist_x_real += dist_x_real.item()
-            total_dist_y_real += real_distance(
+            total_dist_x_abs += dist_x_abs.item()
+            total_dist_y_abs += abs_distance(
                 y_out,
                 y_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
@@ -208,8 +208,8 @@ def inference(
 
         total_dist_x_relative /= len(test_dataset)
         total_dist_y_relative /= len(test_dataset)
-        total_dist_x_real /= len(test_dataset)
-        total_dist_y_real /= len(test_dataset)
+        total_dist_x_abs /= len(test_dataset)
+        total_dist_y_abs /= len(test_dataset)
         total_acc_f /= len(test_dataset)
         print(
             f"The average relative distance per scene for X is: {round(total_dist_x_relative, 2)}"
@@ -218,10 +218,10 @@ def inference(
             f"The average relative distance per scene for Y is: {round(total_dist_y_relative, 2)}"
         )
         print(
-            f"The average real distance per scene for X is: {round(total_dist_x_real, 2)}"
+            f"The average absolute distance per scene for X is: {round(total_dist_x_abs, 2)}"
         )
         print(
-            f"The average real distance per scene for Y is: {round(total_dist_y_real, 2)}"
+            f"The average absolute distance per scene for Y is: {round(total_dist_y_abs, 2)}"
         )
         print(f"The average accuracy for the flip is: {round(total_acc_f * 100, 2)}")
         for pos in pos2groupcount.keys():

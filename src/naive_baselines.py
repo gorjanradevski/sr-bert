@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import logging
 import json
-from scene_layouts.utils import relative_distance, real_distance
+from scene_layouts.utils import relative_distance, abs_distance
 from scene_layouts.datasets import (
     DiscreteInferenceDataset,
     collate_pad_discrete_batch,
@@ -71,8 +71,8 @@ def naive_inference(
         )
 
     # Metrics
-    total_dist_x_real = 0
-    total_dist_y_real = 0
+    total_dist_x_abs = 0
+    total_dist_y_abs = 0
     total_dist_x_relative = 0
     total_dist_y_relative = 0
     total_acc_f = 0
@@ -110,10 +110,10 @@ def naive_inference(
         else:
             raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
-        total_dist_x_real += real_distance(
+        total_dist_x_abs += abs_distance(
             x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
         )[0].item()
-        total_dist_y_real += real_distance(
+        total_dist_y_abs += abs_distance(
             y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
         ).item()
         total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
@@ -125,10 +125,10 @@ def naive_inference(
         ).item()
 
     print(
-        f"The average real distance per scene for X is: {round(total_dist_x_real/len(test_dataset), 2)}"
+        f"The average absolute distance per scene for X is: {round(total_dist_x_abs/len(test_dataset), 2)}"
     )
     print(
-        f"The average real distance per scene for Y is: {round(total_dist_y_real/len(test_dataset), 2)}"
+        f"The average absolute distance per scene for Y is: {round(total_dist_y_abs/len(test_dataset), 2)}"
     )
     print(
         f"The average relative distance per scene for X is: {round(total_dist_x_relative/len(test_dataset), 2)}"

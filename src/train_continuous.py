@@ -8,7 +8,7 @@ import sys
 import logging
 import json
 from transformers import BertConfig
-from scene_layouts.utils import relative_distance, real_distance, flip_acc
+from scene_layouts.utils import relative_distance, abs_distance, flip_acc
 from scene_layouts.generation_strategies import train_cond_continuous
 
 from scene_layouts.datasets import (
@@ -137,18 +137,18 @@ def train(
                 x_scores, y_scores, f_scores = model(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
                 )
-                # Get losses for the real distances
+                # Get losses for the absolute distances
                 max_ids_text = ids_text.size()[1]
-                x_real_loss = (
-                    real_distance(
+                x_abs_loss = (
+                    abs_distance(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
                     )
                     / ids_text.size()[0]
                 )
-                y_real_loss = (
-                    real_distance(
+                y_abs_loss = (
+                    abs_distance(
                         y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
@@ -174,8 +174,8 @@ def train(
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Backward
                 loss = (
-                    x_real_loss
-                    + y_real_loss
+                    x_abs_loss
+                    + y_abs_loss
                     + x_relative_loss
                     + y_relative_loss
                     + f_loss
@@ -194,8 +194,8 @@ def train(
         # Reset counters
         total_dist_x_relative = 0
         total_dist_y_relative = 0
-        total_dist_x_real = 0
-        total_dist_y_real = 0
+        total_dist_x_abs = 0
+        total_dist_y_abs = 0
         total_acc_f = 0
         with torch.no_grad():
             for (
@@ -247,14 +247,14 @@ def train(
                 total_dist_y_relative += relative_distance(
                     y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
                 ).item()
-                dist_x_real, flips = real_distance(
+                dist_x_abs, flips = abs_distance(
                     x_out,
                     x_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
                     check_flipped=True,
                 )
-                total_dist_x_real += dist_x_real.item()
-                total_dist_y_real += real_distance(
+                total_dist_x_abs += dist_x_abs.item()
+                total_dist_y_abs += abs_distance(
                     y_out,
                     y_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
@@ -266,15 +266,15 @@ def train(
 
         total_dist_x_relative /= len(val_dataset)
         total_dist_y_relative /= len(val_dataset)
-        total_dist_x_real /= len(val_dataset)
-        total_dist_y_real /= len(val_dataset)
+        total_dist_x_abs /= len(val_dataset)
+        total_dist_y_abs /= len(val_dataset)
         total_acc_f = (total_acc_f / len(val_dataset)) * 100
         cur_avg_distance = round(
             (
                 total_dist_x_relative
                 + total_dist_y_relative
-                + total_dist_x_real
-                + total_dist_y_real
+                + total_dist_x_abs
+                + total_dist_y_abs
                 - total_acc_f
             )
             / 5,
@@ -286,8 +286,8 @@ def train(
             print("Found new best with average distances per scene:")
             print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
             print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
-            print(f"- X real distance: {round(total_dist_x_real, 2)}")
-            print(f"- Y real distance: {round(total_dist_y_real, 2)}")
+            print(f"- X absolute distance: {round(total_dist_x_abs, 2)}")
+            print(f"- Y absolute distance: {round(total_dist_y_abs, 2)}")
             print(f"- F accuracy: {round(total_acc_f, 2)}")
             print(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
