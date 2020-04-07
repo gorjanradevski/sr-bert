@@ -151,7 +151,7 @@ def train(
                 train_loss_epoch += loss
 
         print(f"The train loss on epoch is {train_loss_epoch}")
-        # torch.save(model.state_dict(), save_model_path)
+        torch.save(model.state_dict(), save_model_path)
         """
         # Set model in evaluation mode
         model.train(False)
