@@ -100,6 +100,7 @@ def train(
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
         model.train(True)
+        train_loss_epoch = 0
         with tqdm(total=len(train_loader)) as pbar:
             for (
                 ids_text,
@@ -147,7 +148,11 @@ def train(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
+                train_loss_epoch += loss
 
+        print(f"The train loss on epoch is {train_loss_epoch}")
+        # torch.save(model.state_dict(), save_model_path)
+        """
         # Set model in evaluation mode
         model.train(False)
         total_dist_x_relative = 0
@@ -262,6 +267,7 @@ def train(
             },
             intermediate_save_checkpoint_path,
         )
+    """
 
 
 def parse_args():

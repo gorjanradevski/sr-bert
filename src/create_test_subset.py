@@ -55,10 +55,14 @@ def contains_word(word, text):
 
 
 def split_dataset(
-    load_test_dataset_path: str, dump_test_dataset_path: str, explicit_rels_ratio: float
+    load_test_dataset_path: str,
+    dump_test_explicit_dataset_path: str,
+    dump_test_implicit_dataset_path: str,
+    explicit_rels_ratio: float,
 ):
     test_dataset = json.load(open(load_test_dataset_path))
-    dump_test_dataset = []
+    dump_implicit_test_dataset = []
+    dump_explicit_test_dataset = []
     for scene in tqdm(test_dataset):
         total = 0
         with_explicit = 0
@@ -70,12 +74,17 @@ def split_dataset(
                         with_explicit += 1
                         break
         if with_explicit / total > explicit_rels_ratio:
-            dump_test_dataset.append(scene)
-            continue
+            dump_explicit_test_dataset.append(scene)
+        else:
+            dump_implicit_test_dataset.append(scene)
 
-    print(f"The size of the filtered dataset is {len(dump_test_dataset)}")
-    print(f"Dumping at {dump_test_dataset_path}")
-    json.dump(dump_test_dataset, open(dump_test_dataset_path, "w"))
+    print(f"The size of the explicit dataset is {len(dump_explicit_test_dataset)}")
+    print(f"Dumping at {dump_test_explicit_dataset_path}")
+    json.dump(dump_explicit_test_dataset, open(dump_test_explicit_dataset_path, "w"))
+    print("============================================")
+    print(f"The size of the implicit dataset is {len(dump_implicit_test_dataset)}")
+    print(f"Dumping at {dump_test_implicit_dataset_path}")
+    json.dump(dump_implicit_test_dataset, open(dump_test_implicit_dataset_path, "w"))
 
 
 def parse_args():
@@ -91,10 +100,16 @@ def parse_args():
         help="Path to the full test dataset.",
     )
     parser.add_argument(
-        "--dump_test_dataset_path",
+        "--dump_test_explicit_dataset_path",
+        type=str,
+        default="data/test_dataset_explicit.json",
+        help="Path to the explicit split of the test dataset.",
+    )
+    parser.add_argument(
+        "--dump_test_implicit_dataset_path",
         type=str,
         default="data/test_dataset_split.json",
-        help="Path to the split of the test dataset.",
+        help="Path to the implicit split of the test dataset.",
     )
     parser.add_argument(
         "--explicit_rels_ratio",
@@ -110,7 +125,8 @@ def main():
     args = parse_args()
     split_dataset(
         args.load_test_dataset_path,
-        args.dump_test_dataset_path,
+        args.dump_test_explicit_dataset_path,
+        args.dump_test_implicit_dataset_path,
         args.explicit_rels_ratio,
     )
 

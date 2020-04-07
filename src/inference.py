@@ -87,6 +87,7 @@ def inference(
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
+    logger.warning(f"Reference class is {ref_class}")
     logger.info(f"Using {gen_strategy}!")
     pos2groupcount = {}
     pos2total = {}
@@ -224,19 +225,22 @@ def inference(
             f"The average absolute distance per scene for Y is: {round(total_dist_y_abs, 2)}"
         )
         print(f"The average accuracy for the flip is: {round(total_acc_f * 100, 2)}")
-        for pos in pos2groupcount.keys():
-            print(
-                f"================== Percentages for group totals per position {pos} =================="
-            )
-            for group, count in pos2groupcount[pos].items():
+        if ref_class is None:
+            for pos in pos2groupcount.keys():
                 print(
-                    f"{group}: {(pos2groupcount[pos][group] / group2total[group]) * 100}"
+                    f"================== Percentages for group totals per position {pos} =================="
                 )
-            print(
-                f"================== Percentages for position totals per position {pos} =================="
-            )
-            for group, count in pos2groupcount[pos].items():
-                print(f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}")
+                for group, count in pos2groupcount[pos].items():
+                    print(
+                        f"{group}: {(pos2groupcount[pos][group] / group2total[group]) * 100}"
+                    )
+                print(
+                    f"================== Percentages for position totals per position {pos} =================="
+                )
+                for group, count in pos2groupcount[pos].items():
+                    print(
+                        f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}"
+                    )
 
 
 def parse_args():
