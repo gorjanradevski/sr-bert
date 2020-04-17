@@ -150,9 +150,6 @@ def train(
                 pbar.set_postfix({"Batch loss": loss.item()})
                 train_loss_epoch += loss
 
-        print(f"The train loss on epoch is {train_loss_epoch}")
-        torch.save(model.state_dict(), save_model_path)
-        """
         # Set model in evaluation mode
         model.train(False)
         total_dist_x_relative = 0
@@ -260,14 +257,13 @@ def train(
         print("Saving intermediate checkpoint...")
         torch.save(
             {
-                "epoch": epoch,
+                "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "distance": best_avg_distance,
             },
             intermediate_save_checkpoint_path,
         )
-    """
 
 
 def parse_args():
