@@ -6,6 +6,38 @@ from typing import List
 from scene_layouts.datasets import X_MASK, Y_MASK, F_MASK
 
 
+class Hypothesis:
+    def __init__(
+        self,
+        prob: float,
+        x_inds: torch.Tensor,
+        y_inds: torch.Tensor,
+        f_inds: torch.Tensor,
+    ):
+        self.prob = prob
+        self.x_inds = x_inds
+        self.y_inds = y_inds
+        self.f_inds = f_inds
+
+    def __eq__(self, other):
+        return self.prob == other.prob
+
+    def __lt__(self, other):
+        return self.prob > other.prob
+
+    def expand(self, x_ind, y_ind, f_ind, latest_prob, index):
+        x_inds_clone = self.x_inds.clone()
+        y_inds_clone = self.y_inds.clone()
+        f_inds_clone = self.f_inds.clone()
+        x_inds_clone[0, index] = x_ind
+        y_inds_clone[0, index] = y_ind
+        f_inds_clone[0, index] = f_ind
+
+        return Hypothesis(
+            self.prob * latest_prob, x_inds_clone, y_inds_clone, f_inds_clone
+        )
+
+
 def one_step_all_continuous(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
@@ -199,6 +231,75 @@ def human_order_discrete(
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
     return x_ind, y_ind, f_ind, []
+
+
+def human_order_discrete_beam_search(
+    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+):
+    # --- Note: Assume batch size 1 ---
+    # https://github.com/tensorflow/models/blob/master/research/textsum/beam_search.py
+    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
+    # Set all indices to MASK tokens
+    beam_size = 5
+    x_ind[:, :] = X_MASK
+    y_ind[:, :] = Y_MASK
+    f_ind[:, :] = F_MASK
+    max_ids_text = ids_text.size()[1]
+    x_scores, y_scores, f_scores = model(
+        ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+    )
+    cur_beam_hypothesis = []
+    for x in range(x_scores.size()[-1]):
+        for y in range(y_scores.size()[-1]):
+            for f in range(f_scores.size()[-1]):
+                x_ind[0, 0] = x
+                y_ind[0, 0] = y
+                f_ind[0, 0] = f
+                joint_prob = (
+                    torch.exp(x_scores[:, max_ids_text:][0, 0, x]).item()
+                    * torch.exp(y_scores[:, max_ids_text:][0, 0, y]).item()
+                    * torch.exp(f_scores[:, max_ids_text:][0, 0, f]).item()
+                )
+                cur_beam_hypothesis.append(
+                    Hypothesis(joint_prob, x_ind.clone(), y_ind.clone(), f_ind.clone())
+                )
+    cur_beam_hypothesis = sorted(cur_beam_hypothesis)[:beam_size]
+
+    for index in range(1, ids_vis.size()[1]):
+        x_ind[:, index] = X_MASK
+        y_ind[:, index] = Y_MASK
+        f_ind[:, index] = F_MASK
+        new_beam_hypothesis = []
+        for i in range(beam_size):
+            x_scores, y_scores, f_scores = model(
+                ids_text,
+                ids_vis,
+                pos_text,
+                cur_beam_hypothesis[i].x_inds,
+                cur_beam_hypothesis[i].y_inds,
+                cur_beam_hypothesis[i].f_inds,
+                t_types,
+                attn_mask,
+            )
+            for x in range(x_scores.size()[-1]):
+                for y in range(y_scores.size()[-1]):
+                    for f in range(f_scores.size()[-1]):
+                        joint_prob = (
+                            torch.exp(x_scores[:, max_ids_text:][0, index, x]).item()
+                            * torch.exp(y_scores[:, max_ids_text:][0, index, y]).item()
+                            * torch.exp(f_scores[:, max_ids_text:][0, index, f]).item()
+                        )
+                        new_beam_hypothesis.append(
+                            cur_beam_hypothesis[i].expand(x, y, f, joint_prob, index)
+                        )
+        cur_beam_hypothesis = sorted(new_beam_hypothesis)[:beam_size]
+
+    return (
+        cur_beam_hypothesis[0].x_inds,
+        cur_beam_hypothesis[0].y_inds,
+        cur_beam_hypothesis[0].f_inds,
+        [],
+    )
 
 
 def random_discrete(
@@ -457,6 +558,10 @@ def generation_strategy_factory(
             t_types,
             attn_mask,
             model,
+        )
+    elif gen_strategy == "human_order_discrete_beam_search":
+        return human_order_discrete_beam_search(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
     elif gen_strategy == "rev_human_order_discrete":
         return rev_human_order_discrete(
