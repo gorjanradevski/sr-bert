@@ -1,56 +1,57 @@
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
+import numpy as np
 
 
 class Evaluator:
     def __init__(self, total_elements):
-        self.abs_dist_x = 0.0
-        self.abs_dist_y = 0.0
-        self.rel_dist_x = 0.0
-        self.rel_dist_y = 0.0
-        self.f_acc = 0.0
         self.total_elements = total_elements
+        self.abs_dist = np.zeros(self.total_elements)
+        self.rel_dist = np.zeros(self.total_elements)
+        self.f_acc = np.zeros(self.total_elements)
+        self.index = 0
 
     def update_metrics(self, x_out, x_lab, y_out, y_lab, f_out, f_lab, attn_mask):
         # Update absolute distance
-        dist_x_abs, flips = self.abs_distance(
-            x_out, x_lab, attn_mask, check_flipped=True
+        batch_size = x_out.size()[0]
+        abs_dist, flips = self.abs_distance(
+            x_out, x_lab, y_out, y_lab, attn_mask, check_flipped=True
         )
-        self.abs_dist_x += dist_x_abs.item()
-        self.abs_dist_y += self.abs_distance(
-            y_out, y_lab, attn_mask, check_flipped=False
-        ).item()
+        self.abs_dist[self.index : self.index + batch_size] = abs_dist.numpy()
         # Update relative distance
-        self.rel_dist_x += self.relative_distance(x_out, x_lab, attn_mask).item()
-        self.rel_dist_y += self.relative_distance(y_out, y_lab, attn_mask).item()
+        self.rel_dist[self.index : self.index + batch_size] = self.relative_distance(
+            x_out, x_lab, y_out, y_lab, attn_mask
+        ).numpy()
         # Update flip accuracy
-        self.f_acc += self.flip_acc(f_out, f_lab, attn_mask, flips).item()
+        self.f_acc[self.index : self.index + batch_size] += self.flip_acc(
+            f_out, f_lab, attn_mask, flips
+        ).numpy()
+        self.index += batch_size
 
     def reset_metrics(self):
-        self.abs_dist_x = 0.0
-        self.abs_dist_y = 0.0
-        self.rel_dist_x = 0.0
-        self.rel_dist_y = 0.0
-        self.f_acc = 0.0
+        self.abs_dist = np.zeros(self.total_elements)
+        self.rel_dist = np.zeros(self.total_elements)
+        self.f_acc = np.zeros(self.total_elements)
+        self.index = 0
 
-    def get_abs_x(self):
-        return round(self.abs_dist_x / self.total_elements, 2)
+    def get_abs_dist(self):
+        return np.round(self.abs_dist.mean(), decimals=2)
 
-    def get_abs_y(self):
-        return round(self.abs_dist_y / self.total_elements, 2)
-
-    def get_rel_x(self):
-        return round(self.rel_dist_x / self.total_elements, 2)
-
-    def get_rel_y(self):
-        return round(self.rel_dist_y / self.total_elements, 2)
+    def get_rel_dist(self):
+        return np.round(self.rel_dist.mean(), decimals=2)
 
     def get_f_acc(self):
-        return round(self.f_acc / self.total_elements * 100, 2)
+        return np.round(self.f_acc.mean() * 100, decimals=2)
 
-    @staticmethod
-    def elementwise_distances(X: torch.Tensor):
-        return torch.abs(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2))
+    def get_abs_error_bar(self):
+        return np.round(
+            np.std(self.abs_dist, ddof=1) / np.sqrt(self.total_elements), decimals=2
+        )
+
+    def get_rel_error_bar(self):
+        return np.round(
+            np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=2
+        )
 
     @staticmethod
     def flip_scene(labs: torch.Tensor):
@@ -62,38 +63,52 @@ class Evaluator:
         return labs_flipped
 
     @classmethod
-    def abs_distance(cls, inds, labs, attn_mask, check_flipped: bool = False):
+    def abs_distance(
+        cls, x_inds, x_labs, y_inds, y_labs, attn_mask, check_flipped: bool = False
+    ):
         # Obtain normal dist
-        dist_normal = cls.abs_distance_single(inds, labs, attn_mask)
+        dist_normal = cls.abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask)
         if check_flipped is False:
-            return dist_normal.sum()
+            return dist_normal
 
-        labs_flipped = cls.flip_scene(labs)
-        dist_flipped = cls.abs_distance_single(inds, labs_flipped, attn_mask)
+        x_labs_flipped = cls.flip_scene(x_labs)
+        dist_flipped = cls.abs_distance_single(
+            x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
+        )
 
         dist = torch.min(dist_normal, dist_flipped)
 
-        return dist.sum(), (dist == dist_flipped).float()
+        return dist, (dist == dist_flipped).float()
 
     @staticmethod
-    def abs_distance_single(inds, labs, attn_mask):
-        # Obtain the distance matrix
-        dist = torch.abs(inds - labs).float()
+    def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
+        # Obtain dist for X and Y
+        dist_x = torch.pow(x_inds - x_labs, 2).float()
+        dist_y = torch.pow(y_inds - y_labs, 2).float()
+        dist = torch.sqrt(dist_x + dist_y)
         # Remove the distance for the padding tokens
         dist = dist * attn_mask
         # Remove the distance for the masked tokens (During training)
-        mask_masked = torch.ones_like(labs)
-        mask_masked[torch.where(labs < 0)] = 0.0
+        mask_masked = torch.ones_like(x_labs)
+        mask_masked[torch.where(x_labs < 0)] = 0.0
         dist = dist * mask_masked
         # Obtain average distance for each scene without considering the padding tokens
         dist = dist.sum(-1) / attn_mask.sum(-1)
 
         return dist
 
+    @staticmethod
+    def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
+        x_dist = torch.pow(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2), 2).float()
+        y_dist = torch.pow(torch.unsqueeze(Y, 1) - torch.unsqueeze(Y, 2), 2).float()
+
+        return torch.sqrt(x_dist + y_dist)
+
     @classmethod
-    def relative_distance(cls, inds, labs, attn_mask):
+    def relative_distance(cls, x_inds, x_labs, y_inds, y_labs, attn_mask):
         dist = torch.abs(
-            cls.elementwise_distances(inds) - cls.elementwise_distances(labs)
+            cls.elementwise_distances(x_inds, y_inds)
+            - cls.elementwise_distances(x_labs, y_labs)
         ).float()
         # Remove the distance for the padding tokens - Both columns and rows
         dist = (
@@ -102,8 +117,8 @@ class Evaluator:
             * attn_mask.unsqueeze(-1).expand(dist.size())
         )
         # Remove the distance for the masked tokens (During training)
-        mask_masked = torch.ones_like(labs)
-        mask_masked[torch.where(labs < 0)] = 0.0
+        mask_masked = torch.ones_like(x_labs)
+        mask_masked[torch.where(x_labs < 0)] = 0.0
         dist = (
             dist
             * mask_masked.unsqueeze(1).expand(dist.size())
@@ -113,10 +128,10 @@ class Evaluator:
         # Obtain average distance for each scene without considering the padding tokens
         dist = dist.sum(-1) / attn_mask.sum(-1)
 
-        return dist.sum()
+        return dist
 
     @staticmethod
     def flip_acc(inds, labs, attn_mask, flips):
         inds = torch.abs(inds - flips.unsqueeze(-1))
 
-        return ((inds == labs).sum(-1).float() / attn_mask.sum(-1)).sum()
+        return (inds == labs).sum(-1).float() / attn_mask.sum(-1)

@@ -109,11 +109,13 @@ def naive_inference(
             x_ind, x_lab, y_ind, y_lab, f_ind, f_lab, torch.ones_like(x_lab)
         )
 
-    print(f"The average absolute distance per scene for X is: {evaluator.get_abs_x()}")
-    print(f"The average absolute distance per scene for Y is: {evaluator.get_abs_y()}")
-    print(f"The average relative distance per scene for X is: {evaluator.get_rel_x()}")
-    print(f"The average relative distance per scene for Y is: {evaluator.get_rel_y()}")
-    print(f"The average accuracy per scene for F is: {evaluator.get_f_acc()}")
+    print(
+        f"The avg ABSOLUTE dist per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"
+    )
+    print(
+        f"The avg RELATIVE dist per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
+    )
+    print(f"The average ACCURACY per scene for F is: {evaluator.get_f_acc()}")
 
 
 def parse_args():

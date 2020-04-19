@@ -208,18 +208,12 @@ def inference(
                     raise ValueError("Can't be possible!")
 
         print(
-            f"The average relative distance per scene for X is: {evaluator.get_abs_x()}"
+            f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"
         )
         print(
-            f"The average relative distance per scene for Y is: {evaluator.get_abs_y()}"
+            f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
-        print(
-            f"The average absolute distance per scene for X is: {evaluator.get_rel_x()}"
-        )
-        print(
-            f"The average absolute distance per scene for Y is: {evaluator.get_rel_y()}"
-        )
-        print(f"The average accuracy for the flip is: {evaluator.get_f_acc()}")
+        print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
         if ref_class is None:
             for pos in pos2groupcount.keys():
                 print(
