@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import logging
 import json
-from scene_layouts.utils import relative_distance, abs_distance
+from scene_layouts.evaluator import Evaluator
 from scene_layouts.datasets import (
     DiscreteInferenceDataset,
     collate_pad_discrete_batch,
@@ -70,12 +70,7 @@ def naive_inference(
             coordinates / visualindex2occurence[visualindex]
         )
 
-    # Metrics
-    total_dist_x_abs = 0
-    total_dist_y_abs = 0
-    total_dist_x_relative = 0
-    total_dist_y_relative = 0
-    total_acc_f = 0
+    evaluator = Evaluator(len(test_dataset))
     for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, f_lab, _, _) in tqdm(test_loader):
         max_ids_text = ids_text.size()[1]
         x_lab = x_lab[:, max_ids_text:]
@@ -110,35 +105,15 @@ def naive_inference(
         else:
             raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
-        total_dist_x_abs += abs_distance(
-            x_ind, x_lab, torch.ones_like(x_lab), check_flipped=True
-        )[0].item()
-        total_dist_y_abs += abs_distance(
-            y_ind, y_lab, torch.ones_like(y_lab), check_flipped=False
-        ).item()
-        total_acc_f += (f_ind == f_lab).sum().item() / f_ind.size()[1]
-        total_dist_x_relative += relative_distance(
-            x_ind, x_lab, torch.ones_like(x_ind)
-        ).item()
-        total_dist_y_relative += relative_distance(
-            y_ind, y_lab, torch.ones_like(x_ind)
-        ).item()
+        evaluator.update_metrics(
+            x_ind, x_lab, y_ind, y_lab, f_ind, f_lab, torch.ones_like(x_lab)
+        )
 
-    print(
-        f"The average absolute distance per scene for X is: {round(total_dist_x_abs/len(test_dataset), 2)}"
-    )
-    print(
-        f"The average absolute distance per scene for Y is: {round(total_dist_y_abs/len(test_dataset), 2)}"
-    )
-    print(
-        f"The average relative distance per scene for X is: {round(total_dist_x_relative/len(test_dataset), 2)}"
-    )
-    print(
-        f"The average relative distance per scene for Y is: {round(total_dist_y_relative/len(test_dataset), 2)}"
-    )
-    print(
-        f"The average accuracy per scene for F is: {round(total_acc_f/len(test_dataset), 2)}"
-    )
+    print(f"The average absolute distance per scene for X is: {evaluator.get_abs_x()}")
+    print(f"The average absolute distance per scene for Y is: {evaluator.get_abs_y()}")
+    print(f"The average relative distance per scene for X is: {evaluator.get_rel_x()}")
+    print(f"The average relative distance per scene for Y is: {evaluator.get_rel_y()}")
+    print(f"The average accuracy per scene for F is: {evaluator.get_f_acc()}")
 
 
 def parse_args():

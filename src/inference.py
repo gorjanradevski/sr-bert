@@ -6,12 +6,7 @@ from tqdm import tqdm
 import logging
 import json
 from transformers import BertConfig
-from scene_layouts.utils import (
-    abs_distance,
-    relative_distance,
-    flip_acc,
-    get_reference_elements,
-)
+from typing import Dict
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
@@ -21,11 +16,33 @@ from scene_layouts.datasets import (
     collate_pad_continuous_batch,
     BUCKET_SIZE,
 )
+from scene_layouts.evaluator import Evaluator
 from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def get_reference_elements(visual2index: Dict[str, int], reference_type: str):
+    if reference_type == "animals":
+        return [v for k, v in visual2index.items() if k.startswith("a")]
+    elif reference_type == "food":
+        return [v for k, v in visual2index.items() if k.startswith("e")]
+    elif reference_type == "toys":
+        return [v for k, v in visual2index.items() if k.startswith("t")]
+    elif reference_type == "people":
+        return [v for k, v in visual2index.items() if k.startswith("hb")]
+    elif reference_type == "sky":
+        return [v for k, v in visual2index.items() if k.startswith("s")]
+    elif reference_type == "large":
+        return [v for k, v in visual2index.items() if k.startswith("p")]
+    elif reference_type == "clothing":
+        return [v for k, v in visual2index.items() if k.startswith("c")]
+    elif reference_type is None:
+        return []
+    else:
+        raise ValueError(f"{reference_type} doesn't exist!")
 
 
 def inference(
@@ -79,11 +96,6 @@ def inference(
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
-    total_dist_x_relative = 0
-    total_dist_y_relative = 0
-    total_dist_x_abs = 0
-    total_dist_y_abs = 0
-    total_acc_f = 0
     logger.warning(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         logger.warning("The model won't use the text to perfrom the inference.")
@@ -100,6 +112,7 @@ def inference(
         "large": 0,
         "food": 0,
     }
+    evaluator = Evaluator(len(test_dataset))
     with torch.no_grad():
         for (
             ids_text,
@@ -147,28 +160,15 @@ def inference(
                 x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
                 y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
-            total_dist_x_relative += relative_distance(
-                x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-            ).item()
-            total_dist_y_relative += relative_distance(
-                y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-            ).item()
-            dist_x_abs, flips = abs_distance(
+            evaluator.update_metrics(
                 x_out,
                 x_lab[:, max_ids_text:],
-                attn_mask[:, max_ids_text:],
-                check_flipped=True,
-            )
-            total_dist_x_abs += dist_x_abs.item()
-            total_dist_y_abs += abs_distance(
                 y_out,
                 y_lab[:, max_ids_text:],
+                f_out,
+                f_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
-                check_flipped=False,
-            ).item()
-            total_acc_f += flip_acc(
-                f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
-            ).item()
+            )
             for i, element in enumerate(order):
                 if i not in pos2groupcount:
                     pos2groupcount[i] = {
@@ -207,24 +207,19 @@ def inference(
                 else:
                     raise ValueError("Can't be possible!")
 
-        total_dist_x_relative /= len(test_dataset)
-        total_dist_y_relative /= len(test_dataset)
-        total_dist_x_abs /= len(test_dataset)
-        total_dist_y_abs /= len(test_dataset)
-        total_acc_f /= len(test_dataset)
         print(
-            f"The average relative distance per scene for X is: {round(total_dist_x_relative, 2)}"
+            f"The average relative distance per scene for X is: {evaluator.get_abs_x()}"
         )
         print(
-            f"The average relative distance per scene for Y is: {round(total_dist_y_relative, 2)}"
+            f"The average relative distance per scene for Y is: {evaluator.get_abs_y()}"
         )
         print(
-            f"The average absolute distance per scene for X is: {round(total_dist_x_abs, 2)}"
+            f"The average absolute distance per scene for X is: {evaluator.get_rel_x()}"
         )
         print(
-            f"The average absolute distance per scene for Y is: {round(total_dist_y_abs, 2)}"
+            f"The average absolute distance per scene for Y is: {evaluator.get_rel_y()}"
         )
-        print(f"The average accuracy for the flip is: {round(total_acc_f * 100, 2)}")
+        print(f"The average accuracy for the flip is: {evaluator.get_f_acc()}")
         if ref_class is None:
             for pos in pos2groupcount.keys():
                 print(
