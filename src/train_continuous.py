@@ -77,7 +77,7 @@ def train(
     )
     # Define training specifics
     config = BertConfig.from_pretrained(bert_name)
-    config.vocab_size = len(visual2index) + 3
+    config.vocab_size = len(visual2index) + 1
     model = nn.DataParallel(SpatialContinuousBert(config, bert_name)).to(device)
     # Loss and optimizer
     criterion_f = nn.NLLLoss()
