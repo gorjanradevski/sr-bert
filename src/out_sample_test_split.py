@@ -6,13 +6,13 @@ from tqdm import tqdm
 def split_dataset(
     load_train_dataset_path: str,
     load_test_dataset_path: str,
-    dump_test_present_dataset_path: str,
-    dump_test_absent_dataset_path: str,
+    dump_test_seen_dataset_path: str,
+    dump_test_unseen_dataset_path: str,
 ):
     train_dataset = json.load(open(load_train_dataset_path))
     test_dataset = json.load(open(load_test_dataset_path))
-    dump_present_test_dataset = []
-    dump_absent_test_dataset = []
+    dump_seen_test_dataset = []
+    dump_unseen_test_dataset = []
     training_relations = set()
     for scene in tqdm(train_dataset):
         for relation_set in scene["relations"].values():
@@ -20,30 +20,27 @@ def split_dataset(
                 training_relations.add(relation)
 
     for scene in tqdm(test_dataset):
-        total_relations = 0
-        train_contained_relations = 0
+        at_least_one = False
         for relation_set in scene["relations"].values():
             for relation in relation_set:
-                if relation in training_relations:
-                    train_contained_relations += 1
-                total_relations += 1
+                if relation not in training_relations:
+                    at_least_one = True
+                    break
 
-        if train_contained_relations / total_relations <= 0.5:
-            dump_absent_test_dataset.append(scene)
+        if at_least_one:
+            dump_unseen_test_dataset.append(scene)
         else:
-            dump_present_test_dataset.append(scene)
+            dump_seen_test_dataset.append(scene)
 
-    print(
-        f"The size of the present relations dataset is {len(dump_present_test_dataset)}"
-    )
-    print(f"Dumping at {dump_test_present_dataset_path}")
-    json.dump(dump_present_test_dataset, open(dump_test_present_dataset_path, "w"))
+    print(f"The size of the seen relations dataset is {len(dump_seen_test_dataset)}")
+    print(f"Dumping at {dump_test_seen_dataset_path}")
+    json.dump(dump_seen_test_dataset, open(dump_test_seen_dataset_path, "w"))
     print("============================================")
     print(
-        f"The size of the absent relations dataset is {len(dump_absent_test_dataset)}"
+        f"The size of the unseen relations dataset is {len(dump_unseen_test_dataset)}"
     )
-    print(f"Dumping at {dump_test_absent_dataset_path}")
-    json.dump(dump_absent_test_dataset, open(dump_test_absent_dataset_path, "w"))
+    print(f"Dumping at {dump_test_unseen_dataset_path}")
+    json.dump(dump_unseen_test_dataset, open(dump_test_unseen_dataset_path, "w"))
 
 
 def parse_args():
@@ -65,16 +62,16 @@ def parse_args():
         help="Path to the full test dataset.",
     )
     parser.add_argument(
-        "--dump_test_present_dataset_path",
+        "--dump_test_seen_dataset_path",
         type=str,
-        default="data/datasets_new/test_dataset_present.json",
-        help="Path to the present relations split of the test dataset.",
+        default="data/datasets_new/test_dataset_seen.json",
+        help="Path to the seen relations split of the test dataset.",
     )
     parser.add_argument(
-        "--dump_test_absent_dataset_path",
+        "--dump_test_unseen_dataset_path",
         type=str,
-        default="data/datasets_new/test_dataset_absent.json",
-        help="Path to the absent relations split of the test dataset.",
+        default="data/datasets_new/test_dataset_unseen.json",
+        help="Path to the unseen relations split of the test dataset.",
     )
 
     return parser.parse_args()
@@ -85,8 +82,8 @@ def main():
     split_dataset(
         args.load_train_dataset_path,
         args.load_test_dataset_path,
-        args.dump_test_present_dataset_path,
-        args.dump_test_absent_dataset_path,
+        args.dump_test_seen_dataset_path,
+        args.dump_test_unseen_dataset_path,
     )
 
 

@@ -8,8 +8,8 @@ import sys
 import logging
 import json
 from transformers import BertConfig
-from scene_layouts.utils import relative_distance, abs_distance, flip_acc
 from scene_layouts.generation_strategies import train_cond_continuous
+from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
 
 from scene_layouts.datasets import (
     ContinuousTrainDataset,
@@ -85,21 +85,22 @@ def train(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
     cur_epoch = 0
-    best_avg_distance = sys.maxsize
+    best_avg_metrics = sys.maxsize
     if checkpoint_path is not None:
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         cur_epoch = checkpoint["epoch"]
-        best_avg_distance = checkpoint["distance"]
+        best_avg_metrics = checkpoint["metrics"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
         del checkpoint
 
         logger.warning(
             f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
         )
-        logger.warning(f"The previous best avg distance was {best_avg_distance}!")
+        logger.warning(f"The previous best avg distance was {best_avg_metrics}!")
 
+    evaluator = Evaluator(len(val_dataset))
     for epoch in range(cur_epoch, epochs):
         logger.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
@@ -139,43 +140,29 @@ def train(
                 )
                 # Get losses for the absolute distances
                 max_ids_text = ids_text.size()[1]
-                x_abs_loss = (
+                abs_loss = (
                     abs_distance(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                )
-                y_abs_loss = (
-                    abs_distance(
                         y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
-                    )
+                    ).sum()
                     / ids_text.size()[0]
                 )
-                x_relative_loss = (
+                relative_loss = (
                     relative_distance(
                         x_scores[:, max_ids_text:],
                         x_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
-                    )
-                    / ids_text.size()[0]
-                ) * 2.0
-                y_relative_loss = (
-                    relative_distance(
                         y_scores[:, max_ids_text:],
                         y_lab[:, max_ids_text:],
                         attn_mask[:, max_ids_text:],
-                    )
+                    ).sum()
                     / ids_text.size()[0]
-                ) * 2.0
+                )
                 f_loss = criterion_f(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
                 # Backward
-                loss = (
-                    x_abs_loss + y_abs_loss + x_relative_loss + y_relative_loss + f_loss
-                )
+                loss = abs_loss + relative_loss + f_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -188,11 +175,7 @@ def train(
         # Set model in evaluation mode
         model.train(False)
         # Reset counters
-        total_dist_x_relative = 0
-        total_dist_y_relative = 0
-        total_dist_x_abs = 0
-        total_dist_y_abs = 0
-        total_acc_f = 0
+        evaluator.reset_metrics()
         with torch.no_grad():
             for (
                 ids_text,
@@ -237,66 +220,39 @@ def train(
                     x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
                     y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
                 )
-                total_dist_x_relative += relative_distance(
-                    x_out, x_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                ).item()
-                total_dist_y_relative += relative_distance(
-                    y_out, y_lab[:, max_ids_text:], attn_mask[:, max_ids_text:]
-                ).item()
-                dist_x_abs, flips = abs_distance(
+                evaluator.update_metrics(
                     x_out,
                     x_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
-                    check_flipped=True,
-                )
-                total_dist_x_abs += dist_x_abs.item()
-                total_dist_y_abs += abs_distance(
                     y_out,
                     y_lab[:, max_ids_text:],
+                    f_out,
+                    f_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
-                    check_flipped=False,
-                ).item()
-                total_acc_f += flip_acc(
-                    f_out, f_lab[:, max_ids_text:], attn_mask[:, max_ids_text:], flips
-                ).item()
+                )
 
-        total_dist_x_relative /= len(val_dataset)
-        total_dist_y_relative /= len(val_dataset)
-        total_dist_x_abs /= len(val_dataset)
-        total_dist_y_abs /= len(val_dataset)
-        total_acc_f = (total_acc_f / len(val_dataset)) * 100
-        cur_avg_distance = round(
-            (
-                total_dist_x_relative
-                + total_dist_y_relative
-                + total_dist_x_abs
-                + total_dist_y_abs
-                - total_acc_f
-            )
-            / 5,
-            2,
-        )
-        if cur_avg_distance < best_avg_distance:
-            best_avg_distance = cur_avg_distance
+        abs_dist = evaluator.get_abs_dist()
+        rel_dist = evaluator.get_rel_dist()
+        f_acc = evaluator.get_f_acc()
+        cur_avg_metrics = (abs_dist + rel_dist + f_acc) / 3
+        if cur_avg_metrics < best_avg_metrics:
+            best_avg_metrics = cur_avg_metrics
             print("====================================================")
-            print("Found new best with average distances per scene:")
-            print(f"- X relative distance: {round(total_dist_x_relative, 2)}")
-            print(f"- Y relative distance: {round(total_dist_y_relative, 2)}")
-            print(f"- X absolute distance: {round(total_dist_x_abs, 2)}")
-            print(f"- Y absolute distance: {round(total_dist_y_abs, 2)}")
-            print(f"- F accuracy: {round(total_acc_f, 2)}")
+            print("Found new best with average metrics per scene:")
+            print(f"- Absolute distance: {abs_dist}")
+            print(f"- Relative distance: {rel_dist}")
+            print(f"- Absolute distance: {f_acc}")
             print(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
             print("====================================================")
         else:
-            print(f"Avg distance on epoch {epoch+1} is: {cur_avg_distance}. ")
+            print(f"Avg metrics on epoch {epoch+1} is: {cur_avg_metrics}. ")
         print("Saving intermediate checkpoint...")
         torch.save(
             {
                 "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "distance": best_avg_distance,
+                "distance": best_avg_metrics,
             },
             intermediate_save_checkpoint_path,
         )

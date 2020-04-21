@@ -162,12 +162,12 @@ def inference(
             )
             evaluator.update_metrics(
                 x_out.cpu(),
-                x_lab[:, max_ids_text:].cpu(),
-                y_out.cpu(),
-                y_lab[:, max_ids_text:].cpu(),
-                f_out.cpu(),
-                f_lab[:, max_ids_text:].cpu(),
-                attn_mask[:, max_ids_text:].cpu(),
+                x_lab[:, max_ids_text:],
+                y_out,
+                y_lab[:, max_ids_text:],
+                f_out,
+                f_lab[:, max_ids_text:],
+                attn_mask[:, max_ids_text:],
             )
             for i, element in enumerate(order):
                 if i not in pos2groupcount:
