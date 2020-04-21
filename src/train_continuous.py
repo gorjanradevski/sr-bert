@@ -240,7 +240,7 @@ def train(
             print("Found new best with average metrics per scene:")
             print(f"- Absolute distance: {abs_dist}")
             print(f"- Relative distance: {rel_dist}")
-            print(f"- Absolute distance: {f_acc}")
+            print(f"- Flip accuracy: {f_acc}")
             print(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
             print("====================================================")

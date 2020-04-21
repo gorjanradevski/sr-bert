@@ -85,7 +85,7 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds - x_labs, 2).float()
     dist_y = torch.pow(y_inds - y_labs, 2).float()
-    dist = torch.sqrt(dist_x + dist_y)
+    dist = torch.sqrt(dist_x + dist_y + (torch.ones_like(dist_x) * 1e-15))
     # Remove the distance for the padding tokens
     dist = dist * attn_mask
     # Remove the distance for the masked tokens (During training)
@@ -102,7 +102,7 @@ def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
     x_dist = torch.pow(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2), 2).float()
     y_dist = torch.pow(torch.unsqueeze(Y, 1) - torch.unsqueeze(Y, 2), 2).float()
 
-    return torch.sqrt(x_dist + y_dist)
+    return torch.sqrt(x_dist + y_dist + (torch.ones_like(x_dist) * 1e-15))
 
 
 def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
