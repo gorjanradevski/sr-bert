@@ -2,7 +2,6 @@ import argparse
 import torch
 from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
-import logging
 import json
 from scene_layouts.evaluator import Evaluator
 from scene_layouts.datasets import (
@@ -12,10 +11,6 @@ from scene_layouts.datasets import (
     Y_MASK,
     BUCKET_SIZE,
 )
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def naive_inference(
@@ -28,7 +23,7 @@ def naive_inference(
     visual2index = json.load(open(visual2index_path))
     train_dataset = DiscreteInferenceDataset(train_dataset_path, visual2index)
     test_dataset = DiscreteInferenceDataset(test_dataset_path, visual2index)
-    logger.info(f"Testing on {len(test_dataset)}")
+    print(f"Testing on {len(test_dataset)}")
     # Create samplers
     train_sampler = SequentialSampler(train_dataset)
     test_sampler = SequentialSampler(test_dataset)

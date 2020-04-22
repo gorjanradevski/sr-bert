@@ -3,7 +3,6 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
-import logging
 import json
 from transformers import BertConfig
 from scene_layouts.generation_strategies import generation_strategy_factory
@@ -19,10 +18,6 @@ from scene_layouts.datasets import (
     BUCKET_SIZE,
 )
 from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def dump_scene(
@@ -72,7 +67,7 @@ def generation(
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.warning(f"--- Using device {device}! ---")
+    print(f"--- Using device {device}! ---")
     # Create dataset
     assert model_type in ["discrete", "continuous"]
     visual2index = json.load(open(visual2index_path))
@@ -86,7 +81,7 @@ def generation(
             test_dataset_path, visual2index, without_text=without_text
         )
     )
-    logger.info(f"Testing on {len(test_dataset)}")
+    print(f"Testing on {len(test_dataset)}")
     # Create sampler
     test_sampler = SequentialSampler(test_dataset)
     # Create loader
@@ -109,10 +104,10 @@ def generation(
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
-    logger.warning(f"Starting generation from checkpoint {checkpoint_path}!")
+    print(f"Starting generation from checkpoint {checkpoint_path}!")
     if without_text:
-        logger.warning("The model won't use the text to generate the scenes.")
-    logger.info(f"Using {gen_strategy}!")
+        print("The model won't use the text to generate the scenes.")
+    print(f"Using {gen_strategy}!")
     index = 0
     with torch.no_grad():
         for (
@@ -140,7 +135,7 @@ def generation(
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out = generation_strategy_factory(
+            x_out, y_out, f_out, [] = generation_strategy_factory(
                 gen_strategy,
                 ids_text,
                 ids_vis,

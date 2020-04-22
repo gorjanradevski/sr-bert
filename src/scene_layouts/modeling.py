@@ -1,12 +1,8 @@
 from torch import nn
 import torch
 from transformers import BertConfig, BertModel, BertOnlyMLMHead
-import logging
 
 from scene_layouts.datasets import X_PAD, Y_PAD, F_PAD
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class SpatialDiscreteBert(nn.Module):

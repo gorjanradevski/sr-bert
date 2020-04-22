@@ -1,11 +1,7 @@
 import json
 import os
 import argparse
-import logging
 from typing import Dict
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def parse_relations(
@@ -147,11 +143,11 @@ def create_datasets(
 
     # Delete the scenes that have no sentence available
     json.dump(train_dataset, open(dump_train_dataset_path, "w"))
-    logger.info(f"Train dataset dumped {dump_train_dataset_path}")
+    print(f"Train dataset dumped {dump_train_dataset_path}")
     json.dump(val_dataset, open(dump_val_dataset_path, "w"))
-    logger.info(f"Val dataset dumped {dump_val_dataset_path}")
+    print(f"Val dataset dumped {dump_val_dataset_path}")
     json.dump(test_dataset, open(dump_test_dataset_path, "w"))
-    logger.info(f"Test dataset dumped {dump_test_dataset_path}")
+    print(f"Test dataset dumped {dump_test_dataset_path}")
     json.dump(dataset, open("data/datasets_new/full_dataset.json", "w"))
 
     # Dump visual2index json file
@@ -173,7 +169,7 @@ def create_datasets(
             index += 1
         json.dump(visual2index, open(dump_visual2index_path, "w"))
 
-        logger.info("Visual2index json file dumped.")
+        print("Visual2index json file dumped.")
 
 
 def parse_args():

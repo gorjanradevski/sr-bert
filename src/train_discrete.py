@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
+from datetime import datetime
 import json
 from transformers import BertConfig
 
@@ -23,10 +24,6 @@ from scene_layouts.generation_strategies import train_cond_discrete
 from scene_layouts.modeling import SpatialDiscreteBert
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
 def train(
     checkpoint_path: str,
     train_dataset_path: str,
@@ -41,18 +38,20 @@ def train(
     clip_val: float,
     save_model_path: str,
     intermediate_save_checkpoint_path: str,
+    log_filepath: str,
 ):
+    logging.basicConfig(level=logging.INFO, filename=log_filepath)
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.warning(f"--- Using device {device}! ---")
+    logging.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
     train_dataset = DiscreteTrainDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
     val_dataset = DiscreteInferenceDataset(val_dataset_path, visual2index)
-    logger.info(f"Training on {len(train_dataset)}")
-    logger.info(f"Validating on {len(val_dataset)}")
+    logging.info(f"Training on {len(train_dataset)}")
+    logging.info(f"Validating on {len(val_dataset)}")
     # Create samplers
     train_sampler = RandomSampler(train_dataset)
     val_sampler = SequentialSampler(val_dataset)
@@ -91,14 +90,15 @@ def train(
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
         del checkpoint
 
-        logger.warning(
+        logging.warning(
             f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
         )
-        logger.warning(f"The previous best avg distance was {best_avg_metrics}!")
+        logging.warning(f"The previous best avg distance was {best_avg_metrics}!")
 
     evaluator = Evaluator(len(val_dataset))
     for epoch in range(cur_epoch, epochs):
-        logger.info(f"Starting epoch {epoch + 1}...")
+        start_time = datetime.now()
+        logging.info(f"Starting epoch {epoch + 1} at {start_time}...")
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
@@ -213,17 +213,17 @@ def train(
         cur_avg_metrics = (abs_dist + rel_dist + f_acc) / 3
         if cur_avg_metrics < best_avg_metrics:
             best_avg_metrics = cur_avg_metrics
-            print("====================================================")
-            print("Found new best with average metrics per scene:")
-            print(f"- Absolute distance: {abs_dist}")
-            print(f"- Relative distance: {rel_dist}")
-            print(f"- Flip accuracy: {f_acc}")
-            print(f"on epoch {epoch+1}. Saving model!!!")
+            logging.info("====================================================")
+            logging.info("Found new best with average metrics per scene:")
+            logging.info(f"- Absolute distance: {abs_dist}")
+            logging.info(f"- Relative distance: {rel_dist}")
+            logging.info(f"- Flip accuracy: {f_acc}")
+            logging.info(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
-            print("====================================================")
+            logging.info("====================================================")
         else:
-            print(f"Avg metrics on epoch {epoch+1} is: {cur_avg_metrics}. ")
-        print("Saving intermediate checkpoint...")
+            logging.info(f"Avg metrics on epoch {epoch+1} is: {cur_avg_metrics}. ")
+        logging.info("Saving intermediate checkpoint...")
         torch.save(
             {
                 "epoch": epoch + 1,
@@ -233,6 +233,7 @@ def train(
             },
             intermediate_save_checkpoint_path,
         )
+        logging.info(f"Finished epoch {epoch+1} in {datetime.now() - start_time}.")
 
 
 def parse_args():
@@ -299,6 +300,12 @@ def parse_args():
         default="bert-base-uncased",
         help="The bert model name.",
     )
+    parser.add_argument(
+        "--log_filepath",
+        type=str,
+        default="condor/discrete.log",
+        help="The logging file.",
+    )
 
     return parser.parse_args()
 
@@ -319,6 +326,7 @@ def main():
         args.clip_val,
         args.save_model_path,
         args.intermediate_save_checkpoint_path,
+        args.log_filepath,
     )
 
 
