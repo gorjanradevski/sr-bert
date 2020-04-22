@@ -161,7 +161,7 @@ def inference(
                 y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
             evaluator.update_metrics(
-                x_out.cpu(),
+                x_out,
                 x_lab[:, max_ids_text:],
                 y_out,
                 y_lab[:, max_ids_text:],

@@ -3,3 +3,4 @@ notebooks/
 models/
 .vscode/
 __pycache__/
+condor/
