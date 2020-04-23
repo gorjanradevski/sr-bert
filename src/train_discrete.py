@@ -40,7 +40,7 @@ def train(
     intermediate_save_checkpoint_path: str,
     log_filepath: str,
 ):
-    logging.basicConfig(level=logging.INFO, filename=log_filepath)
+    logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")

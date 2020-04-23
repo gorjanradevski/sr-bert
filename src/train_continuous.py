@@ -39,7 +39,7 @@ def train(
     intermediate_save_checkpoint_path: str,
     log_filepath: str,
 ):
-    logging.basicConfig(level=logging.INFO, filename=log_filepath)
+    logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
     assert gen_strategy in [
         "one_step_all_continuous",
         "left_to_right_continuous",
@@ -331,7 +331,7 @@ def parse_args():
     parser.add_argument(
         "--log_filepath",
         type=str,
-        default="condor/discrete.log",
+        default="condor/continuous.log",
         help="The logging file.",
     )
 

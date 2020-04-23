@@ -2,6 +2,7 @@ import json
 import argparse
 from tqdm import tqdm
 import re
+import os
 
 # https://academicguides.waldenu.edu/writingcenter/grammar/prepositions
 # https://github.com/gcollell/spatial-commonsense/blob/master/code/pre-process_data.py#L32
@@ -54,37 +55,45 @@ def contains_word(word, text):
     return bool(matches)
 
 
-def split_dataset(
-    load_test_dataset_path: str,
-    dump_test_explicit_dataset_path: str,
-    dump_test_implicit_dataset_path: str,
-    explicit_rels_ratio: float,
-):
+def split_dataset(load_test_dataset_path: str, dump_test_dataset_splits: str):
     test_dataset = json.load(open(load_test_dataset_path))
-    dump_implicit_test_dataset = []
-    dump_explicit_test_dataset = []
+    dataset_splits = {
+        "explicit_0-25": [],
+        "explicit_25-50": [],
+        "explicit_50-75": [],
+        "explicit_75-100": [],
+    }
     for scene in tqdm(test_dataset):
         total = 0
         with_explicit = 0
-        for sentences in scene["sentences"].values():
-            for sentence in sentences:
+        for sentences_set in scene["sentences"].values():
+            for sentence in sentences_set:
                 total += 1
                 for relation in explicit_rels:
                     if contains_word(relation, sentence):
                         with_explicit += 1
                         break
-        if with_explicit / total > explicit_rels_ratio:
-            dump_explicit_test_dataset.append(scene)
-        else:
-            dump_implicit_test_dataset.append(scene)
 
-    print(f"The size of the explicit dataset is {len(dump_explicit_test_dataset)}")
-    print(f"Dumping at {dump_test_explicit_dataset_path}")
-    json.dump(dump_explicit_test_dataset, open(dump_test_explicit_dataset_path, "w"))
-    print("============================================")
-    print(f"The size of the implicit dataset is {len(dump_implicit_test_dataset)}")
-    print(f"Dumping at {dump_test_implicit_dataset_path}")
-    json.dump(dump_implicit_test_dataset, open(dump_test_implicit_dataset_path, "w"))
+        ratio = with_explicit / total
+        if ratio <= 0.25:
+            dataset_splits["explicit_0-25"].append(scene)
+        elif ratio > 0.25 and ratio <= 0.5:
+            dataset_splits["explicit_25-50"].append(scene)
+        elif ratio > 0.5 and ratio <= 0.75:
+            dataset_splits["explicit_50-75"].append(scene)
+        elif ratio > 0.75 and ratio <= 1.0:
+            dataset_splits["explicit_75-100"].append(scene)
+        else:
+            raise ValueError("Impossible!!")
+
+    for split_name, split_scenes in dataset_splits.items():
+        print(f"Dumping {split_name} with {len(split_scenes)} scenes")
+        dump_path = os.path.join(
+            dump_test_dataset_splits, f"test_dataset_{split_name}.json"
+        )
+        print(f"Dumping at {dump_path}")
+        json.dump(split_scenes, open(dump_path, "w"))
+        print("============================================")
 
 
 def parse_args():
@@ -96,26 +105,14 @@ def parse_args():
     parser.add_argument(
         "--load_test_dataset_path",
         type=str,
-        default="data/test_dataset.json",
+        default="data/datasets_new/test_dataset.json",
         help="Path to the full test dataset.",
     )
     parser.add_argument(
-        "--dump_test_explicit_dataset_path",
+        "--dump_test_dataset_splits",
         type=str,
-        default="data/test_dataset_explicit.json",
-        help="Path to the explicit split of the test dataset.",
-    )
-    parser.add_argument(
-        "--dump_test_implicit_dataset_path",
-        type=str,
-        default="data/test_dataset_split.json",
-        help="Path to the implicit split of the test dataset.",
-    )
-    parser.add_argument(
-        "--explicit_rels_ratio",
-        type=float,
-        default=0.5,
-        help="The ratio of explicit relations.",
+        default="data/datasets_new/",
+        help="Where to dump the dataset splits.",
     )
 
     return parser.parse_args()
@@ -123,12 +120,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    split_dataset(
-        args.load_test_dataset_path,
-        args.dump_test_explicit_dataset_path,
-        args.dump_test_implicit_dataset_path,
-        args.explicit_rels_ratio,
-    )
+    split_dataset(args.load_test_dataset_path, args.dump_test_dataset_splits)
 
 
 if __name__ == "__main__":
