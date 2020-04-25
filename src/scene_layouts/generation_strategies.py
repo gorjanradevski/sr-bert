@@ -83,10 +83,12 @@ def human_order_continuous(
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
+    attn_mask[:, max_ids_text:] = 0
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
+        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
@@ -151,84 +153,27 @@ def train_cond_discrete(
     return x_out, y_out, f_out
 
 
-def rev_human_order_discrete(
-    ref_elements,
-    ids_text,
-    ids_vis,
-    pos_text,
-    x_ind,
-    y_ind,
-    f_ind,
-    t_types,
-    attn_mask,
-    model,
-):
-    # Order: Toys, Food, Clothing, Animals, People, Large, Sky
-    # Set all indices to MASK tokens
-    ref_indices = torch.tensor(
-        [
-            True if ids_vis[0, index].item() in ref_elements else False
-            for index in range(ids_vis.size()[1])
-        ]
-    )
-    # Set all indices to MASK tokens
-    x_ind[0, ~ref_indices] = X_MASK
-    y_ind[0, ~ref_indices] = Y_MASK
-    f_ind[0, ~ref_indices] = F_MASK
-    max_ids_text = ids_text.size()[1]
-    for i in range(ids_vis.size()[1] - 1, -1, -1):
-        if ids_vis[0, i].item() in ref_elements:
-            continue
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        f_ind[:, i] = F_MASK
-        x_scores, y_scores, f_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-        )
-        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
-
-    return x_ind, y_ind, f_ind, []
-
-
 def human_order_discrete(
-    ref_elements,
-    ids_text,
-    ids_vis,
-    pos_text,
-    x_ind,
-    y_ind,
-    f_ind,
-    t_types,
-    attn_mask,
-    model,
+    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
-    ref_indices = torch.tensor(
-        [
-            True if ids_vis[0, index].item() in ref_elements else False
-            for index in range(ids_vis.size()[1])
-        ]
-    )
-    # Set all indices to MASK tokens
-    x_ind[0, ~ref_indices] = X_MASK
-    y_ind[0, ~ref_indices] = Y_MASK
-    f_ind[0, ~ref_indices] = F_MASK
+    x_ind[:, :] = X_MASK
+    y_ind[:, :] = Y_MASK
+    f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
+    attn_mask[:, max_ids_text:] = 0
     for i in range(ids_vis.size()[1]):
-        if ids_vis[0, i].item() in ref_elements:
-            continue
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
+        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
+        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
 
     return x_ind, y_ind, f_ind, []
 
@@ -305,22 +250,25 @@ def human_order_discrete_beam_search(
 def random_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
+    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
+    attn_mask[:, max_ids_text:] = 0
     for i in indices:
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
+        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
+        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
 
     return x_ind, y_ind, f_ind, []
 
@@ -334,10 +282,12 @@ def random_continuous(
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
+    attn_mask[:, max_ids_text:] = 0
     for i in indices:
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
+        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
@@ -548,33 +498,11 @@ def generation_strategy_factory(
         )
     elif gen_strategy == "human_order_discrete":
         return human_order_discrete(
-            ref_elements,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            f_ind,
-            t_types,
-            attn_mask,
-            model,
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
     elif gen_strategy == "human_order_discrete_beam_search":
         return human_order_discrete_beam_search(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-        )
-    elif gen_strategy == "rev_human_order_discrete":
-        return rev_human_order_discrete(
-            ref_elements,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            f_ind,
-            t_types,
-            attn_mask,
-            model,
         )
     elif gen_strategy == "highest_confidence":
         return highest_confidence(
