@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import json
 from transformers import BertConfig
-from typing import Dict
 from scene_layouts.generation_strategies import generation_strategy_factory
 
 from scene_layouts.datasets import (
@@ -19,27 +18,6 @@ from scene_layouts.evaluator import Evaluator
 from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
 
 
-def get_reference_elements(visual2index: Dict[str, int], reference_type: str):
-    if reference_type == "animals":
-        return [v for k, v in visual2index.items() if k.startswith("a")]
-    elif reference_type == "food":
-        return [v for k, v in visual2index.items() if k.startswith("e")]
-    elif reference_type == "toys":
-        return [v for k, v in visual2index.items() if k.startswith("t")]
-    elif reference_type == "people":
-        return [v for k, v in visual2index.items() if k.startswith("hb")]
-    elif reference_type == "sky":
-        return [v for k, v in visual2index.items() if k.startswith("s")]
-    elif reference_type == "large":
-        return [v for k, v in visual2index.items() if k.startswith("p")]
-    elif reference_type == "clothing":
-        return [v for k, v in visual2index.items() if k.startswith("c")]
-    elif reference_type is None:
-        return []
-    else:
-        raise ValueError(f"{reference_type} doesn't exist!")
-
-
 def inference(
     checkpoint_path: str,
     model_type: str,
@@ -48,7 +26,6 @@ def inference(
     gen_strategy: str,
     bert_name: str,
     without_text: bool,
-    ref_class: str,
 ):
     # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py
     # Check for CUDA
@@ -57,7 +34,6 @@ def inference(
     # Create dataset
     visual2index = json.load(open(visual2index_path))
     index2visual = {v: k for k, v in visual2index.items()}
-    ref_elements = get_reference_elements(visual2index, ref_class)
     test_dataset = (
         DiscreteInferenceDataset(
             test_dataset_path, visual2index, without_text=without_text
@@ -94,7 +70,6 @@ def inference(
     print(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         print("The model won't use the text to perfrom the inference.")
-    print(f"Reference class is {ref_class}")
     print(f"Using {gen_strategy}!")
     pos2groupcount = {}
     pos2total = {}
@@ -138,7 +113,6 @@ def inference(
             )
             max_ids_text = ids_text.size()[1]
             x_out, y_out, f_out, order = generation_strategy_factory(
-                ref_elements,
                 gen_strategy,
                 ids_text,
                 ids_vis,
@@ -209,22 +183,19 @@ def inference(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
-        if ref_class is None:
-            for pos in pos2groupcount.keys():
+        for pos in pos2groupcount.keys():
+            print(
+                f"================== Percentages for group totals per position {pos} =================="
+            )
+            for group, count in pos2groupcount[pos].items():
                 print(
-                    f"================== Percentages for group totals per position {pos} =================="
+                    f"{group}: {(pos2groupcount[pos][group] / group2total[group]) * 100}"
                 )
-                for group, count in pos2groupcount[pos].items():
-                    print(
-                        f"{group}: {(pos2groupcount[pos][group] / group2total[group]) * 100}"
-                    )
-                print(
-                    f"================== Percentages for position totals per position {pos} =================="
-                )
-                for group, count in pos2groupcount[pos].items():
-                    print(
-                        f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}"
-                    )
+            print(
+                f"================== Percentages for position totals per position {pos} =================="
+            )
+            for group, count in pos2groupcount[pos].items():
+                print(f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}")
 
 
 def parse_args():
@@ -274,9 +245,6 @@ def parse_args():
         default="bert-base-uncased",
         help="The bert model name.",
     )
-    parser.add_argument(
-        "--ref_class", type=str, default=None, help="The reference elements class."
-    )
 
     return parser.parse_args()
 
@@ -291,7 +259,6 @@ def main():
         args.gen_strategy,
         args.bert_name,
         args.without_text,
-        args.ref_class,
     )
 
 

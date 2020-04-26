@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 from torch.nn import functional as F
-from typing import List
 
 from scene_layouts.datasets import X_MASK, Y_MASK, F_MASK
 
@@ -83,12 +82,10 @@ def human_order_continuous(
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
-    attn_mask[:, max_ids_text:] = 0
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
-        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
@@ -162,12 +159,10 @@ def human_order_discrete(
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
-    attn_mask[:, max_ids_text:] = 0
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
-        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
@@ -257,12 +252,10 @@ def random_discrete(
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
-    attn_mask[:, max_ids_text:] = 0
     for i in indices:
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
-        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
@@ -282,53 +275,32 @@ def random_continuous(
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
-    attn_mask[:, max_ids_text:] = 0
     for i in indices:
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
-        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
+        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
+        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
 
     return x_ind, y_ind, f_ind, []
 
 
 def highest_confidence(
-    ref_elements,
-    ids_text,
-    ids_vis,
-    pos_text,
-    x_ind,
-    y_ind,
-    f_ind,
-    t_types,
-    attn_mask,
-    model,
+    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
-    # --- NOTE: Assuming a batch size of 1 all the time ---
     # Set all indices to MASK tokens
-    ref_indices = torch.tensor(
-        [
-            True if ids_vis[0, index].item() in ref_elements else False
-            for index in range(ids_vis.size()[1])
-        ]
-    )
-    # Set all indices to MASK tokens
-    x_ind[0, ~ref_indices] = X_MASK
-    y_ind[0, ~ref_indices] = Y_MASK
-    f_ind[0, ~ref_indices] = F_MASK
+    x_ind[:, :] = X_MASK
+    y_ind[:, :] = Y_MASK
+    f_ind[:, :] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
-        if ids_vis[0, i].item() in ref_elements:
-            continue
         # Obtain model outputs
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
@@ -337,11 +309,6 @@ def highest_confidence(
         x_scores[:, max_ids_text:][pad_indices] = -1e15
         y_scores[:, max_ids_text:][pad_indices] = -1e15
         f_scores[:, max_ids_text:][pad_indices] = -1e15
-        # Set reference indices to low probs so that they are not selected
-        x_scores[:, max_ids_text:][0, ref_indices] = -1e15
-        y_scores[:, max_ids_text:][0, ref_indices] = -1e15
-        f_scores[:, max_ids_text:][0, ref_indices] = -1e15
-
         # If there are indices which are already chosen, change to a small number
         if len(predicted_indices) > 0:
             x_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
@@ -375,37 +342,17 @@ def entropy(inputs: torch.Tensor):
 
 
 def lowest_entropy(
-    ref_elements,
-    ids_text,
-    ids_vis,
-    pos_text,
-    x_ind,
-    y_ind,
-    f_ind,
-    t_types,
-    attn_mask,
-    model,
-    device,
+    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model, device
 ):
-    # --- NOTE: Assuming a batch size of 1 all the time ---
     # Set all indices to MASK tokens
-    ref_indices = torch.tensor(
-        [
-            True if ids_vis[0, index].item() in ref_elements else False
-            for index in range(ids_vis.size()[1])
-        ]
-    )
-    # Set all indices to MASK tokens
-    x_ind[0, ~ref_indices] = X_MASK
-    y_ind[0, ~ref_indices] = Y_MASK
-    f_ind[0, ~ref_indices] = F_MASK
+    x_ind[:, :] = X_MASK
+    y_ind[:, :] = Y_MASK
+    f_ind[:, :] = F_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
-        if ids_vis[0, i].item() in ref_elements:
-            continue
         # Obtain model outputs
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
@@ -418,16 +365,6 @@ def lowest_entropy(
             torch.ones(1, y_scores.size()[-1]).to(device), dim=-1
         )
         f_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
-            torch.ones(1, f_scores.size()[-1]).to(device), dim=-1
-        )
-        # Set ref indices to high entropy values
-        x_scores[:, max_ids_text:][0, ref_indices] = F.log_softmax(
-            torch.ones(1, x_scores.size()[-1]).to(device), dim=-1
-        )
-        y_scores[:, max_ids_text:][0, ref_indices] = F.log_softmax(
-            torch.ones(1, y_scores.size()[-1]).to(device), dim=-1
-        )
-        f_scores[:, max_ids_text:][0, ref_indices] = F.log_softmax(
             torch.ones(1, f_scores.size()[-1]).to(device), dim=-1
         )
         # Set predicted indices to high entropy values
@@ -471,7 +408,6 @@ def lowest_entropy(
 
 
 def generation_strategy_factory(
-    ref_elements: List[int],
     gen_strategy: str,
     ids_text,
     ids_vis,
@@ -506,20 +442,10 @@ def generation_strategy_factory(
         )
     elif gen_strategy == "highest_confidence":
         return highest_confidence(
-            ref_elements,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            f_ind,
-            t_types,
-            attn_mask,
-            model,
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
     elif gen_strategy == "lowest_entropy":
         return lowest_entropy(
-            ref_elements,
             ids_text,
             ids_vis,
             pos_text,
