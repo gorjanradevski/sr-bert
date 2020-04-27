@@ -57,19 +57,19 @@ def parse_args():
     parser.add_argument(
         "--load_train_dataset_path",
         type=str,
-        default="data/datasets_new/train_dataset.json",
+        default="data/train_dataset.json",
         help="Path to the full train dataset.",
     )
     parser.add_argument(
         "--load_test_dataset_path",
         type=str,
-        default="data/datasets_new/test_dataset.json",
+        default="data/test_dataset.json",
         help="Path to the full test dataset.",
     )
     parser.add_argument(
         "--dump_test_dataset_splits",
         type=str,
-        default="data/datasets_new/",
+        default="data/",
         help="Where to dump the dataset splits.",
     )
 

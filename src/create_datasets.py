@@ -67,6 +67,7 @@ def parse_sentences(
 
 
 def create_datasets(
+    dump_full_dataset_path: str,
     dump_train_dataset_path: str,
     dump_val_dataset_path: str,
     dump_test_dataset_path: str,
@@ -148,7 +149,8 @@ def create_datasets(
     print(f"Val dataset dumped {dump_val_dataset_path}")
     json.dump(test_dataset, open(dump_test_dataset_path, "w"))
     print(f"Test dataset dumped {dump_test_dataset_path}")
-    json.dump(dataset, open("data/datasets_new/full_dataset.json", "w"))
+    json.dump(dataset, open(dump_full_dataset_path, "w"))
+    print(f"Full dataset dumped at {dump_full_dataset_path}")
 
     # Dump visual2index json file
     if dump_visual2index_path is not None:
@@ -179,6 +181,12 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(
         description="Creates a train and val json datasets."
+    )
+    parser.add_argument(
+        "--dump_full_dataset_path",
+        type=str,
+        default="data/full_dataset.json",
+        help="Where to dump the train dataset file.",
     )
     parser.add_argument(
         "--dump_train_dataset_path",
@@ -217,6 +225,7 @@ def parse_args():
 def main():
     args = parse_args()
     create_datasets(
+        args.dump_full_dataset_path,
         args.dump_train_dataset_path,
         args.dump_val_dataset_path,
         args.dump_test_dataset_path,

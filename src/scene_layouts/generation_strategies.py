@@ -150,6 +150,46 @@ def train_cond_discrete(
     return x_out, y_out, f_out
 
 
+def qa_discrete(
+    group_inds,
+    ids_text,
+    ids_vis,
+    pos_text,
+    x_ind,
+    y_ind,
+    f_ind,
+    t_types,
+    attn_mask,
+    model,
+):
+    x_out = x_ind.clone()
+    y_out = y_ind.clone()
+    f_out = f_ind.clone()
+    mask = torch.zeros_like(ids_vis)
+    max_ids_text = ids_text.size()[1]
+    for i in range(ids_vis.size()[1]):
+        if ids_vis[0, i].item() not in group_inds:
+            continue
+        mask[0, i] = 1
+        tmp_x = x_ind[:, i].clone()
+        tmp_y = y_ind[:, i].clone()
+        tmp_f = f_ind[:, i].clone()
+        x_ind[:, i] = X_MASK
+        y_ind[:, i] = Y_MASK
+        f_ind[:, i] = F_MASK
+        x_scores, y_scores, f_scores = model(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
+        x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+        y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        f_out[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
+        x_ind[:, i] = tmp_x.clone()
+        y_ind[:, i] = tmp_y.clone()
+        f_ind[:, i] = tmp_f.clone()
+
+    return x_out, y_out, f_out, mask
+
+
 def human_order_discrete(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):

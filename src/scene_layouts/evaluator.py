@@ -134,3 +134,74 @@ def flip_acc(inds, labs, attn_mask, flips):
     inds = torch.abs(inds - flips.unsqueeze(-1))
 
     return (inds == labs).sum(-1).float() / attn_mask.sum(-1)
+
+
+class QaEvaluator:
+    def __init__(self, total_elements):
+        self.total_elements = total_elements
+        self.abs_dist = np.zeros(self.total_elements)
+        self.rel_dist = np.zeros(self.total_elements)
+        self.index = 0
+
+    def update_metrics(self, x_out, x_lab, y_out, y_lab, mask):
+        # Update absolute distance
+        batch_size = x_out.size()[0]
+        self.abs_dist[self.index : self.index + batch_size] = (
+            abs_distance_qa(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
+        )
+        # Update relative distance
+        self.rel_dist[self.index : self.index + batch_size] = (
+            relative_distance_qa(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
+        )
+        self.index += batch_size
+
+    def reset_metrics(self):
+        self.abs_dist = np.zeros(self.total_elements)
+        self.rel_dist = np.zeros(self.total_elements)
+        self.index = 0
+
+    def get_abs_dist(self):
+        return np.round(
+            self.abs_dist.sum() / np.count_nonzero(self.abs_dist), decimals=2
+        )
+
+    def get_rel_dist(self):
+        return np.round(
+            self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=2
+        )
+
+    def get_abs_error_bar(self):
+        return np.round(
+            np.std(self.abs_dist, ddof=1) / np.sqrt(np.count_nonzero(self.abs_dist)),
+            decimals=2,
+        )
+
+    def get_rel_error_bar(self):
+        return np.round(
+            np.std(self.rel_dist, ddof=1) / np.sqrt(np.count_nonzero(self.rel_dist)),
+            decimals=2,
+        )
+
+
+def relative_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
+    dist = torch.abs(
+        elementwise_distances(x_inds, y_inds) - elementwise_distances(x_labs, y_labs)
+    ).float()
+    dist = dist * mask.unsqueeze(-1).expand(dist.size())
+    dist = dist.mean(-1)
+    dist = dist.sum(-1) / (mask.sum(-1) + 1e-15)
+
+    return dist
+
+
+def abs_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
+    # Obtain dist for X and Y
+    dist_x = torch.pow(x_inds - x_labs, 2).float()
+    dist_y = torch.pow(y_inds - y_labs, 2).float()
+    dist = torch.sqrt(dist_x + dist_y + (torch.ones_like(dist_x) * 1e-15))
+    # Remove the distance from the non-target elements
+    dist = dist * mask
+    # Obtain average distance for each scene without considering the padding tokens
+    dist = dist.sum(-1) / (mask.sum(-1) + 1e-15)
+
+    return dist
