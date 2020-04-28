@@ -54,7 +54,7 @@ def highest_confidence_beam(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Set all indices to MASK tokens
-    beam_size = 3
+    beam_size = 5
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
