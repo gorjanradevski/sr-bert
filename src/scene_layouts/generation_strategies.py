@@ -94,10 +94,15 @@ def highest_confidence_beam(
         new_pred_y = pred_y[:, max_ids_text:][batch_indices, index]
         new_pred_f = pred_f[:, max_ids_text:][batch_indices, index]
 
+        # Get clones for the indices
+        x_ind_clone = x_ind.clone()
+        y_ind_clone = y_ind.clone()
+        f_ind_clone = f_ind.clone()
+
         # Change the index with the max probability with its prediction
-        x_ind[batch_indices, index] = new_pred_x
-        y_ind[batch_indices, index] = new_pred_y
-        f_ind[batch_indices, index] = new_pred_f
+        x_ind_clone[batch_indices, index] = new_pred_x
+        y_ind_clone[batch_indices, index] = new_pred_y
+        f_ind_clone[batch_indices, index] = new_pred_f
 
         # Obtain the predicted prob
         pred_prob = (
@@ -108,11 +113,14 @@ def highest_confidence_beam(
 
         cur_beam_hypothesis.append(
             HypothesisHC(
-                pred_prob, x_ind.clone(), y_ind.clone(), f_ind.clone(), [index.tolist()]
+                pred_prob, x_ind_clone, y_ind_clone, f_ind_clone, [index.tolist()]
             )
         )
 
     cur_beam_hypothesis = sorted(cur_beam_hypothesis)[:beam_size]
+    # for h in cur_beam_hypothesis:
+    #     print(h)
+    # print("===============")
 
     for _ in range(ids_vis.size()[1] - 1):
         new_beam_hypothesis = []
@@ -169,6 +177,9 @@ def highest_confidence_beam(
             )
 
         cur_beam_hypothesis = sorted(new_beam_hypothesis)[:beam_size]
+        # for h in cur_beam_hypothesis:
+        #     print(h)
+        # print("===============")
 
     order = [ids_vis[0, index[0]].item() for index in cur_beam_hypothesis[0].predicted]
 
