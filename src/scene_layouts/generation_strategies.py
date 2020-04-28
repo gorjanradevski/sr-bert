@@ -6,7 +6,7 @@ from typing import List
 from scene_layouts.datasets import X_MASK, Y_MASK, F_MASK
 
 
-class HypothesisHC:
+class Hypothesis:
     def __init__(
         self,
         prob: float,
@@ -41,7 +41,7 @@ class HypothesisHC:
         new_predicted = [pred for pred in self.predicted]
         new_predicted.append(index.tolist())
 
-        return HypothesisHC(
+        return Hypothesis(
             self.prob * latest_prob,
             x_inds_clone,
             y_inds_clone,
@@ -112,7 +112,7 @@ def highest_confidence_beam(
         )
 
         cur_beam_hypothesis.append(
-            HypothesisHC(
+            Hypothesis(
                 pred_prob, x_ind_clone, y_ind_clone, f_ind_clone, [index.tolist()]
             )
         )
@@ -139,42 +139,47 @@ def highest_confidence_beam(
             x_scores[:, max_ids_text:][pad_indices] = -1e15
             y_scores[:, max_ids_text:][pad_indices] = -1e15
             f_scores[:, max_ids_text:][pad_indices] = -1e15
-            # If there are indices which are already chosen, change to a small number
-            x_scores[:, max_ids_text:][
-                batch_indices, cur_beam_hypothesis[b].predicted
-            ] = -1e15
-            y_scores[:, max_ids_text:][
-                batch_indices, cur_beam_hypothesis[b].predicted
-            ] = -1e15
-            f_scores[:, max_ids_text:][
-                batch_indices, cur_beam_hypothesis[b].predicted
-            ] = -1e15
+            # Get current predicted indices
+            tmp_predicted_indices = [
+                pred_ind for pred_ind in cur_beam_hypothesis[b].predicted
+            ]
+            for _ in range(ids_vis.size()[1]):
+                # If there are indices which are already chosen, change to a small number
+                x_scores[:, max_ids_text:][batch_indices, tmp_predicted_indices] = -1e15
+                y_scores[:, max_ids_text:][batch_indices, tmp_predicted_indices] = -1e15
+                f_scores[:, max_ids_text:][batch_indices, tmp_predicted_indices] = -1e15
+                # Obtain the probabilities and the prediction for all elements
+                prob_x, pred_x = torch.max(x_scores, dim=-1)
+                prob_y, pred_y = torch.max(y_scores, dim=-1)
+                prob_f, pred_f = torch.max(f_scores, dim=-1)
+                joint_prob = prob_x * prob_y * prob_f
 
-            # Obtain the probabilities and the prediction for all elements
-            prob_x, pred_x = torch.max(x_scores, dim=-1)
-            prob_y, pred_y = torch.max(y_scores, dim=-1)
-            prob_f, pred_f = torch.max(f_scores, dim=-1)
-            joint_prob = prob_x * prob_y * prob_f
+                # Obtain the the indexes of the elements with the highest probability
+                index = torch.argmax(joint_prob[:, max_ids_text:], dim=-1)
 
-            # Obtain the the indexes of the elements with the highest probability
-            index = torch.argmax(joint_prob[:, max_ids_text:], dim=-1)
+                # Remember the chosen indices
+                tmp_predicted_indices.append(index.tolist())
 
-            new_pred_x = pred_x[:, max_ids_text:][batch_indices, index]
-            new_pred_y = pred_y[:, max_ids_text:][batch_indices, index]
-            new_pred_f = pred_f[:, max_ids_text:][batch_indices, index]
+                new_pred_x = pred_x[:, max_ids_text:][batch_indices, index]
+                new_pred_y = pred_y[:, max_ids_text:][batch_indices, index]
+                new_pred_f = pred_f[:, max_ids_text:][batch_indices, index]
 
-            # Obtain the predicted prob
-            pred_prob = (
-                torch.exp(prob_x[:, max_ids_text:][batch_indices, index]).item()
-                * torch.exp(prob_y[:, max_ids_text:][batch_indices, index]).item()
-                * torch.exp(prob_f[:, max_ids_text:][batch_indices, index]).item()
-            )
-
-            new_beam_hypothesis.append(
-                cur_beam_hypothesis[b].expand(
-                    new_pred_x, new_pred_y, new_pred_f, pred_prob, batch_indices, index
+                # Obtain the predicted prob
+                pred_prob = (
+                    torch.exp(prob_x[:, max_ids_text:][batch_indices, index]).item()
+                    * torch.exp(prob_y[:, max_ids_text:][batch_indices, index]).item()
+                    * torch.exp(prob_f[:, max_ids_text:][batch_indices, index]).item()
                 )
-            )
+                new_beam_hypothesis.append(
+                    cur_beam_hypothesis[b].expand(
+                        new_pred_x,
+                        new_pred_y,
+                        new_pred_f,
+                        pred_prob,
+                        batch_indices,
+                        index,
+                    )
+                )
 
         cur_beam_hypothesis = sorted(new_beam_hypothesis)[:beam_size]
         # for h in cur_beam_hypothesis:
@@ -559,10 +564,6 @@ def generation_strategy_factory(
         )
     elif gen_strategy == "human_order_discrete":
         return human_order_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-        )
-    elif gen_strategy == "human_order_discrete_beam_search":
-        return human_order_discrete_beam_search(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
         )
     elif gen_strategy == "highest_confidence_beam":
