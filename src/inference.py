@@ -182,6 +182,7 @@ def inference(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
+        """
         for pos in pos2groupcount.keys():
             print(
                 f"================== Percentages for group totals per position {pos} =================="
@@ -195,6 +196,7 @@ def inference(
             )
             for group, count in pos2groupcount[pos].items():
                 print(f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}")
+        """
 
 
 def parse_args():
