@@ -54,7 +54,7 @@ def highest_confidence_beam(
     ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Set all indices to MASK tokens
-    beam_size = 5
+    beam_size = 3
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
@@ -118,9 +118,6 @@ def highest_confidence_beam(
         )
 
     cur_beam_hypothesis = sorted(cur_beam_hypothesis)[:beam_size]
-    # for h in cur_beam_hypothesis:
-    #     print(h)
-    # print("===============")
 
     for _ in range(ids_vis.size()[1] - 1):
         new_beam_hypothesis = []
@@ -182,9 +179,6 @@ def highest_confidence_beam(
                 )
 
         cur_beam_hypothesis = sorted(new_beam_hypothesis)[:beam_size]
-        # for h in cur_beam_hypothesis:
-        #     print(h)
-        # print("===============")
 
     order = [ids_vis[0, index[0]].item() for index in cur_beam_hypothesis[0].predicted]
 
