@@ -21,16 +21,18 @@ def parse_relations(
     ) as relations:
         for line in relations:
             scene_index = int(line.split("\t")[0])
-            sentence_index = int(line.split("\t")[1])
+            relations_index = (
+                line.split("\t")[1] + "_file" + relations_file_name.split("_")[0][-1]
+            )
             if scene_index not in index2relations:
                 index2relations[scene_index] = {}
-            if sentence_index not in index2relations[scene_index]:
-                index2relations[scene_index][sentence_index] = []
+            if relations_index not in index2relations[scene_index]:
+                index2relations[scene_index][relations_index] = []
             relations = [
                 relation.rstrip("\n").rstrip().lower()
                 for relation in line.split("\t")[2:]
             ]
-            index2relations[scene_index][sentence_index].append("=".join(relations))
+            index2relations[scene_index][relations_index].append("=".join(relations))
 
     return index2relations
 
@@ -53,7 +55,9 @@ def parse_sentences(
             if line == "\n":
                 continue
             scene_index = int(line.split("\t")[0])
-            sentence_index = int(line.split("\t")[1])
+            sentence_index = (
+                line.split("\t")[1] + "_file" + sententences_file_name.split("_")[0][-1]
+            )
             if scene_index not in index2sentences:
                 index2sentences[scene_index] = {}
             if sentence_index not in index2sentences[scene_index]:
@@ -142,7 +146,6 @@ def create_datasets(
     val_dataset.append(same_index_scenes[-2])
     test_dataset.append(same_index_scenes[-1])
 
-    # Delete the scenes that have no sentence available
     json.dump(train_dataset, open(dump_train_dataset_path, "w"))
     print(f"Train dataset dumped {dump_train_dataset_path}")
     json.dump(val_dataset, open(dump_val_dataset_path, "w"))

@@ -111,7 +111,7 @@ def parse_args():
     parser.add_argument(
         "--dump_test_dataset_splits",
         type=str,
-        default="data/",
+        default="data/specific_splits",
         help="Where to dump the dataset splits.",
     )
 

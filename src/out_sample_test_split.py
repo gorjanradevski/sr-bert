@@ -14,18 +14,17 @@ def split_dataset(
     training_relations = set()
     for scene in tqdm(train_dataset):
         for relation_set in scene["relations"].values():
-            for relation in relation_set:
-                training_relations.add(relation)
+            training_relations.add("=".join(relation_set))
 
     dataset_splits = {"0-25": [], "25-50": [], "50-75": [], "75-100": []}
     for scene in tqdm(test_dataset):
         count = 0
         total = 0
         for relation_set in scene["relations"].values():
-            for relation in relation_set:
-                if relation not in training_relations:
-                    count += 1
-                total += 1
+            relation = "=".join(relation_set)
+            if relation not in training_relations:
+                count += 1
+            total += 1
         ratio = count / total
         if ratio <= 0.25:
             dataset_splits["0-25"].append(scene)
@@ -41,7 +40,7 @@ def split_dataset(
     for split_name, split_scenes in dataset_splits.items():
         print(f"Dumping {split_name} with {len(split_scenes)} scenes")
         dump_path = os.path.join(
-            dump_test_dataset_splits, f"test_dataset_{split_name}.json"
+            dump_test_dataset_splits, f"test_dataset_unseen_{split_name}.json"
         )
         print(f"Dumping at {dump_path}")
         json.dump(split_scenes, open(dump_path, "w"))
@@ -69,7 +68,7 @@ def parse_args():
     parser.add_argument(
         "--dump_test_dataset_splits",
         type=str,
-        default="data/",
+        default="data/specific_splits",
         help="Where to dump the dataset splits.",
     )
 
