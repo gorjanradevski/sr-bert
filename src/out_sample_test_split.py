@@ -2,6 +2,7 @@ import json
 import argparse
 from tqdm import tqdm
 import os
+from copy import deepcopy
 
 
 def split_dataset(
@@ -16,24 +17,24 @@ def split_dataset(
         for relation_set in scene["relations"].values():
             training_relations.add("=".join(relation_set))
 
-    dataset_splits = {"0-25": [], "25-50": [], "50-75": [], "75-100": []}
+    dataset_splits = {"more_than_2": [], "more_than_2_filtered": [], "less_than_2": []}
     for scene in tqdm(test_dataset):
         count = 0
-        total = 0
+        # total = 0
         for relation_set in scene["relations"].values():
             relation = "=".join(relation_set)
             if relation not in training_relations:
                 count += 1
-            total += 1
-        ratio = count / total
-        if ratio <= 0.25:
-            dataset_splits["0-25"].append(scene)
-        elif ratio > 0.25 and ratio <= 0.5:
-            dataset_splits["25-50"].append(scene)
-        elif ratio > 0.5 and ratio <= 0.75:
-            dataset_splits["50-75"].append(scene)
-        elif ratio > 0.75 and ratio <= 1.0:
-            dataset_splits["75-100"].append(scene)
+        if count >= 2:
+            dataset_splits["more_than_2"].append(scene)
+            copy_scene = deepcopy(scene)
+            for name, relation_set in copy_scene["relations"].items():
+                relation = "=".join(relation_set)
+                if relation in training_relations:
+                    copy_scene["sentences"].pop(name)
+            dataset_splits["more_than_2_filtered"].append(copy_scene)
+        elif count < 2:
+            dataset_splits["less_than_2"].append(scene)
         else:
             raise ValueError("Impossible!!")
 
