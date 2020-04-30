@@ -17,22 +17,30 @@ def split_dataset(
         for relation_set in scene["relations"].values():
             training_relations.add("=".join(relation_set))
 
-    dataset_splits = {"more_than_2": [], "more_than_2_filtered": [], "less_than_2": []}
+    dataset_splits = {
+        "more_than_2": [],
+        "more_than_2_oo_sample": [],
+        "more_than_2_in_sample": [],
+        "less_than_2": [],
+    }
     for scene in tqdm(test_dataset):
         count = 0
-        # total = 0
         for relation_set in scene["relations"].values():
             relation = "=".join(relation_set)
             if relation not in training_relations:
                 count += 1
         if count >= 2:
             dataset_splits["more_than_2"].append(scene)
-            copy_scene = deepcopy(scene)
-            for name, relation_set in copy_scene["relations"].items():
+            out_scene = deepcopy(scene)
+            in_scene = deepcopy(scene)
+            for name, relation_set in scene["relations"].items():
                 relation = "=".join(relation_set)
                 if relation in training_relations:
-                    copy_scene["sentences"].pop(name)
-            dataset_splits["more_than_2_filtered"].append(copy_scene)
+                    out_scene["sentences"].pop(name)
+                else:
+                    in_scene["sentences"].pop(name)
+            dataset_splits["more_than_2_oo_sample"].append(out_scene)
+            dataset_splits["more_than_2_in_sample"].append(in_scene)
         elif count < 2:
             dataset_splits["less_than_2"].append(scene)
         else:
