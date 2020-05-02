@@ -138,7 +138,13 @@ def inference(
                 y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
             evaluator.update_metrics(
-                x_out, x_lab[:, max_ids_text:], y_out, y_lab[:, max_ids_text:], mask
+                x_out,
+                x_lab[:, max_ids_text:],
+                y_out,
+                y_lab[:, max_ids_text:],
+                f_out,
+                f_lab[:, max_ids_text:],
+                mask,
             )
 
         print(
@@ -146,6 +152,9 @@ def inference(
         )
         print(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
+        )
+        print(
+            f"The avg FLIP accc per scene is: {evaluator.get_f_acc()} +/- {evaluator.get_f_acc_error_bar()}"
         )
 
 
