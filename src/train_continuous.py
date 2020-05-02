@@ -39,7 +39,11 @@ def train(
     intermediate_save_checkpoint_path: str,
     log_filepath: str,
 ):
-    logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
+    # Set up logging
+    if log_filepath:
+        logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
+    else:
+        logging.basicConfig(level=logging.INFO)
     assert gen_strategy in [
         "one_step_all_continuous",
         "left_to_right_continuous",
@@ -232,7 +236,7 @@ def train(
         abs_dist = evaluator.get_abs_dist()
         rel_dist = evaluator.get_rel_dist()
         f_acc = evaluator.get_f_acc()
-        cur_avg_metrics = (abs_dist + rel_dist + f_acc) / 3
+        cur_avg_metrics = (abs_dist + rel_dist - f_acc) / 3
         if cur_avg_metrics < best_avg_metrics:
             best_avg_metrics = cur_avg_metrics
             logging.info("====================================================")
@@ -329,10 +333,7 @@ def parse_args():
         help="The bert model name.",
     )
     parser.add_argument(
-        "--log_filepath",
-        type=str,
-        default="condor/continuous.log",
-        help="The logging file.",
+        "--log_filepath", type=str, default=None, help="The logging file."
     )
 
     return parser.parse_args()

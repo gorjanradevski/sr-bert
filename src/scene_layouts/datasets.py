@@ -33,31 +33,27 @@ class TrainDataset:
     def move_scene(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
         # Left of right; True - left, False - right
         if torch.bernoulli(torch.tensor([0.5])).bool().item():
-            # If left, check whether there is an index at 0; quit if there is
-            if (x_indexes == 0).sum().bool().item():
-                x_indexes_moved = x_indexes.clone()
-            else:
-                x_indexes_moved = x_indexes.clone() - 1
+            # If left, find the minimum movement
+            move_magnitude = torch.randint(0, x_indexes.min().item() + 1, size=(1,))
+            x_indexes_moved = x_indexes.clone() - move_magnitude
         else:
-            # If right, check whether there is an index at max; quit if there is
-            if (x_indexes == 500 / BUCKET_SIZE).sum().bool().item():
-                x_indexes_moved = x_indexes.clone()
-            else:
-                x_indexes_moved = x_indexes.clone() + 1
+            # If right, find the maximum movement
+            move_magnitude = torch.randint(
+                0, 500 // BUCKET_SIZE - x_indexes.max().item() + 1, size=(1,)
+            )
+            x_indexes_moved = x_indexes.clone() + move_magnitude
 
         # Up or down; True - up, False - down
         if torch.bernoulli(torch.tensor([0.5])).bool().item():
-            # If top, check whether there is an index at 0; quit if there is
-            if (y_indexes == 0).sum().bool().item():
-                y_indexes_moved = y_indexes.clone()
-            else:
-                y_indexes_moved = y_indexes.clone() - 1
+            # If top, find the minimum movement
+            move_magnitude = torch.randint(0, y_indexes.min().item() + 1, size=(1,))
+            y_indexes_moved = y_indexes.clone() - move_magnitude
         else:
-            # If down, check whether there is an index at max; quit if there is
-            if (y_indexes == 400 / BUCKET_SIZE).sum().bool().item():
-                y_indexes_moved = y_indexes.clone()
-            else:
-                y_indexes_moved = y_indexes.clone() + 1
+            # If down, find the maximum movement
+            move_magnitude = torch.randint(
+                0, 400 // BUCKET_SIZE - y_indexes.max().item() + 1, size=(1,)
+            )
+            y_indexes_moved = y_indexes.clone() + move_magnitude
 
         return x_indexes_moved, y_indexes_moved
 
