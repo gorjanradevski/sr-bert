@@ -134,7 +134,7 @@ def generation(
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out, [] = generation_strategy_factory(
+            x_out, y_out, f_out, _ = generation_strategy_factory(
                 gen_strategy,
                 ids_text,
                 ids_vis,

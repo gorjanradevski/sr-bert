@@ -7,10 +7,12 @@ from copy import deepcopy
 
 def split_dataset(
     load_train_dataset_path: str,
+    load_val_dataset_path: str,
     load_test_dataset_path: str,
     dump_test_dataset_splits: str,
 ):
     train_dataset = json.load(open(load_train_dataset_path))
+    val_dataset = json.load(open(load_val_dataset_path))
     test_dataset = json.load(open(load_test_dataset_path))
     training_relations = set()
     for scene in tqdm(train_dataset):
@@ -55,6 +57,40 @@ def split_dataset(
         json.dump(split_scenes, open(dump_path, "w"))
         print("============================================")
 
+    # Filtering the training and validation set
+    more_than_2_relations = set()
+    for scene in tqdm(dataset_splits["more_than_2"]):
+        for relation_set in scene["relations"].values():
+            more_than_2_relations.add("=".join(relation_set))
+
+    # Filtering the training set
+    dump_train_filtered_path = os.path.join(
+        dump_test_dataset_splits, "train_dataset_filtered.json"
+    )
+    dump_filtered_set(more_than_2_relations, train_dataset, dump_train_filtered_path)
+
+    # Filtering the validation set
+    dump_val_filtered_path = os.path.join(
+        dump_test_dataset_splits, "val_dataset_filtered.json"
+    )
+    dump_filtered_set(more_than_2_relations, val_dataset, dump_val_filtered_path)
+
+
+def dump_filtered_set(relations, dataset, dump_path):
+    filtered_dataset = []
+    for scene in dataset:
+        filtered_scene = deepcopy(scene)
+        for name, relation_set in filtered_scene["relations"].items():
+            relation = "=".join(relation_set)
+            if relation in relations:
+                filtered_scene["sentences"].pop(name)
+
+        filtered_dataset.append(filtered_scene)
+
+    print(f"Dumping at {dump_path}")
+    json.dump(filtered_dataset, open(dump_path, "w"))
+    print("============================================")
+
 
 def parse_args():
     """Parse command line arguments.
@@ -67,6 +103,12 @@ def parse_args():
         type=str,
         default="data/train_dataset.json",
         help="Path to the full train dataset.",
+    )
+    parser.add_argument(
+        "--load_val_dataset_path",
+        type=str,
+        default="data/val_dataset.json",
+        help="Path to the full val dataset.",
     )
     parser.add_argument(
         "--load_test_dataset_path",
@@ -88,6 +130,7 @@ def main():
     args = parse_args()
     split_dataset(
         args.load_train_dataset_path,
+        args.load_val_dataset_path,
         args.load_test_dataset_path,
         args.dump_test_dataset_splits,
     )
