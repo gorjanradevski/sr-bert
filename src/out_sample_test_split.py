@@ -38,9 +38,11 @@ def split_dataset(
             for name, relation_set in scene["relations"].items():
                 relation = "=".join(relation_set)
                 if relation in training_relations:
+                    out_scene["relations"].pop(name)
                     out_scene["sentences"].pop(name)
                 else:
                     in_scene["sentences"].pop(name)
+                    in_scene["relations"].pop(name)
             dataset_splits["more_than_2_oo_sample"].append(out_scene)
             dataset_splits["more_than_2_in_sample"].append(in_scene)
         elif count < 2:
@@ -80,10 +82,11 @@ def dump_filtered_set(relations, dataset, dump_path):
     filtered_dataset = []
     for scene in dataset:
         filtered_scene = deepcopy(scene)
-        for name, relation_set in filtered_scene["relations"].items():
+        for name, relation_set in scene["relations"].items():
             relation = "=".join(relation_set)
             if relation in relations:
                 filtered_scene["sentences"].pop(name)
+                filtered_scene["relations"].pop(name)
 
         filtered_dataset.append(filtered_scene)
 
