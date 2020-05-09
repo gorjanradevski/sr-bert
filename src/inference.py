@@ -26,6 +26,8 @@ def inference(
     gen_strategy: str,
     bert_name: str,
     without_text: bool,
+    abs_dump_path: str,
+    rel_dump_path: str,
 ):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -182,6 +184,7 @@ def inference(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
+        evaluator.dump_results(abs_dump_path, rel_dump_path)
         for pos in pos2groupcount.keys():
             print(
                 f"================== Percentages for group totals per position {pos} =================="
@@ -244,6 +247,18 @@ def parse_args():
         default="bert-base-uncased",
         help="The bert model name.",
     )
+    parser.add_argument(
+        "--abs_dump_path",
+        type=str,
+        default="data/results/abs.npy",
+        help="Location of the absolute distance results.",
+    )
+    parser.add_argument(
+        "--rel_dump_path",
+        type=str,
+        default="data/results/rel.npy",
+        help="Location of the relative distance results.",
+    )
 
     return parser.parse_args()
 
@@ -258,6 +273,8 @@ def main():
         args.gen_strategy,
         args.bert_name,
         args.without_text,
+        args.abs_dump_path,
+        args.rel_dump_path
     )
 
 

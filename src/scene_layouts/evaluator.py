@@ -53,6 +53,10 @@ class Evaluator:
             np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=2
         )
 
+    def dump_results(self, abs_dump_path: str, rel_dump_path: str):
+        np.save(abs_dump_path, self.abs_dist, allow_pickle=False)
+        np.save(rel_dump_path, self.rel_dist, allow_pickle=False)
+
 
 def flip_scene(labs: torch.Tensor):
     # Get flipped indices
