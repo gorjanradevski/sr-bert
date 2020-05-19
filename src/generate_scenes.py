@@ -134,8 +134,9 @@ def generation(
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out, _ = generation_strategy_factory(
+            x_out, y_out, f_out = generation_strategy_factory(
                 gen_strategy,
+                model_type,
                 ids_text,
                 ids_vis,
                 pos_text,
@@ -156,7 +157,7 @@ def generation(
             ]
             # Dump original
             dump_image_path = os.path.join(
-                dump_scenes_path, str(index) + "_original.png"
+                dump_scenes_path, str(index) + f"-{gen_strategy}" + "-original.png"
             )
             dump_scene(
                 pngs_path,
@@ -169,7 +170,7 @@ def generation(
             )
             # Dump model generated
             dump_image_path = os.path.join(
-                dump_scenes_path, str(index) + "_generated.png"
+                dump_scenes_path, str(index) + f"-{gen_strategy}" + "-generated.png"
             )
             dump_scene(
                 pngs_path,
@@ -180,7 +181,7 @@ def generation(
                 dump_image_path,
                 bucketized=True,
             )
-            index += 1
+            index += 10
 
 
 def parse_args():
@@ -219,7 +220,7 @@ def parse_args():
     parser.add_argument(
         "--gen_strategy",
         type=str,
-        default="left_to_right_discrete",
+        default="human_order_discrete",
         help="How to generate the positions during inference",
     )
     parser.add_argument(

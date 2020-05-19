@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 import json
 from transformers import BertConfig
-from scene_layouts.generation_strategies import train_cond_continuous
+from scene_layouts.generation_strategies import train_cond
 from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
 
 from scene_layouts.datasets import (
@@ -209,7 +209,8 @@ def train(
                     attn_mask.to(device),
                 )
                 max_ids_text = ids_text.size()[1]
-                x_out, y_out, f_out = train_cond_continuous(
+                x_out, y_out, f_out = train_cond(
+                    "continuous",
                     ids_text,
                     ids_vis,
                     pos_text,

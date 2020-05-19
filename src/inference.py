@@ -34,7 +34,6 @@ def inference(
     print(f"--- Using device {device}! ---")
     # Create dataset
     visual2index = json.load(open(visual2index_path))
-    index2visual = {v: k for k, v in visual2index.items()}
     test_dataset = (
         DiscreteInferenceDataset(
             test_dataset_path, visual2index, without_text=without_text
@@ -72,17 +71,6 @@ def inference(
     if without_text:
         print("The model won't use the text to perfrom the inference.")
     print(f"Using {gen_strategy}!")
-    pos2groupcount = {}
-    pos2total = {}
-    group2total = {
-        "sky": 0,
-        "people": 0,
-        "toys": 0,
-        "clothing": 0,
-        "animals": 0,
-        "large": 0,
-        "food": 0,
-    }
     evaluator = Evaluator(len(test_dataset))
     with torch.no_grad():
         for (
@@ -113,8 +101,9 @@ def inference(
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out, order = generation_strategy_factory(
+            x_out, y_out, f_out = generation_strategy_factory(
                 gen_strategy,
+                model_type,
                 ids_text,
                 ids_vis,
                 pos_text,
@@ -139,43 +128,6 @@ def inference(
                 f_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
             )
-            for i, element in enumerate(order):
-                if i not in pos2groupcount:
-                    pos2groupcount[i] = {
-                        "sky": 0,
-                        "people": 0,
-                        "toys": 0,
-                        "clothing": 0,
-                        "animals": 0,
-                        "large": 0,
-                        "food": 0,
-                    }
-                if i not in pos2total:
-                    pos2total[i] = 0
-                pos2total[i] += 1
-                if index2visual[element].startswith("a"):
-                    pos2groupcount[i]["animals"] += 1
-                    group2total["animals"] += 1
-                elif index2visual[element].startswith("e"):
-                    pos2groupcount[i]["food"] += 1
-                    group2total["food"] += 1
-                elif index2visual[element].startswith("t"):
-                    pos2groupcount[i]["toys"] += 1
-                    group2total["toys"] += 1
-                elif index2visual[element].startswith("hb"):
-                    pos2groupcount[i]["people"] += 1
-                    group2total["people"] += 1
-                elif index2visual[element].startswith("s"):
-                    pos2groupcount[i]["sky"] += 1
-                    group2total["sky"] += 1
-                elif index2visual[element].startswith("p"):
-                    pos2groupcount[i]["large"] += 1
-                    group2total["large"] += 1
-                elif index2visual[element].startswith("c"):
-                    pos2groupcount[i]["clothing"] += 1
-                    group2total["clothing"] += 1
-                else:
-                    raise ValueError("Can't be possible!")
 
         print(
             f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"
@@ -184,20 +136,8 @@ def inference(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
-        evaluator.dump_results(abs_dump_path, rel_dump_path)
-        for pos in pos2groupcount.keys():
-            print(
-                f"================== Percentages for group totals per position {pos} =================="
-            )
-            for group, count in pos2groupcount[pos].items():
-                print(
-                    f"{group}: {(pos2groupcount[pos][group] / group2total[group]) * 100}"
-                )
-            print(
-                f"================== Percentages for position totals per position {pos} =================="
-            )
-            for group, count in pos2groupcount[pos].items():
-                print(f"{group}: {(pos2groupcount[pos][group] / pos2total[pos]) * 100}")
+        if abs_dump_path is not None and rel_dump_path is not None:
+            evaluator.dump_results(abs_dump_path, rel_dump_path)
 
 
 def parse_args():
@@ -250,13 +190,13 @@ def parse_args():
     parser.add_argument(
         "--abs_dump_path",
         type=str,
-        default="data/results/abs.npy",
+        default=None,
         help="Location of the absolute distance results.",
     )
     parser.add_argument(
         "--rel_dump_path",
         type=str,
-        default="data/results/rel.npy",
+        default=None,
         help="Location of the relative distance results.",
     )
 
@@ -274,7 +214,7 @@ def main():
         args.bert_name,
         args.without_text,
         args.abs_dump_path,
-        args.rel_dump_path
+        args.rel_dump_path,
     )
 
 

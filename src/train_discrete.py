@@ -20,7 +20,7 @@ from scene_layouts.datasets import (
     BUCKET_SIZE,
 )
 from scene_layouts.evaluator import Evaluator
-from scene_layouts.generation_strategies import train_cond_discrete
+from scene_layouts.generation_strategies import train_cond
 from scene_layouts.modeling import SpatialDiscreteBert
 
 
@@ -186,7 +186,8 @@ def train(
                     attn_mask.to(device),
                 )
                 max_ids_text = ids_text.size()[1]
-                x_out, y_out, f_out = train_cond_discrete(
+                x_out, y_out, f_out = train_cond(
+                    "discrete",
                     ids_text,
                     ids_vis,
                     pos_text,

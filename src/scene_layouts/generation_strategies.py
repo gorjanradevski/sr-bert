@@ -180,18 +180,15 @@ def highest_confidence_beam(
 
         cur_beam_hypothesis = sorted(new_beam_hypothesis)[:beam_size]
 
-    order = [ids_vis[0, index[0]].item() for index in cur_beam_hypothesis[0].predicted]
-
     return (
         cur_beam_hypothesis[0].x_inds,
         cur_beam_hypothesis[0].y_inds,
         cur_beam_hypothesis[0].f_inds,
-        order,
     )
 
 
-def one_step_all_continuous(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+def one_step_all(
+    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
@@ -201,33 +198,22 @@ def one_step_all_continuous(
     x_scores, y_scores, f_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
     )
-    x_ind[:, :] = torch.ceil(x_scores[:, max_ids_text:])
-    y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
+    if mode == "discrete":
+        x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
+        y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
+    elif mode == "continuous":
+        x_ind[:, :] = torch.ceil(x_scores[:, max_ids_text:])
+        y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
+    else:
+        raise ValueError("Invalid mode!")
+
     f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
 
-    return x_ind, y_ind, f_ind, []
+    return x_ind, y_ind, f_ind
 
 
-def one_step_all_discrete(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
-    max_ids_text = ids_text.size()[1]
-    x_scores, y_scores, f_scores = model(
-        ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-    )
-    x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
-    y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
-    f_ind[:, :] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:]
-
-    return x_ind, y_ind, f_ind, []
-
-
-def human_order_continuous(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+def human_order(
+    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
@@ -242,15 +228,53 @@ def human_order_continuous(
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
+        if mode == "continuous":
+            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
+            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+        elif mode == "discrete":
+            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        else:
+            raise ValueError("Invalid mode!")
+
+        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
+
+    return x_ind, y_ind, f_ind
+
+
+def human_order_no_look_ahead(
+    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+):
+    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
+    # Set all indices to MASK tokens
+    x_ind[:, :] = X_MASK
+    y_ind[:, :] = Y_MASK
+    f_ind[:, :] = F_MASK
+    max_ids_text = ids_text.size()[1]
+    attn_mask[:, max_ids_text:] = 0
+    for i in range(ids_vis.size()[1]):
+        x_ind[:, i] = X_MASK
+        y_ind[:, i] = Y_MASK
+        f_ind[:, i] = F_MASK
+        attn_mask[:, max_ids_text + i] = 1
+        x_scores, y_scores, f_scores = model(
+            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+        )
+        if mode == "discrete":
+            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        elif mode == "continuous":
+            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
+            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
+        else:
+            raise ValueError("Invalid mode!")
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
 
-    return x_ind, y_ind, f_ind, []
+    return x_ind, y_ind, f_ind
 
 
-def train_cond_continuous(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+def train_cond(
+    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     x_out = torch.ones_like(x_ind)
     y_out = torch.ones_like(y_ind)
@@ -266,35 +290,14 @@ def train_cond_continuous(
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_out[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-        y_out[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
-        f_out[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
-        x_ind[:, i] = tmp_x.clone()
-        y_ind[:, i] = tmp_y.clone()
-        f_ind[:, i] = tmp_f.clone()
-
-    return x_out, y_out, f_out
-
-
-def train_cond_discrete(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-):
-    x_out = torch.ones_like(x_ind)
-    y_out = torch.ones_like(y_ind)
-    f_out = torch.ones_like(f_ind)
-    max_ids_text = ids_text.size()[1]
-    for i in range(ids_vis.size()[1]):
-        tmp_x = x_ind[:, i].clone()
-        tmp_y = y_ind[:, i].clone()
-        tmp_f = f_ind[:, i].clone()
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        f_ind[:, i] = F_MASK
-        x_scores, y_scores, f_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-        )
-        x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-        y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
+        if mode == "discrete":
+            x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
+            y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
+        elif mode == "continuous":
+            x_out[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
+            y_out[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
+        else:
+            raise ValueError("Invalid mode!")
         f_out[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text:][:, i]
         x_ind[:, i] = tmp_x.clone()
         y_ind[:, i] = tmp_y.clone()
@@ -343,31 +346,8 @@ def qa_discrete(
     return x_out, y_out, f_out, mask
 
 
-def human_order_discrete(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-):
-    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    f_ind[:, :] = F_MASK
-    max_ids_text = ids_text.size()[1]
-    for i in range(ids_vis.size()[1]):
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        f_ind[:, i] = F_MASK
-        x_scores, y_scores, f_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
-        )
-        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
-        f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
-
-    return x_ind, y_ind, f_ind, []
-
-
-def random_discrete(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+def random_order(
+    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
@@ -383,34 +363,49 @@ def random_discrete(
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-        y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        if mode == "discrete":
+            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        elif mode == "continuous":
+            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
+            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+        else:
+            raise ValueError("Invalid mode!")
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
 
-    return x_ind, y_ind, f_ind, []
+    return x_ind, y_ind, f_ind
 
 
-def random_continuous(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+def random_order_no_look_ahead(
+    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
 ):
+    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
     x_ind[:, :] = X_MASK
     y_ind[:, :] = Y_MASK
     f_ind[:, :] = F_MASK
     max_ids_text = ids_text.size()[1]
+    attn_mask[:, max_ids_text:] = 0
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
     for i in indices:
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         f_ind[:, i] = F_MASK
+        attn_mask[:, max_ids_text + i] = 1
         x_scores, y_scores, f_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
         )
-        x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
-        y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+        if mode == "discrete":
+            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
+            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+        elif mode == "continuous":
+            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
+            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+        else:
+            raise ValueError("Invalid mode!")
         f_ind[:, i] = torch.argmax(f_scores, dim=-1)[:, max_ids_text + i]
 
-    return x_ind, y_ind, f_ind, []
+    return x_ind, y_ind, f_ind
 
 
 def highest_confidence(
@@ -456,9 +451,7 @@ def highest_confidence(
         y_ind[batch_indices, index] = pred_y[:, max_ids_text:][batch_indices, index]
         f_ind[batch_indices, index] = pred_f[:, max_ids_text:][batch_indices, index]
 
-    order = [ids_vis[0, index[0]].item() for index in predicted_indices]
-
-    return x_ind, y_ind, f_ind, order
+    return x_ind, y_ind, f_ind
 
 
 def entropy(inputs: torch.Tensor):
@@ -526,13 +519,12 @@ def lowest_entropy(
             batch_indices, index
         ]
 
-    order = [ids_vis[0, index[0]].item() for index in predicted_indices]
-
-    return x_ind, y_ind, f_ind, order
+    return x_ind, y_ind, f_ind
 
 
 def generation_strategy_factory(
     gen_strategy: str,
+    mode: str,
     ids_text,
     ids_vis,
     pos_text,
@@ -544,21 +536,44 @@ def generation_strategy_factory(
     model,
     device,
 ):
-    if gen_strategy == "one_step_all_continuous":
-        return one_step_all_continuous(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    if gen_strategy == "one_step_all":
+        return one_step_all(
+            mode,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
-    elif gen_strategy == "one_step_all_discrete":
-        return one_step_all_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    elif gen_strategy == "human_order":
+        return human_order(
+            mode,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
-    elif gen_strategy == "human_order_continuous":
-        return human_order_continuous(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-        )
-    elif gen_strategy == "human_order_discrete":
-        return human_order_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    elif gen_strategy == "human_order_nla":
+        return human_order_no_look_ahead(
+            mode,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
     elif gen_strategy == "highest_confidence_beam":
         return highest_confidence_beam(
@@ -581,21 +596,44 @@ def generation_strategy_factory(
             model,
             device,
         )
-    elif gen_strategy == "random_discrete":
-        return random_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    elif gen_strategy == "random_order":
+        return random_order(
+            mode,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
-    elif gen_strategy == "random_continuous":
-        return random_continuous(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    elif gen_strategy == "random_order_nla":
+        return random_order_no_look_ahead(
+            mode,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
-    elif gen_strategy == "train_cond_discrete":
-        return train_cond_discrete(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
-        )
-    elif gen_strategy == "train_cond_continuous":
-        return train_cond_continuous(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask, model
+    elif gen_strategy == "train_cond":
+        return train_cond(
+            mode,
+            ids_text,
+            ids_vis,
+            pos_text,
+            x_ind,
+            y_ind,
+            f_ind,
+            t_types,
+            attn_mask,
+            model,
         )
     else:
         raise ValueError(f"{gen_strategy} doesn't exist!")
