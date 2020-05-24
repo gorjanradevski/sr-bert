@@ -13,7 +13,7 @@ from transformers import BertConfig
 from scene_layouts.datasets import (
     DiscreteTrainDataset,
     DiscreteInferenceDataset,
-    collate_pad_discrete_batch,
+    collate_pad_batch,
     X_PAD,
     Y_PAD,
     F_PAD,
@@ -65,13 +65,13 @@ def train(
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_discrete_batch,
+        collate_fn=collate_pad_batch,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_discrete_batch,
+        collate_fn=collate_pad_batch,
         sampler=val_sampler,
     )
     # Define training specifics

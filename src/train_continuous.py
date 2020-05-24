@@ -15,7 +15,7 @@ from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
 from scene_layouts.datasets import (
     ContinuousTrainDataset,
     ContinuousInferenceDataset,
-    collate_pad_continuous_batch,
+    collate_pad_batch,
     F_PAD,
     BUCKET_SIZE,
 )
@@ -69,13 +69,13 @@ def train(
         batch_size=batch_size,
         sampler=train_sampler,
         num_workers=4,
-        collate_fn=collate_pad_continuous_batch,
+        collate_fn=collate_pad_batch,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         num_workers=4,
-        collate_fn=collate_pad_continuous_batch,
+        collate_fn=collate_pad_batch,
         sampler=val_sampler,
     )
     # Define training specifics

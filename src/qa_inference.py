@@ -10,9 +10,8 @@ from typing import Dict
 from scene_layouts.generation_strategies import qa_discrete
 from scene_layouts.datasets import (
     DiscreteInferenceDataset,
-    collate_pad_discrete_batch,
     ContinuousInferenceDataset,
-    collate_pad_continuous_batch,
+    collate_pad_batch,
     BUCKET_SIZE,
 )
 from scene_layouts.evaluator import QaEvaluator
@@ -72,9 +71,7 @@ def inference(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_discrete_batch
-        if model_type == "discrete"
-        else collate_pad_continuous_batch,
+        collate_fn=collate_pad_batch,
         sampler=test_sampler,
     )
     # Prepare model
