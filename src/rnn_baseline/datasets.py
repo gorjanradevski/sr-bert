@@ -46,7 +46,7 @@ class Dataset:
     def tokenize_sentence(self, sentence):
         return [
             self.word2index[word]
-            if self.word2freq[word] >= MAX_FREQ
+            if word in self.word2index
             else self.word2index["<unk>"]
             for word in nltk.word_tokenize(sentence)
         ]
