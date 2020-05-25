@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Subset
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm import tqdm
 import sys
 import logging
@@ -44,9 +44,8 @@ def train(
     # Create datasets
     visual2index = json.load(open(visual2index_path))
     word2freq, word2index, index2word = build_vocab(json.load(open(train_dataset_path)))
-    train_dataset = Subset(
-        TrainDataset(train_dataset_path, word2freq, word2index, visual2index),
-        [0, 1, 2, 3],
+    train_dataset = TrainDataset(
+        train_dataset_path, word2freq, word2index, visual2index
     )
     val_dataset = InferenceDataset(
         val_dataset_path, word2freq, word2index, visual2index
@@ -127,7 +126,7 @@ def train(
                     relative_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
-                f_loss = criterion_f(f_scores.view(-1, 2), f_lab.view(-1))
+                f_loss = criterion_f(f_scores.view(-1, 2), f_lab.view(-1)) * 10
                 # Backward
                 loss = abs_loss + relative_loss + f_loss
                 loss.backward()
