@@ -2,7 +2,7 @@ from torch.utils.data import Dataset as TorchDataset
 import json
 import nltk
 from tqdm import tqdm
-from typing import Dict
+from typing import Dict, Tuple
 import torch
 import numpy as np
 from scene_layouts.datasets import X_MASK, Y_MASK, BUCKET_SIZE
@@ -147,3 +147,38 @@ class InferenceDataset(Dataset, TorchDataset):
         f_labels = torch.tensor([element["flip"] for element in scene_elements])
 
         return input_ids_sentence, input_ids_visuals, x_labels, y_labels, f_labels
+
+
+def collate_pad_batch(
+    batch: Tuple[
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+    ]
+):
+    ids_text, ids_vis, x_labs, y_labs, f_labs = zip(*batch)
+    # Pad the sentences
+    ids_text = torch.nn.utils.rnn.pad_sequence(
+        ids_text, batch_first=True, padding_value=0
+    )
+    # Pad the visuals
+    ids_vis = torch.nn.utils.rnn.pad_sequence(
+        ids_vis, batch_first=True, padding_value=0
+    )
+    # Pad the visual mappings and prepare final mappings
+    x_labs = torch.nn.utils.rnn.pad_sequence(
+        x_labs, batch_first=True, padding_value=-100
+    )
+    y_labs = torch.nn.utils.rnn.pad_sequence(
+        y_labs, batch_first=True, padding_value=-100
+    )
+    f_labs = torch.nn.utils.rnn.pad_sequence(
+        f_labs, batch_first=True, padding_value=-100
+    )
+    # Obtain the padding mask
+    mask = ids_vis.clone()
+    mask[torch.where(mask > 0)] = 1
+
+    return ids_text, ids_vis, x_labs, y_labs, f_labs, mask

@@ -408,7 +408,7 @@ def collate_pad_batch(
     )
     y_lab = torch.cat(
         [
-            text_labs.float() if x_lab[0].dtype == torch.float32 else text_labs,
+            text_labs.float() if y_lab[0].dtype == torch.float32 else text_labs,
             torch.nn.utils.rnn.pad_sequence(
                 y_lab, batch_first=True, padding_value=-100
             ),
