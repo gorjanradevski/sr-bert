@@ -9,14 +9,14 @@ import logging
 from datetime import datetime
 import json
 from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
-from rnn_baseline.modeling import ArrangementsDecoder
+from rnn_baseline.modeling import ArrangementsContinuousDecoder
 from rnn_baseline.datasets import (
     TrainDataset,
     InferenceDataset,
     collate_pad_batch,
     build_vocab,
 )
-from scene_layouts.datasets import BUCKET_SIZE
+from scene_layouts.datasets import BUCKET_SIZE, F_PAD
 
 
 def train(
@@ -74,7 +74,7 @@ def train(
     num_cliparts = len(visual2index) + 1
     vocab_size = len(word2index)
     model = nn.DataParallel(
-        ArrangementsDecoder(num_cliparts, vocab_size, 256, device)
+        ArrangementsContinuousDecoder(num_cliparts, vocab_size, 256, device)
     ).to(device)
     # Loss and optimizer
     criterion_f = nn.NLLLoss()
@@ -126,7 +126,7 @@ def train(
                     relative_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
-                f_loss = criterion_f(f_scores.view(-1, 2), f_lab.view(-1)) * 10
+                f_loss = criterion_f(f_scores.view(-1, F_PAD - 1), f_lab.view(-1)) * 10
                 # Backward
                 loss = abs_loss + relative_loss + f_loss
                 loss.backward()

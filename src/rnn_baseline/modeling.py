@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from scene_layouts.datasets import X_PAD, Y_PAD
+from scene_layouts.datasets import X_PAD, Y_PAD, F_PAD
 
 
 class TextEncoder(nn.Module):
@@ -44,7 +44,7 @@ class TextAttention(nn.Module):
         return z
 
 
-class ArrangementsDecoder(nn.Module):
+class ArrangementsContinuousDecoder(nn.Module):
     def __init__(self, num_cliparts, vocab_size, hidden_size, device):
         super().__init__()
         self.clip_embed = nn.Embedding(num_cliparts, hidden_size)
@@ -54,7 +54,7 @@ class ArrangementsDecoder(nn.Module):
         self.text_enc = TextEncoder(vocab_size, hidden_size)
         self.text_attn = TextAttention(hidden_size)
         self.xy_head = nn.Linear(hidden_size * 4, 2)
-        self.f_head = nn.Linear(hidden_size * 4, 2)
+        self.f_head = nn.Linear(hidden_size * 4, F_PAD - 1)
         self.device = device
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
@@ -71,6 +71,43 @@ class ArrangementsDecoder(nn.Module):
             hidden = torch.cat([clip_enc[:, i, :], attn], dim=-1).to(self.device)
             x_outs[:, i] = torch.sigmoid(self.xy_head(hidden))[:, 0] * (X_PAD - 2)
             y_outs[:, i] = torch.sigmoid(self.xy_head(hidden))[:, 1] * (Y_PAD - 2)
-            f_outs[:, i] = self.log_softmax(self.f_head(hidden))
+            f_outs[:, i, :] = self.log_softmax(self.f_head(hidden))
+
+        return x_outs, y_outs, f_outs
+
+
+class ArrangementsDiscreteDecoder(nn.Module):
+    def __init__(self, num_cliparts, vocab_size, hidden_size, device):
+        super().__init__()
+        self.clip_embed = nn.Embedding(num_cliparts, hidden_size)
+        self.clip_rnn = nn.GRU(
+            hidden_size, hidden_size, bidirectional=True, batch_first=True
+        )
+        self.text_enc = TextEncoder(vocab_size, hidden_size)
+        self.text_attn = TextAttention(hidden_size)
+        self.x_head = nn.Linear(hidden_size * 4, X_PAD - 1)
+        self.y_head = nn.Linear(hidden_size * 4, Y_PAD - 1)
+        self.f_head = nn.Linear(hidden_size * 4, F_PAD - 1)
+        self.device = device
+        self.log_softmax = nn.LogSoftmax(dim=-1)
+
+    def forward(self, text_inds, clip_inds):
+        text_enc, _ = self.text_enc(text_inds)
+        clip_enc, _ = self.clip_rnn(self.clip_embed(clip_inds))
+        x_outs = torch.zeros(clip_inds.size()[0], clip_inds.size()[1], X_PAD - 1).to(
+            self.device
+        )
+        y_outs = torch.zeros(clip_inds.size()[0], clip_inds.size()[1], Y_PAD - 1).to(
+            self.device
+        )
+        f_outs = torch.zeros(clip_inds.size()[0], clip_inds.size()[1], F_PAD - 1).to(
+            self.device
+        )
+        for i in range(clip_enc.size()[1]):
+            attn = self.text_attn(clip_enc[:, i, :], text_enc)
+            hidden = torch.cat([clip_enc[:, i, :], attn], dim=-1).to(self.device)
+            x_outs[:, i, :] = self.log_softmax(self.x_head(hidden))
+            y_outs[:, i, :] = self.log_softmax(self.y_head(hidden))
+            f_outs[:, i, :] = self.log_softmax(self.f_head(hidden))
 
         return x_outs, y_outs, f_outs
