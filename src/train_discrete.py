@@ -16,7 +16,7 @@ from scene_layouts.datasets import (
     collate_pad_batch,
     X_PAD,
     Y_PAD,
-    F_PAD,
+    O_PAD,
     BUCKET_SIZE,
 )
 from scene_layouts.evaluator import Evaluator
@@ -112,38 +112,38 @@ def train(
                 pos_text,
                 x_ind,
                 y_ind,
-                f_ind,
+                o_ind,
                 x_lab,
                 y_lab,
-                f_lab,
+                o_lab,
                 t_types,
                 attn_mask,
             ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
                     pos_text.to(device),
                     x_ind.to(device),
                     y_ind.to(device),
-                    f_ind.to(device),
+                    o_ind.to(device),
                     x_lab.to(device),
                     y_lab.to(device),
-                    f_lab.to(device),
+                    o_lab.to(device),
                     t_types.to(device),
                     attn_mask.to(device),
                 )
-                x_scores, y_scores, f_scores = model(
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask
+                x_scores, y_scores, o_scores = model(
+                    ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
                 )
                 # Get losses as classification losses
                 x_loss = criterion(x_scores.view(-1, X_PAD + 1), x_lab.view(-1))
                 y_loss = criterion(y_scores.view(-1, Y_PAD + 1), y_lab.view(-1))
-                f_loss = criterion(f_scores.view(-1, F_PAD + 1), f_lab.view(-1))
+                o_loss = criterion(o_scores.view(-1, O_PAD + 1), o_lab.view(-1))
                 # Comibine losses and backward
-                loss = x_loss + y_loss + f_loss
+                loss = x_loss + y_loss + o_loss
                 loss.backward()
                 # Clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -164,36 +164,36 @@ def train(
                 pos_text,
                 x_ind,
                 y_ind,
-                f_ind,
+                o_ind,
                 x_lab,
                 y_lab,
-                f_lab,
+                o_lab,
                 t_types,
                 attn_mask,
             ) in tqdm(val_loader):
                 # forward
-                ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+                ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
                     pos_text.to(device),
                     x_ind.to(device),
                     y_ind.to(device),
-                    f_ind.to(device),
+                    o_ind.to(device),
                     x_lab.to(device),
                     y_lab.to(device),
-                    f_lab.to(device),
+                    o_lab.to(device),
                     t_types.to(device),
                     attn_mask.to(device),
                 )
                 max_ids_text = ids_text.size()[1]
-                x_out, y_out, f_out = train_cond(
+                x_out, y_out, o_out = train_cond(
                     "discrete",
                     ids_text,
                     ids_vis,
                     pos_text,
                     x_ind,
                     y_ind,
-                    f_ind,
+                    o_ind,
                     t_types,
                     attn_mask,
                     model,
@@ -207,22 +207,22 @@ def train(
                     x_lab[:, max_ids_text:],
                     y_out,
                     y_lab[:, max_ids_text:],
-                    f_out,
-                    f_lab[:, max_ids_text:],
+                    o_out,
+                    o_lab[:, max_ids_text:],
                     attn_mask[:, max_ids_text:],
                 )
 
         abs_dist = evaluator.get_abs_dist()
         rel_dist = evaluator.get_rel_dist()
-        f_acc = evaluator.get_f_acc()
-        cur_avg_metrics = (abs_dist + rel_dist - f_acc) / 3
+        o_acc = evaluator.get_o_acc()
+        cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:
             best_avg_metrics = cur_avg_metrics
             logging.info("====================================================")
             logging.info("Found new best with average metrics per scene:")
             logging.info(f"- Absolute distance: {abs_dist}")
             logging.info(f"- Relative distance: {rel_dist}")
-            logging.info(f"- Flip accuracy: {f_acc}")
+            logging.info(f"- Flip accuracy: {o_acc}")
             logging.info(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
             logging.info("====================================================")

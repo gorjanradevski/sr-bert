@@ -8,10 +8,10 @@ class Evaluator:
         self.total_elements = total_elements
         self.abs_dist = np.zeros(self.total_elements)
         self.rel_dist = np.zeros(self.total_elements)
-        self.f_acc = np.zeros(self.total_elements)
+        self.o_acc = np.zeros(self.total_elements)
         self.index = 0
 
-    def update_metrics(self, x_out, x_lab, y_out, y_lab, f_out, f_lab, attn_mask):
+    def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask):
         # Update absolute distance
         batch_size = x_out.size()[0]
         abs_dist, flips = abs_distance(
@@ -23,15 +23,15 @@ class Evaluator:
             relative_distance(x_out, x_lab, y_out, y_lab, attn_mask).cpu().numpy()
         )
         # Update flip accuracy
-        self.f_acc[self.index : self.index + batch_size] += (
-            flip_acc(f_out, f_lab, attn_mask, flips).cpu().numpy()
+        self.o_acc[self.index : self.index + batch_size] += (
+            flip_acc(o_out, o_lab, attn_mask, flips).cpu().numpy()
         )
         self.index += batch_size
 
     def reset_metrics(self):
         self.abs_dist = np.zeros(self.total_elements)
         self.rel_dist = np.zeros(self.total_elements)
-        self.f_acc = np.zeros(self.total_elements)
+        self.o_acc = np.zeros(self.total_elements)
         self.index = 0
 
     def get_abs_dist(self):
@@ -40,8 +40,8 @@ class Evaluator:
     def get_rel_dist(self):
         return np.round(self.rel_dist.mean(), decimals=2)
 
-    def get_f_acc(self):
-        return np.round(self.f_acc.mean() * 100, decimals=2)
+    def get_o_acc(self):
+        return np.round(self.o_acc.mean() * 100, decimals=2)
 
     def get_abs_error_bar(self):
         return np.round(
@@ -148,7 +148,7 @@ class QaEvaluator:
         self.flip_acc = np.zeros(self.total_elements)
         self.index = 0
 
-    def update_metrics(self, x_out, x_lab, y_out, y_lab, f_out, f_lab, mask):
+    def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, mask):
         # Update absolute distance
         batch_size = x_out.size()[0]
         self.abs_dist[self.index : self.index + batch_size] = (
@@ -159,7 +159,7 @@ class QaEvaluator:
             relative_distance_qa(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
         )
         self.flip_acc[self.index : self.index + batch_size] = (
-            flip_acc_qa(f_out, f_lab, mask).cpu().numpy()
+            flip_acc_qa(o_out, o_lab, mask).cpu().numpy()
         )
 
         self.index += batch_size
@@ -180,7 +180,7 @@ class QaEvaluator:
             self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=2
         )
 
-    def get_f_acc(self):
+    def get_o_acc(self):
         return np.round(
             (self.flip_acc.sum() / np.count_nonzero(self.flip_acc)) * 100, decimals=2
         )
@@ -197,7 +197,7 @@ class QaEvaluator:
             decimals=2,
         )
 
-    def get_f_acc_error_bar(self):
+    def get_o_acc_error_bar(self):
         return np.round(
             (np.std(self.flip_acc, ddof=1) / np.sqrt(np.count_nonzero(self.flip_acc)))
             * 100,

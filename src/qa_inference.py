@@ -96,36 +96,36 @@ def inference(
             pos_text,
             x_ind,
             y_ind,
-            f_ind,
+            o_ind,
             x_lab,
             y_lab,
-            f_lab,
+            o_lab,
             t_types,
             attn_mask,
         ) in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 pos_text.to(device),
                 x_ind.to(device),
                 y_ind.to(device),
-                f_ind.to(device),
+                o_ind.to(device),
                 x_lab.to(device),
                 y_lab.to(device),
-                f_lab.to(device),
+                o_lab.to(device),
                 t_types.to(device),
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out, mask = qa_discrete(
+            x_out, y_out, o_out, mask = qa_discrete(
                 group_elements,
                 ids_text,
                 ids_vis,
                 pos_text,
                 x_ind,
                 y_ind,
-                f_ind,
+                o_ind,
                 t_types,
                 attn_mask,
                 model,
@@ -139,8 +139,8 @@ def inference(
                 x_lab[:, max_ids_text:],
                 y_out,
                 y_lab[:, max_ids_text:],
-                f_out,
-                f_lab[:, max_ids_text:],
+                o_out,
+                o_lab[:, max_ids_text:],
                 mask,
             )
 
@@ -151,7 +151,7 @@ def inference(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(
-            f"The avg FLIP accc per scene is: {evaluator.get_f_acc()} +/- {evaluator.get_f_acc_error_bar()}"
+            f"The avg FLIP accc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
         )
 
 

@@ -76,29 +76,29 @@ def inference(
             pos_text,
             x_ind,
             y_ind,
-            f_ind,
+            o_ind,
             x_lab,
             y_lab,
-            f_lab,
+            o_lab,
             t_types,
             attn_mask,
         ) in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab, t_types, attn_mask = (
+            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 pos_text.to(device),
                 x_ind.to(device),
                 y_ind.to(device),
-                f_ind.to(device),
+                o_ind.to(device),
                 x_lab.to(device),
                 y_lab.to(device),
-                f_lab.to(device),
+                o_lab.to(device),
                 t_types.to(device),
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out = generation_strategy_factory(
+            x_out, y_out, o_out = generation_strategy_factory(
                 gen_strategy,
                 model_type,
                 ids_text,
@@ -106,7 +106,7 @@ def inference(
                 pos_text,
                 x_ind,
                 y_ind,
-                f_ind,
+                o_ind,
                 t_types,
                 attn_mask,
                 model,
@@ -121,8 +121,8 @@ def inference(
                 x_lab[:, max_ids_text:],
                 y_out,
                 y_lab[:, max_ids_text:],
-                f_out,
-                f_lab[:, max_ids_text:],
+                o_out,
+                o_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
             )
 
@@ -132,7 +132,7 @@ def inference(
         print(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
-        print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
+        print(f"The avg ACCURACY for the flip is: {evaluator.get_o_acc()}")
         if abs_dump_path is not None and rel_dump_path is not None:
             evaluator.dump_results(abs_dump_path, rel_dump_path)
 

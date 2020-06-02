@@ -56,17 +56,17 @@ def inference(
     print(f"Starting inference from checkpoint {checkpoint_path}!")
     evaluator = Evaluator(len(test_dataset))
     with torch.no_grad():
-        for ids_text, ids_vis, x_lab, y_lab, f_lab, attn_mask in tqdm(test_loader):
+        for ids_text, ids_vis, x_lab, y_lab, o_lab, attn_mask in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, x_lab, y_lab, f_lab, attn_mask = (
+            ids_text, ids_vis, x_lab, y_lab, o_lab, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 x_lab.to(device),
                 y_lab.to(device),
-                f_lab.to(device),
+                o_lab.to(device),
                 attn_mask.to(device),
             )
-            x_scores, y_scores, f_scores = model(ids_text, ids_vis)
+            x_scores, y_scores, o_scores = model(ids_text, ids_vis)
             if model_type == "discrete":
                 x_out, y_out = (
                     torch.argmax(x_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
@@ -79,9 +79,9 @@ def inference(
                 )
             else:
                 raise ValueError("Invalid model type!")
-            f_out = torch.argmax(f_scores, dim=-1)
+            o_out = torch.argmax(o_scores, dim=-1)
             evaluator.update_metrics(
-                x_out, x_lab, y_out, y_lab, f_out, f_lab, attn_mask
+                x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask
             )
 
         print(
@@ -90,7 +90,7 @@ def inference(
         print(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
-        print(f"The avg ACCURACY for the flip is: {evaluator.get_f_acc()}")
+        print(f"The avg ACCURACY for the flip is: {evaluator.get_o_acc()}")
         if abs_dump_path is not None and rel_dump_path is not None:
             evaluator.dump_results(abs_dump_path, rel_dump_path)
 

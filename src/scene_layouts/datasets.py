@@ -10,8 +10,8 @@ X_MASK = 500 // BUCKET_SIZE + 1
 X_PAD = 500 // BUCKET_SIZE + 2
 Y_MASK = 400 // BUCKET_SIZE + 1
 Y_PAD = 400 // BUCKET_SIZE + 2
-F_MASK = 2
-F_PAD = 3
+O_MASK = 2
+O_PAD = 3
 SCENE_WIDTH_TRAIN = 500 // BUCKET_SIZE
 SCENE_WIDTH_TEST = 500
 
@@ -26,8 +26,8 @@ class TrainDataset:
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     @staticmethod
-    def flip_scene(x_indexes: torch.Tensor, f_indexes: torch.Tensor):
-        return torch.abs(SCENE_WIDTH_TRAIN - x_indexes), torch.abs(1 - f_indexes)
+    def flip_scene(x_indexes: torch.Tensor, o_indexes: torch.Tensor):
+        return torch.abs(SCENE_WIDTH_TRAIN - x_indexes), torch.abs(1 - o_indexes)
 
     @staticmethod
     def move_scene(x_indexes: torch.Tensor, y_indexes: torch.Tensor):
@@ -101,37 +101,37 @@ class TrainDataset:
             dtype=torch.long,
         )
         # Obtain flips
-        f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
+        o_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
         # Flip scene with 50% prob
         if torch.bernoulli(torch.tensor([0.5])).bool().item():
-            x_indexes, f_indexes = self.flip_scene(x_indexes, f_indexes)
+            x_indexes, o_indexes = self.flip_scene(x_indexes, o_indexes)
 
         # Move scene with 50% prob
         if torch.bernoulli(torch.tensor([0.5])).bool().item():
             x_indexes, y_indexes = self.move_scene(x_indexes, y_indexes)
 
-        return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes
+        return input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, o_indexes
 
-    def masking(self, x_indexes, y_indexes, f_indexes):
+    def masking(self, x_indexes, y_indexes, o_indexes):
         # https://github.com/huggingface/transformers/blob/master/examples/run_lm_finetuning.py#L169
         # Create clones for everything
         x_labels = x_indexes.clone()
         y_labels = y_indexes.clone()
-        f_labels = f_indexes.clone()
+        o_labels = o_indexes.clone()
         # Get probability matrix
         probability_matrix = torch.full(x_indexes.shape, self.mask_probability)
         masked_indices = torch.bernoulli(probability_matrix).bool()
         # We only compute loss on masked tokens
         x_labels[~masked_indices] = -100
         y_labels[~masked_indices] = -100
-        f_labels[~masked_indices] = -100
+        o_labels[~masked_indices] = -100
         # 80% we replace with a mask token
         indices_replaced = (
             torch.bernoulli(torch.full(x_indexes.shape, 0.8)).bool() & masked_indices
         )
         x_indexes[indices_replaced] = X_MASK
         y_indexes[indices_replaced] = Y_MASK
-        f_indexes[indices_replaced] = F_MASK
+        o_indexes[indices_replaced] = O_MASK
         # 10% of the time, we replace masked input tokens with random word
         indices_random = (
             torch.bernoulli(torch.full(x_labels.shape, 0.5)).bool()
@@ -145,13 +145,13 @@ class TrainDataset:
             low=0, high=Y_MASK - 1, size=y_labels.shape, dtype=torch.long
         )
         random_f = torch.randint(
-            low=0, high=F_MASK - 1, size=f_labels.shape, dtype=torch.long
+            low=0, high=O_MASK - 1, size=o_labels.shape, dtype=torch.long
         )
         x_indexes[indices_random] = random_x[indices_random]
         y_indexes[indices_random] = random_y[indices_random]
-        f_indexes[indices_random] = random_f[indices_random]
+        o_indexes[indices_random] = random_f[indices_random]
 
-        return x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels
+        return x_indexes, y_indexes, o_indexes, x_labels, y_labels, o_labels
 
 
 class InferenceDataset:
@@ -232,14 +232,14 @@ class InferenceDataset:
             dtype=torch.long,
         )
         # Obtain flips
-        f_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
+        o_indexes = torch.tensor([element["flip"] for element in scene["elements"]])
 
         return (
             input_ids_sentence,
             input_ids_visuals,
             x_indexes,
             y_indexes,
-            f_indexes,
+            o_indexes,
             x_labels,
             y_labels,
         )
@@ -255,13 +255,13 @@ class ContinuousTrainDataset(TrainDataset, TorchDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int):
-        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes = super().__getitem__(
+        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, o_indexes = super().__getitem__(
             idx
         )
 
         # Mask visual tokens
-        x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels = self.masking(
-            x_indexes, y_indexes, f_indexes
+        x_indexes, y_indexes, o_indexes, x_labels, y_labels, o_labels = self.masking(
+            x_indexes, y_indexes, o_indexes
         )
 
         return (
@@ -269,10 +269,10 @@ class ContinuousTrainDataset(TrainDataset, TorchDataset):
             input_ids_visuals,
             x_indexes,
             y_indexes,
-            f_indexes,
+            o_indexes,
             x_labels.float(),
             y_labels.float(),
-            f_labels,
+            o_labels,
         )
 
 
@@ -286,7 +286,7 @@ class ContinuousInferenceDataset(InferenceDataset, TorchDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int):
-        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes, x_labels, y_labels = super().__getitem__(
+        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, o_indexes, x_labels, y_labels = super().__getitem__(
             idx
         )
 
@@ -295,10 +295,10 @@ class ContinuousInferenceDataset(InferenceDataset, TorchDataset):
             input_ids_visuals,
             x_indexes,
             y_indexes,
-            f_indexes,
+            o_indexes,
             x_labels.float(),
             y_labels.float(),
-            f_indexes,
+            o_indexes,
         )
 
 
@@ -312,13 +312,13 @@ class DiscreteTrainDataset(TrainDataset, TorchDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int):
-        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes = super().__getitem__(
+        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, o_indexes = super().__getitem__(
             idx
         )
 
         # Mask visual tokens
-        x_indexes, y_indexes, f_indexes, x_labels, y_labels, f_labels = self.masking(
-            x_indexes, y_indexes, f_indexes
+        x_indexes, y_indexes, o_indexes, x_labels, y_labels, o_labels = self.masking(
+            x_indexes, y_indexes, o_indexes
         )
 
         return (
@@ -326,10 +326,10 @@ class DiscreteTrainDataset(TrainDataset, TorchDataset):
             input_ids_visuals,
             x_indexes,
             y_indexes,
-            f_indexes,
+            o_indexes,
             x_labels,
             y_labels,
-            f_labels,
+            o_labels,
         )
 
 
@@ -343,7 +343,7 @@ class DiscreteInferenceDataset(InferenceDataset, TorchDataset):
         return super().__len__()
 
     def __getitem__(self, idx: int):
-        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, f_indexes, x_labels, y_labels = super().__getitem__(
+        input_ids_sentence, input_ids_visuals, x_indexes, y_indexes, o_indexes, x_labels, y_labels = super().__getitem__(
             idx
         )
 
@@ -352,10 +352,10 @@ class DiscreteInferenceDataset(InferenceDataset, TorchDataset):
             input_ids_visuals,
             x_indexes,
             y_indexes,
-            f_indexes,
+            o_indexes,
             x_labels,
             y_labels,
-            f_indexes,
+            o_indexes,
         )
 
 
@@ -371,7 +371,7 @@ def collate_pad_batch(
         Tuple[torch.tensor],
     ]
 ):
-    ids_text, ids_vis, x_ind, y_ind, f_ind, x_lab, y_lab, f_lab = zip(*batch)
+    ids_text, ids_vis, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab = zip(*batch)
     # Get max text length to get the text positions
     max_text_length = max([element.size()[0] for element in ids_text])
     pos_text = torch.arange(max_text_length, dtype=torch.long)
@@ -392,8 +392,8 @@ def collate_pad_batch(
     y_ind = torch.nn.utils.rnn.pad_sequence(
         y_ind, batch_first=True, padding_value=Y_PAD
     )
-    f_ind = torch.nn.utils.rnn.pad_sequence(
-        f_ind, batch_first=True, padding_value=F_PAD
+    o_ind = torch.nn.utils.rnn.pad_sequence(
+        o_ind, batch_first=True, padding_value=O_PAD
     )
     # Pad the visual mappings and prepare final mappings
     text_labs = torch.ones_like(ids_text) * -100
@@ -415,11 +415,11 @@ def collate_pad_batch(
         ],
         dim=1,
     )
-    f_lab = torch.cat(
+    o_lab = torch.cat(
         [
             text_labs,
             torch.nn.utils.rnn.pad_sequence(
-                f_lab, batch_first=True, padding_value=-100
+                o_lab, batch_first=True, padding_value=-100
             ),
         ],
         dim=1,
@@ -436,10 +436,10 @@ def collate_pad_batch(
         pos_text,
         x_ind,
         y_ind,
-        f_ind,
+        o_ind,
         x_lab,
         y_lab,
-        f_lab,
+        o_lab,
         t_types,
         attn_mask,
     )

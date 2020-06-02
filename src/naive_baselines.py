@@ -45,7 +45,7 @@ def naive_inference(
     print("Aggregating from training set")
     visualindex2avgcoordinates = {}
     visualindex2occurence = {}
-    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, f_lab, _, _) in tqdm(
+    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(
         train_loader
     ):
         for vis_id, x, y in zip(
@@ -66,19 +66,19 @@ def naive_inference(
         )
 
     evaluator = Evaluator(len(test_dataset))
-    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, f_lab, _, _) in tqdm(test_loader):
+    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(test_loader):
         max_ids_text = ids_text.size()[1]
         x_lab = x_lab[:, max_ids_text:]
         y_lab = y_lab[:, max_ids_text:]
-        f_lab = f_lab[:, max_ids_text:]
+        o_lab = o_lab[:, max_ids_text:]
         if naive_type == "random":
             x_ind = torch.randint_like(x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE))
             y_ind = torch.randint_like(y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE))
-            f_ind = torch.randint_like(f_lab, low=0, high=2)
+            o_ind = torch.randint_like(o_lab, low=0, high=2)
         elif naive_type == "center":
             x_ind = torch.ones_like(x_lab) * ((X_MASK - 1) * BUCKET_SIZE // 2)
             y_ind = torch.ones_like(y_lab) * ((Y_MASK - 1) * BUCKET_SIZE // 2)
-            f_ind = torch.zeros_like(f_lab)
+            o_ind = torch.zeros_like(o_lab)
         elif naive_type == "avg":
             x_ind = torch.tensor(
                 [
@@ -96,12 +96,12 @@ def naive_inference(
                     ]
                 ]
             )
-            f_ind = torch.randint_like(f_lab, low=0, high=2)
+            o_ind = torch.randint_like(o_lab, low=0, high=2)
         else:
             raise ValueError(f"Naive inference type {naive_type} not recognized!")
 
         evaluator.update_metrics(
-            x_ind, x_lab, y_ind, y_lab, f_ind, f_lab, torch.ones_like(x_lab)
+            x_ind, x_lab, y_ind, y_lab, o_ind, o_lab, torch.ones_like(x_lab)
         )
 
     print(
@@ -110,7 +110,7 @@ def naive_inference(
     print(
         f"The avg RELATIVE dist per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
     )
-    print(f"The average ACCURACY per scene for F is: {evaluator.get_f_acc()}")
+    print(f"The average ACCURACY per scene for F is: {evaluator.get_o_acc()}")
 
 
 def parse_args():

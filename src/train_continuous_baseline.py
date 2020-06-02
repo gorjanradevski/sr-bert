@@ -16,7 +16,7 @@ from rnn_baseline.datasets import (
     collate_pad_batch,
     build_vocab,
 )
-from scene_layouts.datasets import BUCKET_SIZE, F_PAD
+from scene_layouts.datasets import BUCKET_SIZE, O_PAD
 
 
 def train(
@@ -104,19 +104,19 @@ def train(
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for ids_text, ids_vis, x_lab, y_lab, f_lab, attn_mask in train_loader:
+            for ids_text, ids_vis, x_lab, y_lab, o_lab, attn_mask in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, ids_vis, x_lab, y_lab, f_lab, attn_mask = (
+                ids_text, ids_vis, x_lab, y_lab, o_lab, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
                     x_lab.to(device),
                     y_lab.to(device),
-                    f_lab.to(device),
+                    o_lab.to(device),
                     attn_mask.to(device),
                 )
-                x_scores, y_scores, f_scores = model(ids_text, ids_vis)
+                x_scores, y_scores, o_scores = model(ids_text, ids_vis)
                 # Get losses for the absolute and relative distances
                 abs_loss = (
                     abs_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
@@ -126,9 +126,9 @@ def train(
                     relative_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
-                f_loss = criterion_f(f_scores.view(-1, F_PAD - 1), f_lab.view(-1)) * 10
+                o_loss = criterion_f(o_scores.view(-1, O_PAD - 1), o_lab.view(-1)) * 10
                 # Backward
-                loss = abs_loss + relative_loss + f_loss
+                loss = abs_loss + relative_loss + o_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -143,36 +143,36 @@ def train(
         # Reset counters
         evaluator.reset_metrics()
         with torch.no_grad():
-            for ids_text, ids_vis, x_lab, y_lab, f_lab, attn_mask in tqdm(val_loader):
+            for ids_text, ids_vis, x_lab, y_lab, o_lab, attn_mask in tqdm(val_loader):
                 # forward
-                ids_text, ids_vis, x_lab, y_lab, f_lab, attn_mask = (
+                ids_text, ids_vis, x_lab, y_lab, o_lab, attn_mask = (
                     ids_text.to(device),
                     ids_vis.to(device),
                     x_lab.to(device),
                     y_lab.to(device),
-                    f_lab.to(device),
+                    o_lab.to(device),
                     attn_mask.to(device),
                 )
-                x_scores, y_scores, f_scores = model(ids_text, ids_vis)
+                x_scores, y_scores, o_scores = model(ids_text, ids_vis)
                 x_out, y_out = (
                     x_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
                     y_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
                 )
-                f_out = torch.argmax(f_scores, dim=-1)
+                o_out = torch.argmax(o_scores, dim=-1)
                 evaluator.update_metrics(
-                    x_out, x_lab, y_out, y_lab, f_out, f_lab, attn_mask
+                    x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask
                 )
         abs_dist = evaluator.get_abs_dist()
         rel_dist = evaluator.get_rel_dist()
-        f_acc = evaluator.get_f_acc()
-        cur_avg_metrics = (abs_dist + rel_dist - f_acc) / 3
+        o_acc = evaluator.get_o_acc()
+        cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:
             best_avg_metrics = cur_avg_metrics
             logging.info("====================================================")
             logging.info("Found new best with average metrics per scene:")
             logging.info(f"- Absolute distance: {abs_dist}")
             logging.info(f"- Relative distance: {rel_dist}")
-            logging.info(f"- Flip accuracy: {f_acc}")
+            logging.info(f"- Flip accuracy: {o_acc}")
             logging.info(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
             logging.info("====================================================")

@@ -2,7 +2,7 @@ from torch import nn
 import torch
 from transformers import BertConfig, BertModel, BertOnlyMLMHead
 
-from scene_layouts.datasets import X_PAD, Y_PAD, F_PAD
+from scene_layouts.datasets import X_PAD, Y_PAD, O_PAD
 
 
 class SpatialDiscreteBert(nn.Module):
@@ -23,10 +23,10 @@ class SpatialDiscreteBert(nn.Module):
             embedding_dim=config.hidden_size,
             padding_idx=Y_PAD,
         )
-        self.f_embeddings = nn.Embedding(
-            num_embeddings=F_PAD + 1,
+        self.o_embeddings = nn.Embedding(
+            num_embeddings=O_PAD + 1,
             embedding_dim=config.hidden_size,
-            padding_idx=F_PAD,
+            padding_idx=O_PAD,
         )
         self.pos_layer_norm = torch.nn.LayerNorm(
             config.hidden_size, eps=config.layer_norm_eps
@@ -38,8 +38,8 @@ class SpatialDiscreteBert(nn.Module):
         self.x_head = BertOnlyMLMHead(config)
         config.vocab_size = Y_PAD + 1
         self.y_head = BertOnlyMLMHead(config)
-        config.vocab_size = F_PAD + 1
-        self.f_head = BertOnlyMLMHead(config)
+        config.vocab_size = O_PAD + 1
+        self.o_head = BertOnlyMLMHead(config)
         # Change config for the depth
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
@@ -50,7 +50,7 @@ class SpatialDiscreteBert(nn.Module):
         text_positions,
         x_ind,
         y_ind,
-        f_ind,
+        o_ind,
         token_type_ids,
         attention_mask=None,
     ):
@@ -64,7 +64,7 @@ class SpatialDiscreteBert(nn.Module):
         vis_embed = (
             self.x_embeddings(x_ind)
             + self.y_embeddings(y_ind)
-            + self.f_embeddings(f_ind)
+            + self.o_embeddings(o_ind)
         ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
@@ -77,12 +77,12 @@ class SpatialDiscreteBert(nn.Module):
         )[0]
         x_scores = self.x_head(sequence_output)
         y_scores = self.y_head(sequence_output)
-        f_scores = self.f_head(sequence_output)
+        o_scores = self.o_head(sequence_output)
 
         return (
             self.log_softmax(x_scores),
             self.log_softmax(y_scores),
-            self.log_softmax(f_scores),
+            self.log_softmax(o_scores),
         )
 
 
@@ -104,10 +104,10 @@ class SpatialContinuousBert(nn.Module):
             embedding_dim=config.hidden_size,
             padding_idx=Y_PAD,
         )
-        self.f_embeddings = nn.Embedding(
-            num_embeddings=F_PAD + 1,
+        self.o_embeddings = nn.Embedding(
+            num_embeddings=O_PAD + 1,
             embedding_dim=config.hidden_size,
-            padding_idx=F_PAD,
+            padding_idx=O_PAD,
         )
         self.pos_layer_norm = torch.nn.LayerNorm(
             config.hidden_size, eps=config.layer_norm_eps
@@ -117,8 +117,8 @@ class SpatialContinuousBert(nn.Module):
         # Change config for the positions
         config.vocab_size = 2
         self.xy_head = BertOnlyMLMHead(config)
-        config.vocab_size = F_PAD + 1
-        self.f_head = BertOnlyMLMHead(config)
+        config.vocab_size = O_PAD + 1
+        self.o_head = BertOnlyMLMHead(config)
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
     def forward(
@@ -128,7 +128,7 @@ class SpatialContinuousBert(nn.Module):
         text_positions,
         x_ind,
         y_ind,
-        f_ind,
+        o_ind,
         token_type_ids,
         attention_mask=None,
     ):
@@ -142,7 +142,7 @@ class SpatialContinuousBert(nn.Module):
         vis_embed = (
             self.x_embeddings(x_ind)
             + self.y_embeddings(y_ind)
-            + self.f_embeddings(f_ind)
+            + self.o_embeddings(o_ind)
         ) / 3
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
@@ -157,5 +157,5 @@ class SpatialContinuousBert(nn.Module):
         return (
             torch.sigmoid(self.xy_head(sequence_output))[:, :, 0] * (X_PAD - 2),
             torch.sigmoid(self.xy_head(sequence_output))[:, :, 1] * (Y_PAD - 2),
-            self.log_softmax(self.f_head(sequence_output)),
+            self.log_softmax(self.o_head(sequence_output)),
         )

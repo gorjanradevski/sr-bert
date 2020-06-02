@@ -104,9 +104,9 @@ class TrainDataset(Dataset, TorchDataset):
             dtype=torch.long,
         )
         # Obtain flips
-        f_labels = torch.tensor([element["flip"] for element in scene_elements])
+        o_labels = torch.tensor([element["flip"] for element in scene_elements])
 
-        return input_ids_sentence, input_ids_visuals, x_labels, y_labels, f_labels
+        return input_ids_sentence, input_ids_visuals, x_labels, y_labels, o_labels
 
 
 class InferenceDataset(Dataset, TorchDataset):
@@ -144,9 +144,9 @@ class InferenceDataset(Dataset, TorchDataset):
             dtype=torch.long,
         )
         # Obtain flips
-        f_labels = torch.tensor([element["flip"] for element in scene_elements])
+        o_labels = torch.tensor([element["flip"] for element in scene_elements])
 
-        return input_ids_sentence, input_ids_visuals, x_labels, y_labels, f_labels
+        return input_ids_sentence, input_ids_visuals, x_labels, y_labels, o_labels
 
 
 def collate_pad_batch(
@@ -158,7 +158,7 @@ def collate_pad_batch(
         Tuple[torch.Tensor],
     ]
 ):
-    ids_text, ids_vis, x_labs, y_labs, f_labs = zip(*batch)
+    ids_text, ids_vis, x_labs, y_labs, o_labs = zip(*batch)
     # Pad the sentences
     ids_text = torch.nn.utils.rnn.pad_sequence(
         ids_text, batch_first=True, padding_value=0
@@ -174,11 +174,11 @@ def collate_pad_batch(
     y_labs = torch.nn.utils.rnn.pad_sequence(
         y_labs, batch_first=True, padding_value=-100
     )
-    f_labs = torch.nn.utils.rnn.pad_sequence(
-        f_labs, batch_first=True, padding_value=-100
+    o_labs = torch.nn.utils.rnn.pad_sequence(
+        o_labs, batch_first=True, padding_value=-100
     )
     # Obtain the padding mask
     mask = ids_vis.clone()
     mask[torch.where(mask > 0)] = 1
 
-    return ids_text, ids_vis, x_labs, y_labs, f_labs, mask
+    return ids_text, ids_vis, x_labs, y_labs, o_labs, mask

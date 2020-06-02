@@ -24,16 +24,16 @@ def dump_scene(
     visual_names: List[str],
     x_indexes: torch.Tensor,
     y_indexes: torch.Tensor,
-    f_indexes: torch.Tensor,
+    o_indexes: torch.Tensor,
     dump_image_path: str,
     bucketized: bool = False,
 ):
     background = Image.open(os.path.join(pngs_path, "background.png"))
-    for visual_name, x_index, y_index, f_index in zip(
-        visual_names, x_indexes, y_indexes, f_indexes
+    for visual_name, x_index, y_index, o_index in zip(
+        visual_names, x_indexes, y_indexes, o_indexes
     ):
         image = Image.open(os.path.join(pngs_path, visual_name))
-        if f_index == 1:
+        if o_index == 1:
             image = image.transpose(Image.FLIP_LEFT_RIGHT)
         # Pasting the image
         background.paste(
@@ -112,26 +112,26 @@ def generation(
             pos_text,
             x_ind,
             y_ind,
-            f_ind,
+            o_ind,
             x_lab,
             y_lab,
-            f_lab,
+            o_lab,
             t_types,
             attn_mask,
         ) in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, x_ind, y_ind, f_ind, t_types, attn_mask = (
+            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 pos_text.to(device),
                 x_ind.to(device),
                 y_ind.to(device),
-                f_ind.to(device),
+                o_ind.to(device),
                 t_types.to(device),
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, f_out = generation_strategy_factory(
+            x_out, y_out, o_out = generation_strategy_factory(
                 gen_strategy,
                 model_type,
                 ids_text,
@@ -139,14 +139,14 @@ def generation(
                 pos_text,
                 x_ind,
                 y_ind,
-                f_ind,
+                o_ind,
                 t_types,
                 attn_mask,
                 model,
                 device,
             )
 
-            x_out, y_out, f_out = x_out.cpu(), y_out.cpu(), f_out.cpu()
+            x_out, y_out, o_out = x_out.cpu(), y_out.cpu(), o_out.cpu()
             visual_names = [
                 index2visual[index.item()]
                 for index in ids_vis[0]
@@ -161,7 +161,7 @@ def generation(
                 visual_names,
                 x_lab[0, max_ids_text:],
                 y_lab[0, max_ids_text:],
-                f_lab[0, max_ids_text:],
+                o_lab[0, max_ids_text:],
                 dump_image_path,
                 bucketized=False,
             )
@@ -174,7 +174,7 @@ def generation(
                 visual_names,
                 x_out[0],
                 y_out[0],
-                f_out[0],
+                o_out[0],
                 dump_image_path,
                 bucketized=True,
             )
