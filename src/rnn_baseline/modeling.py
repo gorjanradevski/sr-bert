@@ -194,9 +194,9 @@ class ArrangementsDiscreteDecoderRNN(nn.Module):
             hidden = torch.cat([clip_enc[:, i, :], attn], dim=-1).to(self.device)
             output, h_last = self.arrangements_decoder(hidden.unsqueeze(1), h_last)
             output = output.squeeze(1)
-            x_outs[:, i, :] = self.log_softmax(self.x_head(hidden))
-            y_outs[:, i, :] = self.log_softmax(self.y_head(hidden))
-            o_outs[:, i, :] = self.log_softmax(self.o_head(hidden))
+            x_outs[:, i, :] = self.log_softmax(self.x_head(output))
+            y_outs[:, i, :] = self.log_softmax(self.y_head(output))
+            o_outs[:, i, :] = self.log_softmax(self.o_head(output))
 
         return x_outs, y_outs, o_outs
 

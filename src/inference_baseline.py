@@ -6,16 +6,13 @@ from tqdm import tqdm
 import logging
 import json
 from scene_layouts.evaluator import Evaluator
-from rnn_baseline.modeling import (
-    ArrangementsDiscreteDecoder,
-    ArrangementsContinuousDecoder,
-)
+from rnn_baseline.modeling import baseline_factory
 from rnn_baseline.datasets import InferenceDataset, collate_pad_batch, build_vocab
 from scene_layouts.datasets import BUCKET_SIZE
 
 
 def inference(
-    model_type: str,
+    baseline_name: str,
     checkpoint_path: str,
     train_dataset_path: str,
     test_dataset_path: str,
@@ -47,9 +44,7 @@ def inference(
     num_cliparts = len(visual2index) + 1
     vocab_size = len(word2index)
     model = nn.DataParallel(
-        ArrangementsDiscreteDecoder(num_cliparts, vocab_size, 256, device)
-        if model_type == "discrete"
-        else ArrangementsContinuousDecoder(num_cliparts, vocab_size, 256, device)
+        baseline_factory(baseline_name, num_cliparts, vocab_size, 256, device)
     ).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
@@ -67,12 +62,12 @@ def inference(
                 attn_mask.to(device),
             )
             x_scores, y_scores, o_scores = model(ids_text, ids_vis)
-            if model_type == "discrete":
+            if "discrete" in baseline_name:
                 x_out, y_out = (
                     torch.argmax(x_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
                     torch.argmax(y_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
                 )
-            elif model_type == "continuous":
+            elif "continuous" in baseline_name:
                 x_out, y_out = (
                     x_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
                     y_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
@@ -101,7 +96,9 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Inference with a RNN baseline model.")
-    parser.add_argument("--model_type", type=str, default=None, help="The model type.")
+    parser.add_argument(
+        "--baseline_name", type=str, default=None, help="The baseline name."
+    )
     parser.add_argument(
         "--checkpoint_path",
         type=str,
@@ -146,7 +143,7 @@ def parse_args():
 def main():
     args = parse_args()
     inference(
-        args.model_type,
+        args.baseline_name,
         args.checkpoint_path,
         args.train_dataset_path,
         args.test_dataset_path,

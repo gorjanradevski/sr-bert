@@ -6,7 +6,7 @@ import json
 from scene_layouts.evaluator import Evaluator
 from scene_layouts.datasets import (
     DiscreteInferenceDataset,
-    collate_pad_discrete_batch,
+    collate_pad_batch,
     X_MASK,
     Y_MASK,
     BUCKET_SIZE,
@@ -32,14 +32,14 @@ def naive_inference(
         train_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_discrete_batch,
+        collate_fn=collate_pad_batch,
         sampler=train_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
-        collate_fn=collate_pad_discrete_batch,
+        collate_fn=collate_pad_batch,
         sampler=test_sampler,
     )
     print("Aggregating from training set")
