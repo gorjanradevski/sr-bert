@@ -101,7 +101,9 @@ class ArrangementsContinuousDecoderRNN(nn.Module):
         o_outs = torch.zeros(clip_inds.size()[0], clip_inds.size()[1], 2).to(
             self.device
         )
-        h_last = torch.zeros(1, clip_inds.size()[0], clip_enc.size()[-1] // 2)
+        h_last = torch.zeros(1, clip_inds.size()[0], clip_enc.size()[-1] // 2).to(
+            self.device
+        )
         for i in range(clip_enc.size()[1]):
             attn = self.text_attn(clip_enc[:, i, :], text_enc)
             hidden = torch.cat([clip_enc[:, i, :], attn], dim=-1).to(self.device)
@@ -184,7 +186,9 @@ class ArrangementsDiscreteDecoderRNN(nn.Module):
         o_outs = torch.zeros(clip_inds.size()[0], clip_inds.size()[1], O_PAD - 1).to(
             self.device
         )
-        h_last = torch.zeros(1, clip_inds.size()[0], clip_enc.size()[-1] // 2)
+        h_last = torch.zeros(1, clip_inds.size()[0], clip_enc.size()[-1] // 2).to(
+            self.device
+        )
         for i in range(clip_enc.size()[1]):
             attn = self.text_attn(clip_enc[:, i, :], text_enc)
             hidden = torch.cat([clip_enc[:, i, :], attn], dim=-1).to(self.device)
