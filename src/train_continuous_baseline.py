@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 import json
 from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
-from rnn_baseline.modeling import ArrangementsContinuousDecoder
+from rnn_baseline.modeling import baseline_factory
 from rnn_baseline.datasets import (
     TrainDataset,
     InferenceDataset,
@@ -24,6 +24,7 @@ def train(
     train_dataset_path: str,
     val_dataset_path: str,
     visual2index_path: str,
+    baseline_name: str,
     batch_size: int,
     learning_rate: float,
     weight_decay: float,
@@ -74,7 +75,7 @@ def train(
     num_cliparts = len(visual2index) + 1
     vocab_size = len(word2index)
     model = nn.DataParallel(
-        ArrangementsContinuousDecoder(num_cliparts, vocab_size, 256, device)
+        baseline_factory(baseline_name, num_cliparts, vocab_size, 256, device)
     ).to(device)
     # Loss and optimizer
     criterion_f = nn.NLLLoss()
@@ -249,6 +250,12 @@ def parse_args():
     parser.add_argument(
         "--log_filepath", type=str, default=None, help="The logging file."
     )
+    parser.add_argument(
+        "--baseline_name",
+        type=str,
+        default="attn_continuous",
+        help="Where to save the intermediate checkpoint.",
+    )
 
     return parser.parse_args()
 
@@ -260,6 +267,7 @@ def main():
         args.train_dataset_path,
         args.val_dataset_path,
         args.visual2index_path,
+        args.baseline_name,
         args.batch_size,
         args.learning_rate,
         args.weight_decay,
