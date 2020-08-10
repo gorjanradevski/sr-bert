@@ -6,8 +6,7 @@ authors = ["gorjanradevski <gorjanradevski@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-torch = "^1.3"
-torchvision = "^0.4.2"
+torch = "1.6.0"
 jupyter = "^1.0"
 tqdm = "^4.41"
 nltk = "^3.4"
