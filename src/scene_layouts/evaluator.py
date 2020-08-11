@@ -85,7 +85,7 @@ def abs_distance(
     return dist, (dist == dist_flipped).float()
 
 
-def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask, sigma):
+def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # REBUTTAL: Normalize coordinates
     x_inds_norm = x_inds.clone() / 500
     y_inds_norm = y_inds.clone() / 400
