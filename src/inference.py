@@ -118,9 +118,9 @@ def inference(
             )
             evaluator.update_metrics(
                 x_out,
-                x_lab[:, max_ids_text:],
+                x_lab[:, max_ids_text:].float(),
                 y_out,
-                y_lab[:, max_ids_text:],
+                y_lab[:, max_ids_text:].float(),
                 o_out,
                 o_lab[:, max_ids_text:],
                 attn_mask[:, max_ids_text:],
