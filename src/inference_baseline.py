@@ -30,7 +30,7 @@ def inference(
     test_dataset = InferenceDataset(
         test_dataset_path, word2freq, word2index, visual2index
     )
-    logging.info(f"Performing infernece on {len(test_dataset)}")
+    logging.info(f"Performing inference on {len(test_dataset)}")
     # Create samplers
     test_sampler = SequentialSampler(test_dataset)
     # Create loaders

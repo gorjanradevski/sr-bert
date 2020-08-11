@@ -8,7 +8,7 @@ from scene_layouts.datasets import X_PAD, Y_PAD, O_PAD
 class TextEncoder(nn.Module):
     def __init__(self, vocab_size, hidden_size):
         super().__init__()
-        self.embedding = nn.Embedding(vocab_size, hidden_size)
+        self.embedding = nn.Embedding(vocab_size, hidden_size, padding_idx=0)
         self.rnn = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
@@ -47,7 +47,7 @@ class TextAttention(nn.Module):
 class ArrangementsContinuousDecoder(nn.Module):
     def __init__(self, num_cliparts, vocab_size, hidden_size, device):
         super().__init__()
-        self.clip_embed = nn.Embedding(num_cliparts, hidden_size)
+        self.clip_embed = nn.Embedding(num_cliparts, hidden_size, padding_idx=0)
         self.clip_rnn = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
@@ -79,7 +79,7 @@ class ArrangementsContinuousDecoder(nn.Module):
 class ArrangementsContinuousDecoderRNN(nn.Module):
     def __init__(self, num_cliparts, vocab_size, hidden_size, device):
         super().__init__()
-        self.clip_embed = nn.Embedding(num_cliparts, hidden_size)
+        self.clip_embed = nn.Embedding(num_cliparts, hidden_size, padding_idx=0)
         self.clip_rnn = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
@@ -119,7 +119,7 @@ class ArrangementsContinuousDecoderRNN(nn.Module):
 class ArrangementsDiscreteDecoder(nn.Module):
     def __init__(self, num_cliparts, vocab_size, hidden_size, device):
         super().__init__()
-        self.clip_embed = nn.Embedding(num_cliparts, hidden_size)
+        self.clip_embed = nn.Embedding(num_cliparts, hidden_size, padding_idx=0)
         self.clip_rnn = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
@@ -159,7 +159,7 @@ class ArrangementsDiscreteDecoder(nn.Module):
 class ArrangementsDiscreteDecoderRNN(nn.Module):
     def __init__(self, num_cliparts, vocab_size, hidden_size, device):
         super().__init__()
-        self.clip_embed = nn.Embedding(num_cliparts, hidden_size)
+        self.clip_embed = nn.Embedding(num_cliparts, hidden_size, padding_idx=0)
         self.clip_rnn = nn.GRU(
             hidden_size, hidden_size, bidirectional=True, batch_first=True
         )
