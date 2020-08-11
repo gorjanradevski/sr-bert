@@ -87,10 +87,10 @@ def abs_distance(
 
 def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # REBUTTAL: Normalize coordinates
-    x_inds /= 500
-    y_inds /= 400
-    x_labs = x_labs.float() / 500
-    y_labs = y_labs.float() / 400
+    # x_inds /= 500
+    # y_inds /= 400
+    # x_labs = x_labs.float() / 500
+    # y_labs = y_labs.float() / 400
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds - x_labs, 2).float()
     dist_y = torch.pow(y_inds - y_labs, 2).float()
@@ -104,7 +104,7 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / attn_mask.sum(-1)
     # REBUTTAL: Gaussian kernel
-    dist = torch.exp(-dist / 0.2)
+    # dist = torch.exp(-dist / 0.2)
 
     return dist
 
