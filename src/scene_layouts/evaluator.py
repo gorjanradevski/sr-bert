@@ -80,20 +80,20 @@ def abs_distance(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
     # BECAUSE OF THE SIMILARITY FUNCTION
-    dist = torch.min(dist_normal, dist_flipped)
+    dist = torch.max(dist_normal, dist_flipped)
 
     return dist, (dist == dist_flipped).float()
 
 
 def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # REBUTTAL: Normalize coordinates
-    # x_inds_norm = x_inds.clone() / 500
-    # y_inds_norm = y_inds.clone() / 400
-    # x_labs_norm = x_labs.clone().float() / 500
-    # y_labs_norm = y_labs.clone().float() / 400
+    x_inds_norm = x_inds.clone() / 500
+    y_inds_norm = y_inds.clone() / 400
+    x_labs_norm = x_labs.clone().float() / 500
+    y_labs_norm = y_labs.clone().float() / 400
     # Obtain dist for X and Y
-    dist_x = torch.pow(x_inds - x_labs, 2).float()
-    dist_y = torch.pow(y_inds - y_labs, 2).float()
+    dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
+    dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
     dist = torch.sqrt(dist_x + dist_y + (torch.ones_like(dist_x) * 1e-15))
     # Remove the distance for the padding tokens
     dist = dist * attn_mask
@@ -105,7 +105,7 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist.sum(-1) / attn_mask.sum(-1)
     # REBUTTAL: Gaussian kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    # dist = torch.exp(-0.5 * dist / 0.2)
+    dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
