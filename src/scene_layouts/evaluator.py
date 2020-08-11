@@ -80,7 +80,7 @@ def abs_distance(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
     # BECAUSE OF THE SIMILARITY FUNCTION
-    dist = torch.max(dist_normal, dist_flipped)
+    dist = torch.min(dist_normal, dist_flipped)
 
     return dist, (dist == dist_flipped).float()
 
