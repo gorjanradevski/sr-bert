@@ -111,8 +111,8 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
 
 
 def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
-    X_inds_norm = X.clone() / 500
-    Y_inds_norm = Y.clone() / 400
+    X_inds_norm = X.clone().float() / 500
+    Y_inds_norm = Y.clone().float() / 400
     x_dist = torch.pow(
         torch.unsqueeze(X_inds_norm, 1) - torch.unsqueeze(X_inds_norm, 2), 2
     ).float()
