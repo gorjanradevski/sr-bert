@@ -111,8 +111,14 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
 
 
 def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
-    x_dist = torch.pow(torch.unsqueeze(X, 1) - torch.unsqueeze(X, 2), 2).float()
-    y_dist = torch.pow(torch.unsqueeze(Y, 1) - torch.unsqueeze(Y, 2), 2).float()
+    X_inds_norm = X.clone() / 500
+    Y_inds_norm = Y.clone() / 400
+    x_dist = torch.pow(
+        torch.unsqueeze(X_inds_norm, 1) - torch.unsqueeze(X_inds_norm, 2), 2
+    ).float()
+    y_dist = torch.pow(
+        torch.unsqueeze(Y_inds_norm, 1) - torch.unsqueeze(Y_inds_norm, 2), 2
+    ).float()
 
     return torch.sqrt(x_dist + y_dist + (torch.ones_like(x_dist) * 1e-15))
 
@@ -138,6 +144,9 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist.sum(-1) / attn_mask.sum(-1).unsqueeze(-1)
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / attn_mask.sum(-1)
+    # REBUTTAL: Gaussian kernel
+    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
+    dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
