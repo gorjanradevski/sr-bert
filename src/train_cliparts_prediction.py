@@ -8,7 +8,6 @@ import logging
 import json
 import numpy as np
 from transformers import BertConfig
-from sklearn.metrics import accuracy_score
 
 from scene_layouts.datasets import (
     ClipartsPredictionDataset,
@@ -117,7 +116,9 @@ def train(
                 targets[index : index + batch_size] = target_visuals.cpu().numpy()
                 index += batch_size
 
-        cur_accuracy = accuracy_score(targets, predictions)
+        cur_accuracy = (
+            (targets == predictions).sum(-1) / len(visual2index)
+        ).sum() / len(val_dataset)
         if cur_accuracy > best_accuracy:
             best_accuracy = cur_accuracy
             logging.info("====================================================")
