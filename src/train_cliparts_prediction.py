@@ -43,7 +43,7 @@ def train(
     train_dataset = ClipartsPredictionDataset(
         train_dataset_path, visual2index, train=True
     )
-    val_dataset = ClipartsPredictionDataset(train_dataset_path, visual2index)
+    val_dataset = ClipartsPredictionDataset(val_dataset_path, visual2index)
     logging.info(f"Training on {len(train_dataset)}")
     logging.info(f"Validating on {len(val_dataset)}")
     # Create loaders
