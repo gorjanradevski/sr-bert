@@ -8,6 +8,7 @@ import logging
 import json
 import numpy as np
 from transformers import BertConfig
+from sklearn.metrics import f1_score
 
 from scene_layouts.datasets import (
     ClipartsPredictionDataset,
@@ -66,7 +67,7 @@ def train(
     optimizer = optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    best_accuracy = -1.0
+    best_f_score = -1.0
     for epoch in range(epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
         predictions = np.zeros((len(val_dataset), len(visual2index)))
@@ -116,14 +117,12 @@ def train(
                 targets[index : index + batch_size] = target_visuals.cpu().numpy()
                 index += batch_size
 
-        cur_accuracy = (
-            (targets == predictions).sum(-1) / len(visual2index)
-        ).sum() / len(val_dataset)
-        if cur_accuracy > best_accuracy:
-            best_accuracy = cur_accuracy
+        cur_f_score = f1_score(targets, predictions, average="micro")
+        if cur_f_score > best_f_score:
+            best_f_score = cur_f_score
             logging.info("====================================================")
             logging.info(
-                f"Found new best with accuracy: {best_accuracy} on epoch {epoch+1}. Saving model!"
+                f"Found new best with F1: {best_f_score} on epoch {epoch+1}. Saving model!"
             )
             torch.save(model.state_dict(), save_model_path)
             logging.info("====================================================")
