@@ -359,6 +359,59 @@ class DiscreteInferenceDataset(InferenceDataset, TorchDataset):
         )
 
 
+class ClipartsPredictionDataset(TorchDataset):
+    def __init__(self, dataset_file_path: str, visual2index: str, train: bool = False):
+        self.dataset_file = json.load(open(dataset_file_path))
+        self.visual2index = visual2index
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        self.train = train
+
+    def __len__(self):
+        return len(self.dataset_file)
+
+    def __getitem__(self, idx: str):
+        # Obtain elements
+        scene = self.dataset_file[idx]
+        # Prepare sentences
+        nested_sentences = [sentences for sentences in scene["sentences"].values()]
+        sentences = np.array(
+            [sentence for sublist in nested_sentences for sentence in sublist]
+        )
+        if self.train:
+            input_ids_sentence = torch.tensor(
+                self.tokenizer.encode(
+                    " ".join(np.random.permutation(sentences)), add_special_tokens=True
+                )
+            )
+        else:
+            input_ids_sentence = torch.tensor(
+                self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
+            )
+        # Prepare visuals
+        input_ids_visuals = torch.tensor(
+            [
+                # Because they start from 1 we subtract 1
+                self.visual2index[element["visual_name"]] - 1
+                for element in scene["elements"]
+            ]
+        )
+        one_hot_visuals = torch.zeros(len(self.visual2index))
+        one_hot_visuals[input_ids_visuals] = 1
+
+        return input_ids_sentence, one_hot_visuals
+
+
+def collate_pad_cliparts_prediction_batch(batch):
+    ids_text, one_hot_visuals = zip(*batch)
+    ids_text = torch.nn.utils.rnn.pad_sequence(
+        ids_text, batch_first=True, padding_value=0
+    )
+    attn_mask = ids_text.clone()
+    attn_mask[torch.where(attn_mask > 0)] = 1
+
+    return ids_text, attn_mask, torch.stack([*one_hot_visuals], dim=0)
+
+
 def collate_pad_batch(
     batch: Tuple[
         Tuple[torch.Tensor],

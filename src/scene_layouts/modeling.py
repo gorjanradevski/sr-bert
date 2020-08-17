@@ -159,3 +159,17 @@ class SpatialContinuousBert(nn.Module):
             torch.sigmoid(self.xy_head(sequence_output))[:, :, 1] * (Y_PAD - 2),
             self.log_softmax(self.o_head(sequence_output)),
         )
+
+
+class ClipartsPredictionModel(nn.Module):
+    def __init__(self, config: BertConfig, bert_name: str):
+        super(ClipartsPredictionModel, self).__init__()
+        self.bert = BertModel.from_pretrained(bert_name)
+        self.projector = nn.Linear(config.hidden_size, config.vocab_size)
+
+    def forward(self, input_ids, attention_mask):
+        last_state = self.bert(input_ids=input_ids, attention_mask=attention_mask)[0][
+            :, 0, :
+        ]
+
+        return self.projector(last_state)
