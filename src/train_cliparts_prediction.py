@@ -6,15 +6,14 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import logging
 import json
-import numpy as np
 from transformers import BertConfig
-from sklearn.metrics import f1_score
 
 from scene_layouts.datasets import (
     ClipartsPredictionDataset,
     collate_pad_cliparts_prediction_batch,
 )
 from scene_layouts.modeling import ClipartsPredictionModel
+from scene_layouts.evaluator import ClipartsPredictionEvaluator
 
 
 def train(
@@ -68,11 +67,10 @@ def train(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
     best_f_score = -1.0
+    evaluator = ClipartsPredictionEvaluator(len(val_dataset), visual2index)
     for epoch in range(epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
-        predictions = np.zeros((len(val_dataset), len(visual2index)))
-        targets = np.zeros((len(val_dataset), len(visual2index)))
-        index = 0
+        evaluator.reset_counters()
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
@@ -112,17 +110,16 @@ def train(
                 one_hot_pred = torch.zeros_like(probs)
                 one_hot_pred[torch.where(probs > 0.5)] = 1
                 # Aggregate predictions/targets
-                batch_size = ids_text.size()[0]
-                predictions[index : index + batch_size] = one_hot_pred.cpu().numpy()
-                targets[index : index + batch_size] = target_visuals.cpu().numpy()
-                index += batch_size
+                evaluator.update_counters(
+                    one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
+                )
 
-        cur_f_score = f1_score(targets, predictions, average="micro")
+        cur_f_score = evaluator.f1_score()
         if cur_f_score > best_f_score:
             best_f_score = cur_f_score
             logging.info("====================================================")
             logging.info(
-                f"Found new best with F1: {best_f_score} on epoch {epoch+1}. Saving model!"
+                f"Found best with F1 {best_f_score} on epoch {epoch+1}. Saving model!"
             )
             torch.save(model.state_dict(), save_model_path)
             logging.info("====================================================")

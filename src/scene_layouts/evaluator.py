@@ -1,6 +1,7 @@
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
 import numpy as np
+from sklearn.metrics import f1_score, precision_recall_fscore_support, accuracy_score
 
 
 class Evaluator:
@@ -249,3 +250,41 @@ def abs_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
 def flip_acc_qa(inds, labs, mask):
     acc = ((inds == labs).float() + 1e-15) * mask
     return acc.sum(-1) / (mask.sum(-1) + 1e-15)
+
+
+class ClipartsPredictionEvaluator:
+    def __init__(self, dataset_size, visual2index):
+        self.dataset_size = dataset_size
+        self.visual2index = visual2index
+        self.predictions = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.targets = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.index = 0
+
+    def update_counters(self, preds, targets):
+        batch_size = preds.shape[0]
+        self.predictions[self.index : self.index + batch_size] = preds
+        self.targets[self.index : self.index + batch_size] = targets
+        self.index += batch_size
+
+    def reset_counters(self):
+        self.predictions = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.targets = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.index = 0
+
+    def f1_score(self):
+        return f1_score(self.targets, self.predictions, average="micro")
+
+    def per_object_pr(self):
+        targets_obj = np.concatenate(
+            [self.targets[:, :23], self.targets[:, 93:]], axis=1
+        )
+        preds_obj = np.concatenate(
+            [self.predictions[:, :23], self.predictions[:, 93:]], axis=1
+        )
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            targets_obj, preds_obj, average="micro"
+        )
+        return precision, recall, f1
+
+    def posses_expressions_accuracy(self):
+        return accuracy_score(self.targets[:, 23:93], self.predictions[:, 23:93])
