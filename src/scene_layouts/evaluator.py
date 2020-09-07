@@ -287,4 +287,16 @@ class ClipartsPredictionEvaluator:
         return precision, recall, f1
 
     def posses_expressions_accuracy(self):
-        return accuracy_score(self.targets[:, 23:93], self.predictions[:, 23:93])
+        num_targets = len(
+            [target for target in self.targets[:, 23:93] if target.sum() > 0]
+        )
+        targets = np.zeros((num_targets, self.targets[:, 23:93].shape[1]))
+        predictions = np.zeros((num_targets, self.predictions[:, 23:93].shape[1]))
+        index = 0
+        for i in range(self.targets.shape[0]):
+            if self.targets[i, 23:93].sum() > 0:
+                targets[index] = self.targets[i, 23:93]
+                predictions[index] = self.predictions[i, 23:93]
+                index += 1
+
+        return accuracy_score(targets, predictions)

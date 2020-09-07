@@ -415,13 +415,13 @@ def collate_pad_cliparts_prediction_batch(batch):
 def collate_pad_batch(
     batch: Tuple[
         Tuple[torch.Tensor],
-        Tuple[torch.tensor],
-        Tuple[torch.tensor],
-        Tuple[torch.tensor],
-        Tuple[torch.tensor],
-        Tuple[torch.tensor],
-        Tuple[torch.tensor],
-        Tuple[torch.tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
+        Tuple[torch.Tensor],
     ]
 ):
     ids_text, ids_vis, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab = zip(*batch)
