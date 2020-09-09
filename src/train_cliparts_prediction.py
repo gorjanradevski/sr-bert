@@ -108,15 +108,7 @@ def train(
                 # Get predictions
                 probs = torch.sigmoid(model(ids_text, attn_mask))
                 one_hot_pred = torch.zeros_like(probs)
-                # Regular objects
-                one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.5)] = 1
-                one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
-                # Mike and Jenny
-                batch_indices = torch.arange(ids_text.size()[0])
-                max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
-                one_hot_pred[batch_indices, max_hb0 + 23] = 1
-                max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
-                one_hot_pred[batch_indices, max_hb1 + 58] = 1
+                one_hot_pred[torch.where(probs > 0.5)] = 1
                 # Aggregate predictions/targets
                 evaluator.update_counters(
                     one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
