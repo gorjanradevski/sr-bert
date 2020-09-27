@@ -2,6 +2,7 @@ import json
 import os
 import argparse
 from typing import Dict
+from natsort import natsorted
 
 
 def parse_relations(
@@ -167,7 +168,7 @@ def create_datasets(
         visual2index = {}
         index = 1
         pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
-        for filename in sorted(os.listdir(pngs_file_path)):
+        for filename in natsorted(os.listdir(pngs_file_path)):
             if filename in excluded:
                 continue
             visual2index[filename] = index

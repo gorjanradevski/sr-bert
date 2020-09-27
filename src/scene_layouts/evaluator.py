@@ -1,7 +1,157 @@
+from operator import xor
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
 import numpy as np
 from sklearn.metrics import f1_score, precision_recall_fscore_support, accuracy_score
+
+index2pose_hb0 = {
+    23: 0,
+    34: 0,
+    45: 0,
+    51: 0,
+    52: 0,
+    53: 1,
+    54: 1,
+    55: 1,
+    56: 1,
+    57: 1,
+    24: 2,
+    25: 2,
+    26: 2,
+    27: 2,
+    28: 2,
+    29: 3,
+    30: 3,
+    31: 3,
+    32: 3,
+    33: 3,
+    35: 4,
+    36: 4,
+    37: 4,
+    38: 4,
+    39: 4,
+    40: 5,
+    41: 5,
+    42: 5,
+    43: 5,
+    44: 5,
+    46: 6,
+    47: 6,
+    48: 6,
+    49: 6,
+    50: 6,
+}
+index2pose_hb1 = {
+    58: 0,
+    69: 0,
+    80: 0,
+    86: 0,
+    87: 0,
+    88: 1,
+    89: 1,
+    90: 1,
+    91: 1,
+    92: 1,
+    59: 2,
+    60: 2,
+    61: 2,
+    62: 2,
+    63: 2,
+    64: 3,
+    65: 3,
+    66: 3,
+    67: 3,
+    68: 3,
+    70: 4,
+    71: 4,
+    72: 4,
+    73: 4,
+    74: 4,
+    75: 5,
+    76: 5,
+    77: 5,
+    78: 5,
+    79: 5,
+    81: 6,
+    82: 6,
+    83: 6,
+    84: 6,
+    85: 6,
+}
+index2expression_hb0 = {
+    23: 0,
+    53: 0,
+    24: 0,
+    29: 0,
+    35: 0,
+    40: 0,
+    46: 0,
+    34: 1,
+    54: 1,
+    25: 1,
+    30: 1,
+    36: 1,
+    41: 1,
+    47: 1,
+    45: 2,
+    55: 2,
+    26: 2,
+    31: 2,
+    37: 2,
+    42: 2,
+    48: 2,
+    51: 3,
+    56: 3,
+    27: 3,
+    32: 3,
+    38: 3,
+    43: 3,
+    49: 3,
+    52: 4,
+    57: 4,
+    28: 4,
+    33: 4,
+    39: 4,
+    44: 4,
+    50: 4,
+}
+index2expression_hb1 = {
+    58: 0,
+    88: 0,
+    59: 0,
+    64: 0,
+    70: 0,
+    75: 0,
+    81: 0,
+    69: 1,
+    89: 1,
+    60: 1,
+    65: 1,
+    71: 1,
+    76: 1,
+    82: 1,
+    80: 2,
+    90: 2,
+    61: 2,
+    66: 2,
+    72: 2,
+    77: 2,
+    83: 2,
+    86: 3,
+    91: 3,
+    62: 3,
+    67: 3,
+    73: 3,
+    78: 3,
+    84: 3,
+    87: 4,
+    92: 4,
+    63: 4,
+    68: 4,
+    74: 4,
+    79: 4,
+    85: 4,
+}
 
 
 class Evaluator:
@@ -36,27 +186,39 @@ class Evaluator:
         self.index = 0
 
     def get_abs_dist(self):
-        return np.round(self.abs_dist.mean(), decimals=2)
+        return np.round(self.abs_dist.mean(), decimals=1)
 
     def get_rel_dist(self):
-        return np.round(self.rel_dist.mean(), decimals=2)
+        return np.round(self.rel_dist.mean(), decimals=1)
 
     def get_o_acc(self):
-        return np.round(self.o_acc.mean() * 100, decimals=2)
+        return np.round(self.o_acc.mean() * 100, decimals=1)
 
     def get_abs_error_bar(self):
         return np.round(
-            np.std(self.abs_dist, ddof=1) / np.sqrt(self.total_elements), decimals=2
+            np.std(self.abs_dist, ddof=1) / np.sqrt(self.total_elements), decimals=1
         )
 
     def get_rel_error_bar(self):
         return np.round(
-            np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=2
+            np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=1
         )
 
     def dump_results(self, abs_dump_path: str, rel_dump_path: str):
         np.save(abs_dump_path, self.abs_dist, allow_pickle=False)
         np.save(rel_dump_path, self.rel_dist, allow_pickle=False)
+
+    def find_common_pos(self, pred_clips, gt_clips, pred_pos, gt_pos):
+        # https://github.com/uvavision/Text2Scene/blob/master/lib/modules/abstract_evaluator.py#L309
+        common_preds = []
+        common_gts = []
+        for i in range(pred_clips):
+            if pred_clips[i] in gt_clips:
+                common_preds.append([pred_pos[i]["x"], pred_pos[i]["y"]])
+                index_gt = gt_clips.index(pred_clips[i])
+                common_gts.append([gt_pos[index_gt]["x"], gt_pos[index_gt]["y"]])
+        
+        return common_preds, common_gts
 
 
 def flip_scene(labs: torch.Tensor):
@@ -81,17 +243,17 @@ def abs_distance(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
     # BECAUSE OF THE SIMILARITY FUNCTION
-    dist = torch.max(dist_normal, dist_flipped)
+    dist = torch.min(dist_normal, dist_flipped)
 
     return dist, (dist == dist_flipped).float()
 
 
 def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # REBUTTAL: Normalize coordinates
-    x_inds_norm = x_inds.clone() / 500
-    y_inds_norm = y_inds.clone() / 400
-    x_labs_norm = x_labs.clone().float() / 500
-    y_labs_norm = y_labs.clone().float() / 400
+    x_inds_norm = x_inds.clone()
+    y_inds_norm = y_inds.clone()
+    x_labs_norm = x_labs.clone().float()
+    y_labs_norm = y_labs.clone().float()
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
     dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
@@ -106,14 +268,14 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist.sum(-1) / attn_mask.sum(-1)
     # REBUTTAL: Gaussian kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    dist = torch.exp(-0.5 * dist / 0.2)
+    # dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
 
 def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
-    X_inds_norm = X.clone().float() / 500
-    Y_inds_norm = Y.clone().float() / 400
+    X_inds_norm = X.clone().float()
+    Y_inds_norm = Y.clone().float()
     x_dist = torch.pow(
         torch.unsqueeze(X_inds_norm, 1) - torch.unsqueeze(X_inds_norm, 2), 2
     ).float()
@@ -147,7 +309,7 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist.sum(-1) / attn_mask.sum(-1)
     # REBUTTAL: Gaussian kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    dist = torch.exp(-0.5 * dist / 0.2)
+    # dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
@@ -190,36 +352,36 @@ class QaEvaluator:
 
     def get_abs_dist(self):
         return np.round(
-            self.abs_dist.sum() / np.count_nonzero(self.abs_dist), decimals=2
+            self.abs_dist.sum() / np.count_nonzero(self.abs_dist), decimals=1
         )
 
     def get_rel_dist(self):
         return np.round(
-            self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=2
+            self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=1
         )
 
     def get_o_acc(self):
         return np.round(
-            (self.flip_acc.sum() / np.count_nonzero(self.flip_acc)) * 100, decimals=2
+            (self.flip_acc.sum() / np.count_nonzero(self.flip_acc)) * 100, decimals=1
         )
 
     def get_abs_error_bar(self):
         return np.round(
             np.std(self.abs_dist, ddof=1) / np.sqrt(np.count_nonzero(self.abs_dist)),
-            decimals=2,
+            decimals=1,
         )
 
     def get_rel_error_bar(self):
         return np.round(
             np.std(self.rel_dist, ddof=1) / np.sqrt(np.count_nonzero(self.rel_dist)),
-            decimals=2,
+            decimals=1,
         )
 
     def get_o_acc_error_bar(self):
         return np.round(
             (np.std(self.flip_acc, ddof=1) / np.sqrt(np.count_nonzero(self.flip_acc)))
             * 100,
-            decimals=2,
+            decimals=1,
         )
 
 
@@ -284,19 +446,54 @@ class ClipartsPredictionEvaluator:
         precision, recall, f1, _ = precision_recall_fscore_support(
             targets_obj, preds_obj, average="micro"
         )
-        return precision, recall, f1
+        return (
+            np.round(precision * 100, decimals=1),
+            np.round(recall * 100, decimals=1),
+            np.round(f1 * 100, decimals=1),
+        )
 
     def posses_expressions_accuracy(self):
-        num_targets = len(
-            [target for target in self.targets[:, 23:93] if target.sum() > 0]
+        num_targets_hbo = len(
+            [target for target in self.targets[:, 23:58] if target.sum() > 0]
         )
-        targets = np.zeros((num_targets, self.targets[:, 23:93].shape[1]))
-        predictions = np.zeros((num_targets, self.predictions[:, 23:93].shape[1]))
+        num_targets_hb1 = len(
+            [target for target in self.targets[:, 58:93] if target.sum() > 0]
+        )
+        targets_pose = np.zeros((num_targets_hbo + num_targets_hb1,))
+        targets_expr = np.zeros((num_targets_hbo + num_targets_hb1,))
+        predicts_pose = np.zeros((num_targets_hbo + num_targets_hb1,))
+        predicts_expr = np.zeros((num_targets_hbo + num_targets_hb1,))
         index = 0
         for i in range(self.targets.shape[0]):
-            if self.targets[i, 23:93].sum() > 0:
-                targets[index] = self.targets[i, 23:93]
-                predictions[index] = self.predictions[i, 23:93]
+            if self.targets[i, 23:58].sum() > 0:
+                # Get target index
+                target_index = self.targets[i, 23:58].argmax() + 23
+                # Get predictions index
+                pred_index = self.predictions[i, 23:58].argmax() + 23
+                # Update pose arrays
+                targets_pose[index] = index2pose_hb0[target_index]
+                predicts_pose[index] = index2pose_hb0[pred_index]
+                # Update expression arrays
+                targets_expr[index] = index2expression_hb0[target_index]
+                predicts_expr[index] = index2expression_hb0[pred_index]
+                # Update index
+                index += 1
+            if self.targets[i, 58:93].sum() > 0:
+                # Get target index
+                target_index = self.targets[i, 58:93].argmax() + 58
+                # Get predictions index
+                pred_index = self.predictions[i, 58:93].argmax() + 58
+                # Update pose arrays
+                targets_pose[index] = index2pose_hb1[target_index]
+                predicts_pose[index] = index2pose_hb1[pred_index]
+                # Update expression arrays
+                targets_expr[index] = index2expression_hb1[target_index]
+                predicts_expr[index] = index2expression_hb1[pred_index]
+                # Update index
                 index += 1
 
-        return accuracy_score(targets, predictions)
+        return (
+            np.round(accuracy_score(targets_pose, predicts_pose) * 100, decimals=1),
+            np.round(accuracy_score(targets_expr, predicts_expr) * 100, decimals=1),
+        )
+

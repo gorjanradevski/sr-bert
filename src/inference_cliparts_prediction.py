@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 import logging
 import json
@@ -69,10 +69,12 @@ def train(
             )
 
     precision, recall, f1_score = evaluator.per_object_pr()
-    posses_expressions_accuracy = evaluator.posses_expressions_accuracy()
+    posses_acc, expr_acc = evaluator.posses_expressions_accuracy()
     logging.info("====================================================")
     logging.info(f"Precison is {precision}, recall is {recall}, F1 is {f1_score}")
-    logging.info(f"Posess and expression accuracy is {posses_expressions_accuracy}")
+    logging.info(
+        f"Posess accuracy is {posses_acc}, and expression accuracy is {expr_acc}"
+    )
     logging.info("====================================================")
 
 

@@ -14,19 +14,21 @@ from scene_layouts.datasets import (
     BUCKET_SIZE,
 )
 from scene_layouts.evaluator import Evaluator
-from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
+from scene_layouts.modeling import (
+    SpatialDiscreteBert,
+    SpatialContinuousBert,
+    ClipartsPredictionModel,
+)
 
 
 def inference(
-    checkpoint_path: str,
+    sr_bert_checkpoint_path: str,
+    clip_pred_checkpoint_path: str,
     model_type: str,
     test_dataset_path: str,
     visual2index_path: str,
     gen_strategy: str,
     bert_name: str,
-    without_text: bool,
-    abs_dump_path: str,
-    rel_dump_path: str,
 ):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,13 +36,9 @@ def inference(
     # Create dataset
     visual2index = json.load(open(visual2index_path))
     test_dataset = (
-        DiscreteInferenceDataset(
-            test_dataset_path, visual2index, without_text=without_text
-        )
+        DiscreteInferenceDataset(test_dataset_path, visual2index)
         if model_type == "discrete"
-        else ContinuousInferenceDataset(
-            test_dataset_path, visual2index, without_text=without_text
-        )
+        else ContinuousInferenceDataset(test_dataset_path, visual2index)
     )
     print(f"Testing on {len(test_dataset)}")
     # Create sampler
@@ -53,20 +51,26 @@ def inference(
         collate_fn=collate_pad_batch,
         sampler=test_sampler,
     )
-    # Prepare model
+    # Prepare SR-BERT model
     assert model_type in ["discrete", "continuous"]
     config = BertConfig.from_pretrained(bert_name)
     config.vocab_size = len(visual2index) + 1
-    model = nn.DataParallel(
+    sr_bert = nn.DataParallel(
         SpatialDiscreteBert(config, bert_name)
         if model_type == "discrete"
         else SpatialContinuousBert(config, bert_name)
     ).to(device)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    model.train(False)
-    print(f"Starting inference from checkpoint {checkpoint_path}!")
-    if without_text:
-        print("The model won't use the text to perfrom the inference.")
+    sr_bert.load_state_dict(torch.load(sr_bert_checkpoint_path, map_location=device))
+    sr_bert.train(False)
+    # Prepare Cliparts prediction model
+    config = BertConfig.from_pretrained(bert_name)
+    config.vocab_size = len(visual2index)
+    clip_pred = nn.DataParallel(ClipartsPredictionModel(config, bert_name)).to(device)
+    clip_pred.load_state_dict(
+        torch.load(clip_pred_checkpoint_path, map_location=device)
+    )
+    clip_pred.train(False)
+    print(f"Starting inference from checkpoint {sr_bert_checkpoint_path}!")
     print(f"Using {gen_strategy}!")
     evaluator = Evaluator(len(test_dataset))
     with torch.no_grad():
@@ -97,6 +101,7 @@ def inference(
                 t_types.to(device),
                 attn_mask.to(device),
             )
+            
             max_ids_text = ids_text.size()[1]
             x_out, y_out, o_out = generation_strategy_factory(
                 gen_strategy,
@@ -109,7 +114,7 @@ def inference(
                 o_ind,
                 t_types,
                 attn_mask,
-                model,
+                sr_bert,
                 device,
             )
             x_out, y_out = (
@@ -132,9 +137,6 @@ def inference(
         print(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
-        print(f"The avg ACCURACY for the flip is: {evaluator.get_o_acc()}")
-        if abs_dump_path is not None and rel_dump_path is not None:
-            evaluator.dump_results(abs_dump_path, rel_dump_path)
 
 
 def parse_args():
@@ -142,9 +144,7 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Performs inference with a SpatialBERT model."
-    )
+    parser = argparse.ArgumentParser(description="Performs scene generation inference.")
     parser.add_argument(
         "--model_type",
         type=str,
@@ -170,9 +170,6 @@ def parse_args():
         help="Path to the visual2index mapping json.",
     )
     parser.add_argument(
-        "--without_text", action="store_true", help="Whether to use the text."
-    )
-    parser.add_argument(
         "--gen_strategy",
         type=str,
         default="highest_confidence",
@@ -183,18 +180,6 @@ def parse_args():
         type=str,
         default="bert-base-uncased",
         help="The bert model name.",
-    )
-    parser.add_argument(
-        "--abs_dump_path",
-        type=str,
-        default=None,
-        help="Location of the absolute distance results.",
-    )
-    parser.add_argument(
-        "--rel_dump_path",
-        type=str,
-        default=None,
-        help="Location of the relative distance results.",
     )
 
     return parser.parse_args()
@@ -209,9 +194,6 @@ def main():
         args.visual2index_path,
         args.gen_strategy,
         args.bert_name,
-        args.without_text,
-        args.abs_dump_path,
-        args.rel_dump_path,
     )
 
 
