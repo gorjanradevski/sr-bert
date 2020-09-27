@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from torch.nn import functional as F
+from torch.nn import functional as F  # type: ignore
 from typing import List
 
 from scene_layouts.datasets import X_MASK, Y_MASK, O_MASK
@@ -50,14 +50,12 @@ class Hypothesis:
         )
 
 
-def highest_confidence_beam(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
+def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     # Set all indices to MASK tokens
+    x_ind = torch.full_like(ids_vis, X_MASK)
+    y_ind = torch.full_like(ids_vis, Y_MASK)
+    o_ind = torch.full_like(ids_vis, O_MASK)
     beam_size = 3
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
@@ -187,13 +185,11 @@ def highest_confidence_beam(
     )
 
 
-def one_step_all(
-    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
+def one_step_all(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
+    x_ind = torch.full_like(ids_vis, X_MASK)
+    y_ind = torch.full_like(ids_vis, Y_MASK)
+    o_ind = torch.full_like(ids_vis, O_MASK)
     max_ids_text = ids_text.size()[1]
     x_scores, y_scores, o_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
@@ -212,14 +208,12 @@ def one_step_all(
     return x_ind, y_ind, o_ind
 
 
-def human_order(
-    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
+def human_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
+    x_ind = torch.full_like(ids_vis, X_MASK)
+    y_ind = torch.full_like(ids_vis, Y_MASK)
+    o_ind = torch.full_like(ids_vis, O_MASK)
     max_ids_text = ids_text.size()[1]
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
@@ -238,37 +232,6 @@ def human_order(
             raise ValueError("Invalid mode!")
 
         o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text + i]
-
-    return x_ind, y_ind, o_ind
-
-
-def human_order_no_look_ahead(
-    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
-    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
-    max_ids_text = ids_text.size()[1]
-    attn_mask[:, max_ids_text:] = 0
-    for i in range(ids_vis.size()[1]):
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        o_ind[:, i] = O_MASK
-        attn_mask[:, max_ids_text + i] = 1
-        x_scores, y_scores, o_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
-        )
-        if mode == "discrete":
-            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
-        elif mode == "continuous":
-            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
-        else:
-            raise ValueError("Invalid mode!")
-        o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text:][:, i]
 
     return x_ind, y_ind, o_ind
 
@@ -346,14 +309,12 @@ def qa_discrete(
     return x_out, y_out, o_out, mask
 
 
-def random_order(
-    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
+def random_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     # Order: Sky, Large, People, Animals, Clothing, Food, Toys
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
+    x_ind = torch.full_like(ids_vis, X_MASK)
+    y_ind = torch.full_like(ids_vis, Y_MASK)
+    o_ind = torch.full_like(ids_vis, O_MASK)
     max_ids_text = ids_text.size()[1]
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
     for i in indices:
@@ -376,45 +337,11 @@ def random_order(
     return x_ind, y_ind, o_ind
 
 
-def random_order_no_look_ahead(
-    mode, ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
-    # Order: Sky, Large, People, Animals, Clothing, Food, Toys
+def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
-    max_ids_text = ids_text.size()[1]
-    attn_mask[:, max_ids_text:] = 0
-    indices = np.random.permutation(list(range(ids_vis.size()[1])))
-    for i in indices:
-        x_ind[:, i] = X_MASK
-        y_ind[:, i] = Y_MASK
-        o_ind[:, i] = O_MASK
-        attn_mask[:, max_ids_text + i] = 1
-        x_scores, y_scores, o_scores = model(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
-        )
-        if mode == "discrete":
-            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
-        elif mode == "continuous":
-            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
-            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
-        else:
-            raise ValueError("Invalid mode!")
-        o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text + i]
-
-    return x_ind, y_ind, o_ind
-
-
-def highest_confidence(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
-):
-    # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
+    x_ind = torch.full_like(ids_vis, X_MASK)
+    y_ind = torch.full_like(ids_vis, Y_MASK)
+    o_ind = torch.full_like(ids_vis, O_MASK)
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
@@ -458,13 +385,11 @@ def entropy(inputs: torch.Tensor):
     return torch.sum(-torch.exp(inputs) * torch.log2(torch.exp(inputs)), dim=-1)
 
 
-def lowest_entropy(
-    ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model, device
-):
+def lowest_entropy(ids_text, ids_vis, pos_text, t_types, attn_mask, model, device):
     # Set all indices to MASK tokens
-    x_ind[:, :] = X_MASK
-    y_ind[:, :] = Y_MASK
-    o_ind[:, :] = O_MASK
+    x_ind = torch.full_like(ids_vis, X_MASK)
+    y_ind = torch.full_like(ids_vis, Y_MASK)
+    o_ind = torch.full_like(ids_vis, O_MASK)
     batch_indices = list(range(ids_text.size()[0]))
     max_ids_text = ids_text.size()[1]
     pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
@@ -528,9 +453,6 @@ def generation_strategy_factory(
     ids_text,
     ids_vis,
     pos_text,
-    x_ind,
-    y_ind,
-    o_ind,
     t_types,
     attn_mask,
     model,
@@ -538,102 +460,27 @@ def generation_strategy_factory(
 ):
     if gen_strategy == "one_step_all":
         return one_step_all(
-            mode,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
+            mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model
         )
     elif gen_strategy == "human_order":
-        return human_order(
-            mode,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
-        )
-    elif gen_strategy == "human_order_nla":
-        return human_order_no_look_ahead(
-            mode,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
-        )
+        return human_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model)
     elif gen_strategy == "highest_confidence_beam":
         return highest_confidence_beam(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
+            ids_text, ids_vis, pos_text, t_types, attn_mask, model
         )
     elif gen_strategy == "highest_confidence":
         return highest_confidence(
-            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask, model
+            ids_text, ids_vis, pos_text, t_types, attn_mask, model
         )
     elif gen_strategy == "lowest_entropy":
         return lowest_entropy(
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
-            device,
+            ids_text, ids_vis, pos_text, t_types, attn_mask, model, device
         )
     elif gen_strategy == "random_order":
         return random_order(
-            mode,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
-        )
-    elif gen_strategy == "random_order_nla":
-        return random_order_no_look_ahead(
-            mode,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
+            mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model
         )
     elif gen_strategy == "train_cond":
-        return train_cond(
-            mode,
-            ids_text,
-            ids_vis,
-            pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
-            t_types,
-            attn_mask,
-            model,
-        )
+        return train_cond(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model)
     else:
         raise ValueError(f"{gen_strategy} doesn't exist!")

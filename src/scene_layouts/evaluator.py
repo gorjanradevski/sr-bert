@@ -186,39 +186,60 @@ class Evaluator:
         self.index = 0
 
     def get_abs_dist(self):
-        return np.round(self.abs_dist.mean(), decimals=1)
+        return np.round(self.abs_dist.mean(), decimals=3)
 
     def get_rel_dist(self):
-        return np.round(self.rel_dist.mean(), decimals=1)
+        return np.round(self.rel_dist.mean(), decimals=3)
 
     def get_o_acc(self):
-        return np.round(self.o_acc.mean() * 100, decimals=1)
+        return np.round(self.o_acc.mean() * 100, decimals=3)
 
     def get_abs_error_bar(self):
         return np.round(
-            np.std(self.abs_dist, ddof=1) / np.sqrt(self.total_elements), decimals=1
+            np.std(self.abs_dist, ddof=1) / np.sqrt(self.total_elements), decimals=3
         )
 
     def get_rel_error_bar(self):
         return np.round(
-            np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=1
+            np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=3
         )
 
     def dump_results(self, abs_dump_path: str, rel_dump_path: str):
         np.save(abs_dump_path, self.abs_dist, allow_pickle=False)
         np.save(rel_dump_path, self.rel_dist, allow_pickle=False)
 
-    def find_common_pos(self, pred_clips, gt_clips, pred_pos, gt_pos):
+    def find_common_pos(
+        self,
+        pred_clips,
+        gt_clips,
+        pred_pos_x,
+        gt_pos_x,
+        pred_pos_y,
+        gt_pos_y,
+        pred_pos_o,
+        gt_pos_o,
+    ):
         # https://github.com/uvavision/Text2Scene/blob/master/lib/modules/abstract_evaluator.py#L309
-        common_preds = []
-        common_gts = []
-        for i in range(pred_clips):
+        common_pred_x, common_pred_y, common_pred_o = [], [], []
+        common_gts_x, common_gts_y, common_gts_o = [], [], []
+        for i in range(len(pred_clips)):
             if pred_clips[i] in gt_clips:
-                common_preds.append([pred_pos[i]["x"], pred_pos[i]["y"]])
+                common_pred_x.append(pred_pos_x[i])
+                common_pred_y.append(pred_pos_y[i])
+                common_pred_o.append(pred_pos_o[i])
                 index_gt = gt_clips.index(pred_clips[i])
-                common_gts.append([gt_pos[index_gt]["x"], gt_pos[index_gt]["y"]])
-        
-        return common_preds, common_gts
+                common_gts_x.append(gt_pos_x[index_gt])
+                common_gts_y.append(gt_pos_y[index_gt])
+                common_gts_o.append(gt_pos_o[index_gt])
+
+        return (
+            torch.tensor(common_pred_x).unsqueeze(0),
+            torch.tensor(common_pred_y).unsqueeze(0),
+            torch.tensor(common_pred_o).unsqueeze(0),
+            torch.tensor(common_gts_x).unsqueeze(0),
+            torch.tensor(common_gts_y).unsqueeze(0),
+            torch.tensor(common_gts_o).unsqueeze(0),
+        )
 
 
 def flip_scene(labs: torch.Tensor):
@@ -243,17 +264,17 @@ def abs_distance(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
     # BECAUSE OF THE SIMILARITY FUNCTION
-    dist = torch.min(dist_normal, dist_flipped)
+    dist = torch.max(dist_normal, dist_flipped)
 
     return dist, (dist == dist_flipped).float()
 
 
 def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # REBUTTAL: Normalize coordinates
-    x_inds_norm = x_inds.clone()
-    y_inds_norm = y_inds.clone()
-    x_labs_norm = x_labs.clone().float()
-    y_labs_norm = y_labs.clone().float()
+    x_inds_norm = x_inds.clone() / 500
+    y_inds_norm = y_inds.clone() / 400
+    x_labs_norm = x_labs.clone().float() / 500
+    y_labs_norm = y_labs.clone().float() / 400
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
     dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
@@ -268,14 +289,14 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist.sum(-1) / attn_mask.sum(-1)
     # REBUTTAL: Gaussian kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    # dist = torch.exp(-0.5 * dist / 0.2)
+    dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
 
 def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
-    X_inds_norm = X.clone().float()
-    Y_inds_norm = Y.clone().float()
+    X_inds_norm = X.clone().float() / 500
+    Y_inds_norm = Y.clone().float() / 400
     x_dist = torch.pow(
         torch.unsqueeze(X_inds_norm, 1) - torch.unsqueeze(X_inds_norm, 2), 2
     ).float()
@@ -309,7 +330,7 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist.sum(-1) / attn_mask.sum(-1)
     # REBUTTAL: Gaussian kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    # dist = torch.exp(-0.5 * dist / 0.2)
+    dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
@@ -352,12 +373,12 @@ class QaEvaluator:
 
     def get_abs_dist(self):
         return np.round(
-            self.abs_dist.sum() / np.count_nonzero(self.abs_dist), decimals=1
+            self.abs_dist.sum() / np.count_nonzero(self.abs_dist), decimals=3
         )
 
     def get_rel_dist(self):
         return np.round(
-            self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=1
+            self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=3
         )
 
     def get_o_acc(self):
@@ -368,13 +389,13 @@ class QaEvaluator:
     def get_abs_error_bar(self):
         return np.round(
             np.std(self.abs_dist, ddof=1) / np.sqrt(np.count_nonzero(self.abs_dist)),
-            decimals=1,
+            decimals=3,
         )
 
     def get_rel_error_bar(self):
         return np.round(
             np.std(self.rel_dist, ddof=1) / np.sqrt(np.count_nonzero(self.rel_dist)),
-            decimals=1,
+            decimals=3,
         )
 
     def get_o_acc_error_bar(self):

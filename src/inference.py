@@ -74,9 +74,9 @@ def inference(
             ids_text,
             ids_vis,
             pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
+            _,
+            _,
+            _,
             x_lab,
             y_lab,
             o_lab,
@@ -84,13 +84,10 @@ def inference(
             attn_mask,
         ) in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
+            ids_text, ids_vis, pos_text, x_lab, y_lab, o_lab, t_types, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 pos_text.to(device),
-                x_ind.to(device),
-                y_ind.to(device),
-                o_ind.to(device),
                 x_lab.to(device),
                 y_lab.to(device),
                 o_lab.to(device),
@@ -104,9 +101,6 @@ def inference(
                 ids_text,
                 ids_vis,
                 pos_text,
-                x_ind,
-                y_ind,
-                o_ind,
                 t_types,
                 attn_mask,
                 model,
