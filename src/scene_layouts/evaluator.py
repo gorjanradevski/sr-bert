@@ -160,6 +160,7 @@ class Evaluator:
         self.abs_dist = np.zeros(self.total_elements)
         self.rel_dist = np.zeros(self.total_elements)
         self.o_acc = np.zeros(self.total_elements)
+        self.u_obj_coord = np.zeros(self.total_elements)
         self.index = 0
 
     def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask):
@@ -177,22 +178,31 @@ class Evaluator:
         self.o_acc[self.index : self.index + batch_size] += (
             flip_acc(o_out, o_lab, attn_mask, flips).cpu().numpy()
         )
+        # Update U-obj coord
+        self.u_obj_coord[self.index : self.index + batch_size] = (
+            u_obj_coord(x_out, x_lab, y_out, y_lab, attn_mask).cpu().numpy()
+        )
+
         self.index += batch_size
 
     def reset_metrics(self):
         self.abs_dist = np.zeros(self.total_elements)
         self.rel_dist = np.zeros(self.total_elements)
         self.o_acc = np.zeros(self.total_elements)
+        self.u_obj_coord = np.zeros(self.total_elements)
         self.index = 0
 
     def get_abs_dist(self):
-        return np.round(self.abs_dist.mean(), decimals=3)
+        return np.round(self.abs_dist.mean(), decimals=1)
 
     def get_rel_dist(self):
-        return np.round(self.rel_dist.mean(), decimals=3)
+        return np.round(self.rel_dist.mean(), decimals=1)
 
     def get_o_acc(self):
-        return np.round(self.o_acc.mean() * 100, decimals=3)
+        return np.round(self.o_acc.mean() * 100, decimals=1)
+
+    def get_u_obj_coord(self):
+        return np.round(self.u_obj_coord.mean(), decimals=3)
 
     def get_abs_error_bar(self):
         return np.round(
@@ -208,7 +218,7 @@ class Evaluator:
         np.save(abs_dump_path, self.abs_dist, allow_pickle=False)
         np.save(rel_dump_path, self.rel_dist, allow_pickle=False)
 
-    def find_common_pos(
+    def find_common_cliparts(
         self,
         pred_clips,
         gt_clips,
@@ -263,18 +273,16 @@ def abs_distance(
     dist_flipped = abs_distance_single(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
-    # BECAUSE OF THE SIMILARITY FUNCTION IT IS MAX
-    dist = torch.max(dist_normal, dist_flipped)
+    dist = torch.min(dist_normal, dist_flipped)
 
     return dist, (dist == dist_flipped).float()
 
 
 def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
-    # REBUTTAL: Normalize coordinates
-    x_inds_norm = x_inds.clone() / 500
-    y_inds_norm = y_inds.clone() / 400
-    x_labs_norm = x_labs.clone().float() / 500
-    y_labs_norm = y_labs.clone().float() / 400
+    x_inds_norm = x_inds.clone()
+    y_inds_norm = y_inds.clone()
+    x_labs_norm = x_labs.clone().float()
+    y_labs_norm = y_labs.clone().float()
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
     dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
@@ -287,16 +295,44 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = dist * mask_masked
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / attn_mask.sum(-1)
-    # REBUTTAL: Gaussian kernel
-    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
 
+# def u_obj_coord(x_inds, x_labs, y_inds, y_labs, attn_mask):
+#     # Obtain normal dist
+#     normal_sim = u_obj_coord_single(x_inds, x_labs, y_inds, y_labs, attn_mask)
+#     x_labs_flipped = flip_scene(x_labs)
+#     flipped_sim = u_obj_coord_single(
+#         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
+#     )
+#     sim = torch.max(normal_sim, flipped_sim)
+
+#     return sim
+
+
+def u_obj_coord(x_inds, x_labs, y_inds, y_labs, attn_mask):
+    x_inds_norm = x_inds.clone() / 500
+    y_inds_norm = y_inds.clone() / 400
+    x_labs_norm = x_labs.clone().float() / 500
+    y_labs_norm = y_labs.clone().float() / 400
+    # Obtain dist for X and Y
+    sim_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
+    sim_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
+    sim = torch.sqrt(sim_x + sim_y + (torch.ones_like(sim_x) * 1e-15))
+    # Remove the distance for the padding tokens
+    sim = sim * attn_mask
+    # Obtain average distance for each scene without considering the padding tokens
+    sim = sim.sum(-1) / attn_mask.sum(-1)
+    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
+    sim = torch.exp(-0.5 * sim / 0.2)
+
+    return sim
+
+
 def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
-    X_inds_norm = X.clone().float() / 500
-    Y_inds_norm = Y.clone().float() / 400
+    X_inds_norm = X.clone().float()
+    Y_inds_norm = Y.clone().float()
     x_dist = torch.pow(
         torch.unsqueeze(X_inds_norm, 1) - torch.unsqueeze(X_inds_norm, 2), 2
     ).float()
@@ -325,12 +361,9 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
         * mask_masked.unsqueeze(1).expand(dist.size())
         * mask_masked.unsqueeze(-1).expand(dist.size())
     )
-    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)  # .unsqueeze(-1)
+    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
-    # REBUTTAL: Gaussian kernel
-    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    dist = torch.exp(-0.5 * dist / 0.2)
 
     return dist
 
@@ -491,8 +524,6 @@ class ClipartsPredictionEvaluator:
                 target_index = self.targets[i, 23:58].argmax() + 23
                 # Get predictions index
                 pred_index = self.predictions[i, 23:58].argmax() + 23
-                print(pred_index, target_index)
-                print("=====================")
                 # Update pose arrays
                 targets_pose[index] = index2pose_hb0[target_index]
                 predicts_pose[index] = index2pose_hb0[pred_index]
@@ -506,8 +537,6 @@ class ClipartsPredictionEvaluator:
                 target_index = self.targets[i, 58:93].argmax() + 58
                 # Get predictions index
                 pred_index = self.predictions[i, 58:93].argmax() + 58
-                print(target_index, pred_index)
-                print("=====================")
                 # Update pose arrays
                 targets_pose[index] = index2pose_hb1[target_index]
                 predicts_pose[index] = index2pose_hb1[pred_index]

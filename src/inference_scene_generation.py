@@ -95,8 +95,8 @@ def inference(
             probs = torch.sigmoid(clip_pred_model(ids_text, ids_text_attn_mask))
             clip_art_preds = torch.zeros_like(probs)
             # Regular objects
-            clip_art_preds[:, :23][torch.where(probs[:, :23] > 0.5)] = 1
-            clip_art_preds[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
+            clip_art_preds[:, :23][torch.where(probs[:, :23] > 0.4)] = 1
+            clip_art_preds[:, 93:][torch.where(probs[:, 93:] > 0.4)] = 1
             # Mike and Jenny
             batch_indices = torch.arange(ids_text.size()[0])
             max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
@@ -132,7 +132,7 @@ def inference(
                 x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
                 y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
-            common_pred_x, common_pred_y, common_pred_o, common_gts_x, common_gts_y, common_gts_o = evaluator.find_common_pos(
+            common_pred_x, common_pred_y, common_pred_o, common_gts_x, common_gts_y, common_gts_o = evaluator.find_common_cliparts(
                 pred_vis[0].tolist(),
                 gt_vis[0].tolist(),
                 x_out[0].tolist(),
@@ -153,12 +153,7 @@ def inference(
                 common_attn_mask,
             )
 
-        print(
-            f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"
-        )
-        print(
-            f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
-        )
+        print(f"The U-obj coord per scene is: {evaluator.get_u_obj_coord()}")
 
 
 def parse_args():

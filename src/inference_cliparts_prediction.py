@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import logging
 import json
@@ -28,9 +28,7 @@ def train(
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    test_dataset = Subset(
-        ClipartsPredictionDataset(test_dataset_path, visual2index), list(range(100))
-    )
+    test_dataset = ClipartsPredictionDataset(test_dataset_path, visual2index)
     logging.info(f"Inference on {len(test_dataset)}")
     # Create loaders
     test_loader = DataLoader(
@@ -57,8 +55,8 @@ def train(
             probs = torch.sigmoid(model(ids_text, attn_mask))
             one_hot_pred = torch.zeros_like(probs)
             # Regular objects
-            one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.5)] = 1
-            one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
+            one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
+            one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
             # Mike and Jenny
             batch_indices = torch.arange(ids_text.size()[0])
             max_hb0 = torch.argmax(probs[:, 23:58], axis=-1) + 23
@@ -100,7 +98,7 @@ def parse_args():
         default="data/visual2index.json",
         help="Path to the visual2index mapping json.",
     )
-    parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
+    parser.add_argument("--batch_size", type=int, default=32, help="The batch size.")
     parser.add_argument(
         "--checkpoint_path",
         type=str,
