@@ -28,7 +28,9 @@ def train(
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(open(visual2index_path))
-    test_dataset = ClipartsPredictionDataset(test_dataset_path, visual2index)
+    test_dataset = Subset(
+        ClipartsPredictionDataset(test_dataset_path, visual2index), list(range(100))
+    )
     logging.info(f"Inference on {len(test_dataset)}")
     # Create loaders
     test_loader = DataLoader(
@@ -59,10 +61,10 @@ def train(
             one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
             # Mike and Jenny
             batch_indices = torch.arange(ids_text.size()[0])
-            max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
-            one_hot_pred[batch_indices, max_hb0 + 23] = 1
-            max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
-            one_hot_pred[batch_indices, max_hb1 + 58] = 1
+            max_hb0 = torch.argmax(probs[:, 23:58], axis=-1) + 23
+            one_hot_pred[batch_indices, max_hb0] = 1
+            max_hb1 = torch.argmax(probs[:, 58:93], axis=-1) + 58
+            one_hot_pred[batch_indices, max_hb1] = 1
             # Aggregate predictions/targets
             evaluator.update_counters(
                 one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()

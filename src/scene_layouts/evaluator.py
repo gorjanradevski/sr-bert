@@ -263,7 +263,7 @@ def abs_distance(
     dist_flipped = abs_distance_single(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
-    # BECAUSE OF THE SIMILARITY FUNCTION
+    # BECAUSE OF THE SIMILARITY FUNCTION IT IS MAX
     dist = torch.max(dist_normal, dist_flipped)
 
     return dist, (dist == dist_flipped).float()
@@ -325,9 +325,9 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
         * mask_masked.unsqueeze(1).expand(dist.size())
         * mask_masked.unsqueeze(-1).expand(dist.size())
     )
-    dist = dist.sum(-1) / attn_mask.sum(-1).unsqueeze(-1)
+    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)  # .unsqueeze(-1)
     # Obtain average distance for each scene without considering the padding tokens
-    dist = dist.sum(-1) / attn_mask.sum(-1)
+    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
     # REBUTTAL: Gaussian kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
     dist = torch.exp(-0.5 * dist / 0.2)
@@ -341,7 +341,7 @@ def flip_acc(inds, labs, attn_mask, flips):
     return (inds == labs).sum(-1).float() / attn_mask.sum(-1)
 
 
-class QaEvaluator:
+class ScEvaluator:
     def __init__(self, total_elements):
         self.total_elements = total_elements
         self.abs_dist = np.zeros(self.total_elements)
@@ -353,14 +353,14 @@ class QaEvaluator:
         # Update absolute distance
         batch_size = x_out.size()[0]
         self.abs_dist[self.index : self.index + batch_size] = (
-            abs_distance_qa(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
+            abs_distance_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
         )
         # Update relative distance
         self.rel_dist[self.index : self.index + batch_size] = (
-            relative_distance_qa(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
+            relative_distance_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
         )
         self.flip_acc[self.index : self.index + batch_size] = (
-            flip_acc_qa(o_out, o_lab, mask).cpu().numpy()
+            flip_acc_sc(o_out, o_lab, mask).cpu().numpy()
         )
 
         self.index += batch_size
@@ -406,7 +406,7 @@ class QaEvaluator:
         )
 
 
-def relative_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
+def relative_distance_sc(x_inds, x_labs, y_inds, y_labs, mask):
     dist = torch.abs(
         elementwise_distances(x_inds, y_inds) - elementwise_distances(x_labs, y_labs)
     ).float()
@@ -417,7 +417,7 @@ def relative_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
     return dist
 
 
-def abs_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
+def abs_distance_sc(x_inds, x_labs, y_inds, y_labs, mask):
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds - x_labs, 2).float()
     dist_y = torch.pow(y_inds - y_labs, 2).float()
@@ -430,7 +430,7 @@ def abs_distance_qa(x_inds, x_labs, y_inds, y_labs, mask):
     return dist
 
 
-def flip_acc_qa(inds, labs, mask):
+def flip_acc_sc(inds, labs, mask):
     acc = ((inds == labs).float() + 1e-15) * mask
     return acc.sum(-1) / (mask.sum(-1) + 1e-15)
 
@@ -491,6 +491,8 @@ class ClipartsPredictionEvaluator:
                 target_index = self.targets[i, 23:58].argmax() + 23
                 # Get predictions index
                 pred_index = self.predictions[i, 23:58].argmax() + 23
+                print(pred_index, target_index)
+                print("=====================")
                 # Update pose arrays
                 targets_pose[index] = index2pose_hb0[target_index]
                 predicts_pose[index] = index2pose_hb0[pred_index]
@@ -504,6 +506,8 @@ class ClipartsPredictionEvaluator:
                 target_index = self.targets[i, 58:93].argmax() + 58
                 # Get predictions index
                 pred_index = self.predictions[i, 58:93].argmax() + 58
+                print(target_index, pred_index)
+                print("=====================")
                 # Update pose arrays
                 targets_pose[index] = index2pose_hb1[target_index]
                 predicts_pose[index] = index2pose_hb1[pred_index]

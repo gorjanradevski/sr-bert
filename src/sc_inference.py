@@ -7,14 +7,14 @@ import json
 from transformers import BertConfig
 from typing import Dict
 
-from scene_layouts.generation_strategies import qa_discrete
+from scene_layouts.generation_strategies import sc_discrete
 from scene_layouts.datasets import (
     DiscreteInferenceDataset,
     ContinuousInferenceDataset,
     collate_pad_batch,
     BUCKET_SIZE,
 )
-from scene_layouts.evaluator import QaEvaluator
+from scene_layouts.evaluator import ScEvaluator
 from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
 
 
@@ -88,7 +88,7 @@ def inference(
     print(f"Starting inference from checkpoint {checkpoint_path}!")
     if without_text:
         print("The model won't use the text to perfrom the inference.")
-    evaluator = QaEvaluator(len(test_dataset))
+    evaluator = ScEvaluator(len(test_dataset))
     with torch.no_grad():
         for (
             ids_text,
@@ -118,7 +118,7 @@ def inference(
                 attn_mask.to(device),
             )
             max_ids_text = ids_text.size()[1]
-            x_out, y_out, o_out, mask = qa_discrete(
+            x_out, y_out, o_out, mask = sc_discrete(
                 group_elements,
                 ids_text,
                 ids_vis,

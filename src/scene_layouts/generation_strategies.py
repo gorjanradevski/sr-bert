@@ -269,7 +269,7 @@ def train_cond(
     return x_out, y_out, o_out
 
 
-def qa_discrete(
+def sc_discrete(
     group_inds,
     ids_text,
     ids_vis,
