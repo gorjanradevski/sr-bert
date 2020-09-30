@@ -66,7 +66,7 @@ def train(
     optimizer = optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    best_f_score = -1.0
+    best_score = -1.0
     evaluator = ClipartsPredictionEvaluator(len(val_dataset), visual2index)
     for epoch in range(epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
@@ -108,30 +108,33 @@ def train(
                 # Get predictions
                 probs = torch.sigmoid(model(ids_text, attn_mask))
                 one_hot_pred = torch.zeros_like(probs)
-                # # Regular objects
-                # one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.5)] = 1
-                # one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
-                # # Mike and Jenny
-                # batch_indices = torch.arange(ids_text.size()[0])
-                # max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
-                # one_hot_pred[batch_indices, max_hb0 + 23] = 1
-                # max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
-                # one_hot_pred[batch_indices, max_hb1 + 58] = 1
-                one_hot_pred[torch.where(probs > 0.5)] = 1
+                # Regular objects
+                one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.5)] = 1
+                one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
+                # Mike and Jenny
+                batch_indices = torch.arange(ids_text.size()[0])
+                max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
+                one_hot_pred[batch_indices, max_hb0 + 23] = 1
+                max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
+                one_hot_pred[batch_indices, max_hb1 + 58] = 1
                 # Aggregate predictions/targets
                 evaluator.update_counters(
                     one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
                 )
 
-        cur_f_score = evaluator.f1_score()
-        if cur_f_score > best_f_score:
-            best_f_score = cur_f_score
+        precision, recall, _ = evaluator.per_object_pr()
+        posses_acc, expr_acc = evaluator.posses_expressions_accuracy()
+        total_score = precision + recall + posses_acc + expr_acc
+        if total_score > best_score:
+            best_score = total_score
             logging.info("====================================================")
+            logging.info(f"Found best on epoch {epoch+1}. Saving model!")
+            logging.info(f"Precison is {precision}, recall is {recall}")
             logging.info(
-                f"Found best with F1 {best_f_score} on epoch {epoch+1}. Saving model!"
+                f"Posess accuracy is {posses_acc}, and expression accuracy is {expr_acc}"
             )
-            torch.save(model.state_dict(), save_model_path)
             logging.info("====================================================")
+            torch.save(model.state_dict(), save_model_path)
 
 
 def parse_args():
