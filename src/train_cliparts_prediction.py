@@ -26,6 +26,7 @@ def train(
     weight_decay: float,
     epochs: int,
     clip_val: float,
+    object_loss_weight: float,
     save_model_path: str,
     log_filepath: str,
 ):
@@ -100,7 +101,10 @@ def train(
                     ids_text, attn_mask
                 )
                 # Loss and backward
-                object_loss = object_criterion(object_probs, one_hot_objects_targets)
+                object_loss = (
+                    object_criterion(object_probs, one_hot_objects_targets)
+                    * object_loss_weight
+                )
                 hb0_pose_loss = pose_expr_criterion(hb0_pose_probs, hb0_poses_targets)
                 hb0_expr_loss = pose_expr_criterion(hb0_expr_probs, hb0_exprs_targets)
                 hb1_pose_loss = pose_expr_criterion(hb1_pose_probs, hb1_poses_targets)
@@ -182,14 +186,16 @@ def train(
                     hb0_hb1_exprs_preds.cpu().numpy(),
                 )
 
-        precision, recall, _ = evaluator.per_object_pr()
+        precision, recall, f1_score = evaluator.per_object_pr()
         posses_acc, expr_acc = evaluator.posses_expressions_accuracy()
-        total_score = precision + recall + posses_acc + expr_acc
+        total_score = f1_score + posses_acc + expr_acc
         if total_score > best_score:
             best_score = total_score
             logging.info("====================================================")
             logging.info(f"Found best on epoch {epoch+1}. Saving model!")
-            logging.info(f"Precison is {precision}, recall is {recall}")
+            logging.info(
+                f"Precison is {precision}, recall is {recall}, f1 score is {f1_score}"
+            )
             logging.info(
                 f"Posess accuracy is {posses_acc}, and expressions accuracy is {expr_acc}"
             )
@@ -232,6 +238,9 @@ def parse_args():
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
     )
     parser.add_argument(
+        "--object_loss_weight", type=float, default=1.0, help="The object loss weight."
+    )
+    parser.add_argument(
         "--weight_decay", type=float, default=0.01, help="The weight decay."
     )
     parser.add_argument(
@@ -265,6 +274,7 @@ def main():
         args.weight_decay,
         args.epochs,
         args.clip_val,
+        args.object_loss_weight,
         args.save_model_path,
         args.log_filepath,
     )

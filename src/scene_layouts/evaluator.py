@@ -368,25 +368,26 @@ class ClipartsPredictionEvaluator:
         self.index_poses_exprs += batch_size * 2
 
     def reset_counters(self):
-        # Create prediction arrays
+        # Reset prediction arrays
         self.object_preds = np.zeros((self.dataset_size, 56))
         self.hb0_hb1_poses_preds = np.zeros((self.dataset_size * 2,))
         self.hb0_hb1_exprs_preds = np.zeros((self.dataset_size * 2,))
-        # Create target arrays
+        # Reset target arrays
         self.object_targets = np.zeros((self.dataset_size, 56))
         self.hb0_hb1_poses_targets = np.zeros((self.dataset_size * 2,))
         self.hb0_hb1_exprs_targets = np.zeros((self.dataset_size * 2,))
+        # Reset indexes
         self.index_objects = 0
         self.index_poses_exprs = 0
 
     def per_object_pr(self):
-        precision, recall, f1, _ = precision_recall_fscore_support(
+        precision, recall, f1_score, _ = precision_recall_fscore_support(
             self.object_targets, self.object_preds, average="micro"
         )
         return (
             np.round(precision * 100, decimals=1),
             np.round(recall * 100, decimals=1),
-            np.round(f1 * 100, decimals=1),
+            np.round(f1_score * 100, decimals=1)
         )
 
     def posses_expressions_accuracy(self):

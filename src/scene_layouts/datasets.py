@@ -551,11 +551,13 @@ class ClipartsPredictionDataset(TorchDataset):
                 hb0_expr = index2expression_hb0[visual]
             elif visual in index2pose_hb1 and visual in index2expression_hb1:
                 hb1_pose = index2pose_hb1[visual]
-                hb1_expr = index2expression_hb1[visual]                
+                hb1_expr = index2expression_hb1[visual]
             elif visual > 92:
                 object_visuals.append(visual - 70)
-            else:
+            elif visual < 23:
                 object_visuals.append(visual)
+            else:
+                raise ValueError("Impossible")
 
         one_hot_objects = torch.zeros(23 + 33)
         one_hot_objects[object_visuals] = 1
