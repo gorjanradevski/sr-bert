@@ -43,29 +43,66 @@ def train(
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
     evaluator = ClipartsPredictionEvaluator(len(test_dataset), visual2index)
+    # Set model in evaluation mode
+    model.train(False)
     with torch.no_grad():
-        for ids_text, attn_mask, target_visuals in tqdm(test_loader):
+        for (
+            ids_text,
+            attn_mask,
+            one_hot_objects_targets,
+            hb0_poses_targets,
+            hb0_exprs_targets,
+            hb1_poses_targets,
+            hb1_exprs_targets,
+        ) in tqdm(test_loader):
             # forward
-            ids_text, attn_mask, target_visuals = (
+            ids_text, attn_mask, one_hot_objects_targets, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
                 ids_text.to(device),
                 attn_mask.to(device),
-                target_visuals.to(device),
+                one_hot_objects_targets.to(device),
+                hb0_poses_targets.to(device),
+                hb0_exprs_targets.to(device),
+                hb1_poses_targets.to(device),
+                hb1_exprs_targets.to(device),
             )
             # Get predictions
-            probs = torch.sigmoid(model(ids_text, attn_mask))
-            one_hot_pred = torch.zeros_like(probs)
+            object_outs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
+                ids_text, attn_mask
+            )
+            object_probs = torch.sigmoid(object_outs)
+            one_hot_objects_preds = torch.zeros_like(object_probs)
             # Regular objects
-            one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
-            one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
-            # Mike and Jenny
-            batch_indices = torch.arange(ids_text.size()[0])
-            max_hb0 = torch.argmax(probs[:, 23:58], axis=-1) + 23
-            one_hot_pred[batch_indices, max_hb0] = 1
-            max_hb1 = torch.argmax(probs[:, 58:93], axis=-1) + 58
-            one_hot_pred[batch_indices, max_hb1] = 1
+            one_hot_objects_preds[torch.where(object_probs > 0.4)] = 1
+            # Mike and Jenny predictions
+            hb0_hb1_poses_preds = torch.cat(
+                [
+                    torch.argmax(hb0_pose_probs, axis=-1),
+                    torch.argmax(hb1_pose_probs, axis=-1),
+                ],
+                dim=0,
+            )
+            hb0_hb1_exprs_preds = torch.cat(
+                [
+                    torch.argmax(hb0_expr_probs, axis=-1),
+                    torch.argmax(hb1_expr_probs, axis=-1),
+                ],
+                dim=0,
+            )
+            # Mike and Jenny targets
+            hb0_hb1_poses_targets = torch.cat(
+                [hb0_poses_targets, hb1_poses_targets], dim=0
+            )
+            hb0_hb1_exprs_targets = torch.cat(
+                [hb0_exprs_targets, hb1_exprs_targets], dim=0
+            )
             # Aggregate predictions/targets
             evaluator.update_counters(
-                one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
+                one_hot_objects_targets.cpu().numpy(),
+                one_hot_objects_preds.cpu().numpy(),
+                hb0_hb1_poses_targets.cpu().numpy(),
+                hb0_hb1_poses_preds.cpu().numpy(),
+                hb0_hb1_exprs_targets.cpu().numpy(),
+                hb0_hb1_exprs_preds.cpu().numpy(),
             )
 
     precision, recall, f1_score = evaluator.per_object_pr()

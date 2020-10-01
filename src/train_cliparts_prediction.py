@@ -148,9 +148,10 @@ def train(
                     hb1_exprs_targets.to(device),
                 )
                 # Get predictions
-                object_probs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
+                object_outs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
                     ids_text, attn_mask
                 )
+                object_probs = torch.sigmoid(object_outs)
                 one_hot_objects_preds = torch.zeros_like(object_probs)
                 # Regular objects
                 one_hot_objects_preds[torch.where(object_probs > 0.5)] = 1
