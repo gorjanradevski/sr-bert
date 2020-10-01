@@ -87,9 +87,10 @@ def train(
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, attn_mask, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
+                ids_text, attn_mask, one_hot_objects_targets, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
                     ids_text.to(device),
                     attn_mask.to(device),
+                    one_hot_objects_targets.to(device),
                     hb0_poses_targets.to(device),
                     hb0_exprs_targets.to(device),
                     hb1_poses_targets.to(device),
