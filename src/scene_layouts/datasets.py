@@ -359,6 +359,156 @@ class DiscreteInferenceDataset(InferenceDataset, TorchDataset):
         )
 
 
+index2pose_hb0 = {
+    23: 0,
+    34: 0,
+    45: 0,
+    51: 0,
+    52: 0,
+    53: 1,
+    54: 1,
+    55: 1,
+    56: 1,
+    57: 1,
+    24: 2,
+    25: 2,
+    26: 2,
+    27: 2,
+    28: 2,
+    29: 3,
+    30: 3,
+    31: 3,
+    32: 3,
+    33: 3,
+    35: 4,
+    36: 4,
+    37: 4,
+    38: 4,
+    39: 4,
+    40: 5,
+    41: 5,
+    42: 5,
+    43: 5,
+    44: 5,
+    46: 6,
+    47: 6,
+    48: 6,
+    49: 6,
+    50: 6,
+}
+index2pose_hb1 = {
+    58: 0,
+    69: 0,
+    80: 0,
+    86: 0,
+    87: 0,
+    88: 1,
+    89: 1,
+    90: 1,
+    91: 1,
+    92: 1,
+    59: 2,
+    60: 2,
+    61: 2,
+    62: 2,
+    63: 2,
+    64: 3,
+    65: 3,
+    66: 3,
+    67: 3,
+    68: 3,
+    70: 4,
+    71: 4,
+    72: 4,
+    73: 4,
+    74: 4,
+    75: 5,
+    76: 5,
+    77: 5,
+    78: 5,
+    79: 5,
+    81: 6,
+    82: 6,
+    83: 6,
+    84: 6,
+    85: 6,
+}
+index2expression_hb0 = {
+    23: 0,
+    53: 0,
+    24: 0,
+    29: 0,
+    35: 0,
+    40: 0,
+    46: 0,
+    34: 1,
+    54: 1,
+    25: 1,
+    30: 1,
+    36: 1,
+    41: 1,
+    47: 1,
+    45: 2,
+    55: 2,
+    26: 2,
+    31: 2,
+    37: 2,
+    42: 2,
+    48: 2,
+    51: 3,
+    56: 3,
+    27: 3,
+    32: 3,
+    38: 3,
+    43: 3,
+    49: 3,
+    52: 4,
+    57: 4,
+    28: 4,
+    33: 4,
+    39: 4,
+    44: 4,
+    50: 4,
+}
+index2expression_hb1 = {
+    58: 0,
+    88: 0,
+    59: 0,
+    64: 0,
+    70: 0,
+    75: 0,
+    81: 0,
+    69: 1,
+    89: 1,
+    60: 1,
+    65: 1,
+    71: 1,
+    76: 1,
+    82: 1,
+    80: 2,
+    90: 2,
+    61: 2,
+    66: 2,
+    72: 2,
+    77: 2,
+    83: 2,
+    86: 3,
+    91: 3,
+    62: 3,
+    67: 3,
+    73: 3,
+    78: 3,
+    84: 3,
+    87: 4,
+    92: 4,
+    63: 4,
+    68: 4,
+    74: 4,
+    79: 4,
+    85: 4,
+}
+
+
 class ClipartsPredictionDataset(TorchDataset):
     def __init__(self, dataset_file_path: str, visual2index: str, train: bool = False):
         self.dataset_file = json.load(open(dataset_file_path))
@@ -388,28 +538,55 @@ class ClipartsPredictionDataset(TorchDataset):
                 self.tokenizer.encode(" ".join(sentences), add_special_tokens=True)
             )
         # Prepare visuals
-        input_ids_visuals = torch.tensor(
-            [
-                # Because they start from 1 we subtract 1
-                self.visual2index[element["visual_name"]] - 1
-                for element in scene["elements"]
-            ]
-        )
-        one_hot_visuals = torch.zeros(len(self.visual2index))
-        one_hot_visuals[input_ids_visuals] = 1
+        ids_visuals = [
+            # Because they start from 1 we subtract 1
+            self.visual2index[element["visual_name"]] - 1
+            for element in scene["elements"]
+        ]
+        hb0_pose, hb0_expr, hb1_pose, hb1_expr = -100, -100, -100, -100
+        object_visuals = []
+        for visual in ids_visuals:
+            if visual in index2pose_hb0 and visual in index2expression_hb0:
+                hb0_pose = index2pose_hb0[visual]
+                hb0_expr = index2expression_hb0[visual]
+            elif visual in index2pose_hb1 and visual in index2expression_hb1:
+                hb1_pose = index2pose_hb1[visual]
+                hb1_expr = index2expression_hb1[visual]                
+            elif visual > 92:
+                object_visuals.append(visual - 70)
+            else:
+                object_visuals.append(visual)
 
-        return input_ids_sentence, one_hot_visuals
+        one_hot_objects = torch.zeros(23 + 33)
+        one_hot_objects[object_visuals] = 1
+
+        return (
+            input_ids_sentence,
+            one_hot_objects,
+            torch.tensor(hb0_pose),
+            torch.tensor(hb0_expr),
+            torch.tensor(hb1_pose),
+            torch.tensor(hb1_expr),
+        )
 
 
 def collate_pad_cliparts_prediction_batch(batch):
-    ids_text, one_hot_visuals = zip(*batch)
+    ids_text, one_hot_objects, hb0_pose, hb0_expr, hb1_pose, hb1_expr = zip(*batch)
     ids_text = torch.nn.utils.rnn.pad_sequence(
         ids_text, batch_first=True, padding_value=0
     )
     attn_mask = ids_text.clone()
     attn_mask[torch.where(attn_mask > 0)] = 1
 
-    return ids_text, attn_mask, torch.stack([*one_hot_visuals], dim=0)
+    return (
+        ids_text,
+        attn_mask,
+        torch.stack([*one_hot_objects], dim=0),
+        torch.stack([*hb0_pose], dim=0),
+        torch.stack([*hb0_expr], dim=0),
+        torch.stack([*hb1_pose], dim=0),
+        torch.stack([*hb1_expr], dim=0),
+    )
 
 
 def collate_pad_batch(

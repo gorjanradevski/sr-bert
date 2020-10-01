@@ -62,7 +62,8 @@ def train(
     config.vocab_size = len(visual2index)
     model = nn.DataParallel(ClipartsPredictionModel(config, bert_name)).to(device)
     # Loss and optimizer
-    criterion = nn.BCEWithLogitsLoss()
+    object_criterion = nn.BCEWithLogitsLoss()
+    pose_expr_criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
@@ -74,18 +75,42 @@ def train(
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for ids_text, attn_mask, target_visuals in train_loader:
+            for (
+                ids_text,
+                attn_mask,
+                one_hot_objects_targets,
+                hb0_poses_targets,
+                hb0_exprs_targets,
+                hb1_poses_targets,
+                hb1_exprs_targets,
+            ) in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, attn_mask, target_visuals = (
+                ids_text, attn_mask, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
                     ids_text.to(device),
                     attn_mask.to(device),
-                    target_visuals.to(device),
+                    hb0_poses_targets.to(device),
+                    hb0_exprs_targets.to(device),
+                    hb1_poses_targets.to(device),
+                    hb1_exprs_targets.to(device),
                 )
-                probs = model(ids_text, attn_mask)
+                object_probs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
+                    ids_text, attn_mask
+                )
                 # Loss and backward
-                loss = criterion(probs, target_visuals)
+                object_loss = object_criterion(object_probs, one_hot_objects_targets)
+                hb0_pose_loss = pose_expr_criterion(hb0_pose_probs, hb0_poses_targets)
+                hb0_expr_loss = pose_expr_criterion(hb0_expr_probs, hb0_exprs_targets)
+                hb1_pose_loss = pose_expr_criterion(hb1_pose_probs, hb1_poses_targets)
+                hb1_expr_loss = pose_expr_criterion(hb1_expr_probs, hb1_exprs_targets)
+                loss = (
+                    object_loss
+                    + hb0_pose_loss
+                    + hb0_expr_loss
+                    + hb1_pose_loss
+                    + hb1_expr_loss
+                )
                 loss.backward()
                 # Clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -98,28 +123,62 @@ def train(
         # Set model in evaluation mode
         model.train(False)
         with torch.no_grad():
-            for ids_text, attn_mask, target_visuals in tqdm(val_loader):
+            for (
+                ids_text,
+                attn_mask,
+                one_hot_objects_targets,
+                hb0_poses_targets,
+                hb0_exprs_targets,
+                hb1_poses_targets,
+                hb1_exprs_targets,
+            ) in tqdm(val_loader):
                 # forward
-                ids_text, attn_mask, target_visuals = (
+                ids_text, attn_mask, one_hot_objects_targets, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
                     ids_text.to(device),
                     attn_mask.to(device),
-                    target_visuals.to(device),
+                    one_hot_objects_targets.to(device),
+                    hb0_poses_targets.to(device),
+                    hb0_exprs_targets.to(device),
+                    hb1_poses_targets.to(device),
+                    hb1_exprs_targets.to(device),
                 )
                 # Get predictions
-                probs = torch.sigmoid(model(ids_text, attn_mask))
-                one_hot_pred = torch.zeros_like(probs)
+                object_probs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
+                    ids_text, attn_mask
+                )
+                one_hot_objects_preds = torch.zeros_like(object_probs)
                 # Regular objects
-                one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.5)] = 1
-                one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.5)] = 1
-                # Mike and Jenny
-                batch_indices = torch.arange(ids_text.size()[0])
-                max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
-                one_hot_pred[batch_indices, max_hb0 + 23] = 1
-                max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
-                one_hot_pred[batch_indices, max_hb1 + 58] = 1
+                one_hot_objects_preds[torch.where(object_probs > 0.5)] = 1
+                # Mike and Jenny predictions
+                hb0_hb1_poses_preds = torch.cat(
+                    [
+                        torch.argmax(hb0_pose_probs, axis=-1),
+                        torch.argmax(hb1_pose_probs, axis=-1),
+                    ],
+                    dim=0,
+                )
+                hb0_hb1_exprs_preds = torch.cat(
+                    [
+                        torch.argmax(hb0_expr_probs, axis=-1),
+                        torch.argmax(hb1_expr_probs, axis=-1),
+                    ],
+                    dim=0,
+                )
+                # Mike and Jenny targets
+                hb0_hb1_poses_targets = torch.cat(
+                    [hb0_poses_targets, hb1_poses_targets], dim=0
+                )
+                hb0_hb1_exprs_targets = torch.cat(
+                    [hb0_exprs_targets, hb1_exprs_targets], dim=0
+                )
                 # Aggregate predictions/targets
                 evaluator.update_counters(
-                    one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
+                    one_hot_objects_targets.cpu().numpy(),
+                    one_hot_objects_preds.cpu().numpy(),
+                    hb0_hb1_poses_targets.cpu().numpy(),
+                    hb0_hb1_poses_preds.cpu().numpy(),
+                    hb0_hb1_exprs_targets.cpu().numpy(),
+                    hb0_hb1_exprs_preds.cpu().numpy(),
                 )
 
         precision, recall, _ = evaluator.per_object_pr()
@@ -131,7 +190,7 @@ def train(
             logging.info(f"Found best on epoch {epoch+1}. Saving model!")
             logging.info(f"Precison is {precision}, recall is {recall}")
             logging.info(
-                f"Posess accuracy is {posses_acc}, and expression accuracy is {expr_acc}"
+                f"Posess accuracy is {posses_acc}, and expressions accuracy is {expr_acc}"
             )
             logging.info("====================================================")
             torch.save(model.state_dict(), save_model_path)
