@@ -3,7 +3,7 @@ import numpy as np
 from torch.nn import functional as F  # type: ignore
 from typing import List
 
-from scene_layouts.datasets import X_MASK, Y_MASK, O_MASK
+from scene_layouts.datasets import X_MASK, X_PAD, Y_MASK, Y_PAD, O_MASK, O_PAD
 
 
 class Hypothesis:
@@ -332,12 +332,17 @@ def random_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
 
 
 def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
+    # Obtain pad indices
+    pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
     # Set all indices to MASK tokens
     x_ind = torch.full_like(ids_vis, X_MASK)
+    x_ind[pad_indices] = X_PAD
     y_ind = torch.full_like(ids_vis, Y_MASK)
+    y_ind[pad_indices] = Y_PAD
     o_ind = torch.full_like(ids_vis, O_MASK)
+    o_ind[pad_indices] = O_PAD
     batch_indices = list(range(ids_text.size()[0]))
-    pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
+    
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
         # Obtain model outputs
