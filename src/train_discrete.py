@@ -208,7 +208,7 @@ def train(
                     y_lab,
                     o_out,
                     o_lab,
-                    attn_mask[:, ids_text.size()[1]:],
+                    attn_mask[:, ids_text.size()[1] :],
                 )
 
         abs_dist = evaluator.get_abs_dist()

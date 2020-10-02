@@ -30,14 +30,14 @@ class Hypothesis:
     def __repr__(self):
         return f"{self.x_inds}, {self.predicted}, {self.prob}"
 
-    def expand(self, x_ind, y_ind, o_ind, latest_prob, batch_indices, index):
+    def expand(self, x_ind, y_ind, o_ind, latest_prob, index):
         # Change the index with the max probability with its prediction
         x_inds_clone = self.x_inds.clone()
         y_inds_clone = self.y_inds.clone()
         o_inds_clone = self.o_inds.clone()
-        x_inds_clone[batch_indices, index] = x_ind
-        y_inds_clone[batch_indices, index] = y_ind
-        o_inds_clone[batch_indices, index] = o_ind
+        x_inds_clone[0, index] = x_ind
+        y_inds_clone[0, index] = y_ind
+        o_inds_clone[0, index] = o_ind
         new_predicted = [pred for pred in self.predicted]
         new_predicted.append(index.tolist())
 
@@ -51,12 +51,12 @@ class Hypothesis:
 
 
 def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
+    # DISCLAIMER: ONLY WORKS FOR BATCH SIZE=1
     # Set all indices to MASK tokens
     x_ind = torch.full_like(ids_vis, X_MASK)
     y_ind = torch.full_like(ids_vis, Y_MASK)
     o_ind = torch.full_like(ids_vis, O_MASK)
     beam_size = 3
-    batch_indices = list(range(ids_text.size()[0]))
     pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
     x_scores, y_scores, o_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
@@ -70,15 +70,15 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
     for _ in range(ids_vis.size()[1]):
 
         if len(predicted_indices) > 0:
-            x_scores[batch_indices, predicted_indices] = -1e15
-            y_scores[batch_indices, predicted_indices] = -1e15
-            o_scores[batch_indices, predicted_indices] = -1e15
+            x_scores[0, predicted_indices] = -1e15
+            y_scores[0, predicted_indices] = -1e15
+            o_scores[0, predicted_indices] = -1e15
 
         # Obtain the probabilities and the prediction for all elements
         prob_x, pred_x = torch.max(x_scores, dim=-1)
         prob_y, pred_y = torch.max(y_scores, dim=-1)
-        prob_f, pred_f = torch.max(o_scores, dim=-1)
-        joint_prob = prob_x * prob_y * prob_f
+        prob_o, pred_o = torch.max(o_scores, dim=-1)
+        joint_prob = prob_x * prob_y * prob_o
 
         # Obtain the the indexes of the elements with the highest probability
         index = torch.argmax(joint_prob, dim=-1)
@@ -86,26 +86,21 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
         # Remember the chosen indices
         predicted_indices.append(index.tolist())
 
-        # Obtain the the indexes of the elements with the highest probability
-        new_pred_x = pred_x[batch_indices, index]
-        new_pred_y = pred_y[batch_indices, index]
-        new_pred_f = pred_f[batch_indices, index]
-
         # Get clones for the indices
         x_ind_clone = x_ind.clone()
         y_ind_clone = y_ind.clone()
         o_ind_clone = o_ind.clone()
 
         # Change the index with the max probability with its prediction
-        x_ind_clone[batch_indices, index] = new_pred_x
-        y_ind_clone[batch_indices, index] = new_pred_y
-        o_ind_clone[batch_indices, index] = new_pred_f
+        x_ind_clone[0, index] = pred_x[0, index]
+        y_ind_clone[0, index] = pred_y[0, index]
+        o_ind_clone[0, index] = pred_o[0, index]
 
         # Obtain the predicted prob
         pred_prob = (
-            torch.exp(prob_x[batch_indices, index]).item()
-            * torch.exp(prob_y[batch_indices, index]).item()
-            * torch.exp(prob_f[batch_indices, index]).item()
+            torch.exp(prob_x[0, index]).item()
+            * torch.exp(prob_y[0, index]).item()
+            * torch.exp(prob_o[0, index]).item()
         )
 
         cur_beam_hypothesis.append(
@@ -139,14 +134,14 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
             ]
             for _ in range(ids_vis.size()[1]):
                 # If there are indices which are already chosen, change to a small number
-                x_scores[batch_indices, tmp_predicted_indices] = -1e15
-                y_scores[batch_indices, tmp_predicted_indices] = -1e15
-                o_scores[batch_indices, tmp_predicted_indices] = -1e15
+                x_scores[0, tmp_predicted_indices] = -1e15
+                y_scores[0, tmp_predicted_indices] = -1e15
+                o_scores[0, tmp_predicted_indices] = -1e15
                 # Obtain the probabilities and the prediction for all elements
                 prob_x, pred_x = torch.max(x_scores, dim=-1)
                 prob_y, pred_y = torch.max(y_scores, dim=-1)
-                prob_f, pred_f = torch.max(o_scores, dim=-1)
-                joint_prob = prob_x * prob_y * prob_f
+                prob_o, pred_o = torch.max(o_scores, dim=-1)
+                joint_prob = prob_x * prob_y * prob_o
 
                 # Obtain the the indexes of the elements with the highest probability
                 index = torch.argmax(joint_prob, dim=-1)
@@ -154,23 +149,18 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
                 # Remember the chosen indices
                 tmp_predicted_indices.append(index.tolist())
 
-                new_pred_x = pred_x[batch_indices, index]
-                new_pred_y = pred_y[batch_indices, index]
-                new_pred_f = pred_f[batch_indices, index]
-
                 # Obtain the predicted prob
                 pred_prob = (
-                    torch.exp(prob_x[batch_indices, index]).item()
-                    * torch.exp(prob_y[batch_indices, index]).item()
-                    * torch.exp(prob_f[batch_indices, index]).item()
+                    torch.exp(prob_x[0, index]).item()
+                    * torch.exp(prob_y[0, index]).item()
+                    * torch.exp(prob_o[0, index]).item()
                 )
                 new_beam_hypothesis.append(
                     cur_beam_hypothesis[b].expand(
-                        new_pred_x,
-                        new_pred_y,
-                        new_pred_f,
+                        pred_x[0, index],
+                        pred_y[0, index],
+                        pred_o[0, index],
                         pred_prob,
-                        batch_indices,
                         index,
                     )
                 )
@@ -336,13 +326,10 @@ def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
     # Set all indices to MASK tokens
     x_ind = torch.full_like(ids_vis, X_MASK)
-    x_ind[pad_indices] = X_PAD
     y_ind = torch.full_like(ids_vis, Y_MASK)
-    y_ind[pad_indices] = Y_PAD
     o_ind = torch.full_like(ids_vis, O_MASK)
-    o_ind[pad_indices] = O_PAD
     batch_indices = list(range(ids_text.size()[0]))
-    
+
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
         # Obtain model outputs
