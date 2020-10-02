@@ -57,23 +57,22 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
     o_ind = torch.full_like(ids_vis, O_MASK)
     beam_size = 3
     batch_indices = list(range(ids_text.size()[0]))
-    max_ids_text = ids_text.size()[1]
-    pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
+    pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
     x_scores, y_scores, o_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
     )
     # Set pad indices to low probs
-    x_scores[:, max_ids_text:][pad_indices] = -1e15
-    y_scores[:, max_ids_text:][pad_indices] = -1e15
-    o_scores[:, max_ids_text:][pad_indices] = -1e15
+    x_scores[pad_indices] = -1e15
+    y_scores[pad_indices] = -1e15
+    o_scores[pad_indices] = -1e15
     cur_beam_hypothesis = []
     predicted_indices = []
     for _ in range(ids_vis.size()[1]):
 
         if len(predicted_indices) > 0:
-            x_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
-            y_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
-            o_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
+            x_scores[batch_indices, predicted_indices] = -1e15
+            y_scores[batch_indices, predicted_indices] = -1e15
+            o_scores[batch_indices, predicted_indices] = -1e15
 
         # Obtain the probabilities and the prediction for all elements
         prob_x, pred_x = torch.max(x_scores, dim=-1)
@@ -82,15 +81,15 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
         joint_prob = prob_x * prob_y * prob_f
 
         # Obtain the the indexes of the elements with the highest probability
-        index = torch.argmax(joint_prob[:, max_ids_text:], dim=-1)
+        index = torch.argmax(joint_prob, dim=-1)
 
         # Remember the chosen indices
         predicted_indices.append(index.tolist())
 
         # Obtain the the indexes of the elements with the highest probability
-        new_pred_x = pred_x[:, max_ids_text:][batch_indices, index]
-        new_pred_y = pred_y[:, max_ids_text:][batch_indices, index]
-        new_pred_f = pred_f[:, max_ids_text:][batch_indices, index]
+        new_pred_x = pred_x[batch_indices, index]
+        new_pred_y = pred_y[batch_indices, index]
+        new_pred_f = pred_f[batch_indices, index]
 
         # Get clones for the indices
         x_ind_clone = x_ind.clone()
@@ -104,9 +103,9 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
 
         # Obtain the predicted prob
         pred_prob = (
-            torch.exp(prob_x[:, max_ids_text:][batch_indices, index]).item()
-            * torch.exp(prob_y[:, max_ids_text:][batch_indices, index]).item()
-            * torch.exp(prob_f[:, max_ids_text:][batch_indices, index]).item()
+            torch.exp(prob_x[batch_indices, index]).item()
+            * torch.exp(prob_y[batch_indices, index]).item()
+            * torch.exp(prob_f[batch_indices, index]).item()
         )
 
         cur_beam_hypothesis.append(
@@ -131,18 +130,18 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
                 attn_mask,
             )
             # Set pad indices to low probs
-            x_scores[:, max_ids_text:][pad_indices] = -1e15
-            y_scores[:, max_ids_text:][pad_indices] = -1e15
-            o_scores[:, max_ids_text:][pad_indices] = -1e15
+            x_scores[pad_indices] = -1e15
+            y_scores[pad_indices] = -1e15
+            o_scores[pad_indices] = -1e15
             # Get current predicted indices
             tmp_predicted_indices = [
                 pred_ind for pred_ind in cur_beam_hypothesis[b].predicted
             ]
             for _ in range(ids_vis.size()[1]):
                 # If there are indices which are already chosen, change to a small number
-                x_scores[:, max_ids_text:][batch_indices, tmp_predicted_indices] = -1e15
-                y_scores[:, max_ids_text:][batch_indices, tmp_predicted_indices] = -1e15
-                o_scores[:, max_ids_text:][batch_indices, tmp_predicted_indices] = -1e15
+                x_scores[batch_indices, tmp_predicted_indices] = -1e15
+                y_scores[batch_indices, tmp_predicted_indices] = -1e15
+                o_scores[batch_indices, tmp_predicted_indices] = -1e15
                 # Obtain the probabilities and the prediction for all elements
                 prob_x, pred_x = torch.max(x_scores, dim=-1)
                 prob_y, pred_y = torch.max(y_scores, dim=-1)
@@ -150,20 +149,20 @@ def highest_confidence_beam(ids_text, ids_vis, pos_text, t_types, attn_mask, mod
                 joint_prob = prob_x * prob_y * prob_f
 
                 # Obtain the the indexes of the elements with the highest probability
-                index = torch.argmax(joint_prob[:, max_ids_text:], dim=-1)
+                index = torch.argmax(joint_prob, dim=-1)
 
                 # Remember the chosen indices
                 tmp_predicted_indices.append(index.tolist())
 
-                new_pred_x = pred_x[:, max_ids_text:][batch_indices, index]
-                new_pred_y = pred_y[:, max_ids_text:][batch_indices, index]
-                new_pred_f = pred_f[:, max_ids_text:][batch_indices, index]
+                new_pred_x = pred_x[batch_indices, index]
+                new_pred_y = pred_y[batch_indices, index]
+                new_pred_f = pred_f[batch_indices, index]
 
                 # Obtain the predicted prob
                 pred_prob = (
-                    torch.exp(prob_x[:, max_ids_text:][batch_indices, index]).item()
-                    * torch.exp(prob_y[:, max_ids_text:][batch_indices, index]).item()
-                    * torch.exp(prob_f[:, max_ids_text:][batch_indices, index]).item()
+                    torch.exp(prob_x[batch_indices, index]).item()
+                    * torch.exp(prob_y[batch_indices, index]).item()
+                    * torch.exp(prob_f[batch_indices, index]).item()
                 )
                 new_beam_hypothesis.append(
                     cur_beam_hypothesis[b].expand(
@@ -190,20 +189,19 @@ def one_step_all(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     x_ind = torch.full_like(ids_vis, X_MASK)
     y_ind = torch.full_like(ids_vis, Y_MASK)
     o_ind = torch.full_like(ids_vis, O_MASK)
-    max_ids_text = ids_text.size()[1]
     x_scores, y_scores, o_scores = model(
         ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
     )
     if mode == "discrete":
-        x_ind[:, :] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:]
-        y_ind[:, :] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:]
+        x_ind[:, :] = torch.argmax(x_scores, dim=-1)
+        y_ind[:, :] = torch.argmax(y_scores, dim=-1)
     elif mode == "continuous":
-        x_ind[:, :] = torch.ceil(x_scores[:, max_ids_text:])
-        y_ind[:, :] = torch.ceil(y_scores[:, max_ids_text:])
+        x_ind[:, :] = torch.ceil(x_scores)
+        y_ind[:, :] = torch.ceil(y_scores)
     else:
         raise ValueError("Invalid mode!")
 
-    o_ind[:, :] = torch.argmax(o_scores, dim=-1)[:, max_ids_text:]
+    o_ind[:, :] = torch.argmax(o_scores, dim=-1)
 
     return x_ind, y_ind, o_ind
 
@@ -214,7 +212,6 @@ def human_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     x_ind = torch.full_like(ids_vis, X_MASK)
     y_ind = torch.full_like(ids_vis, Y_MASK)
     o_ind = torch.full_like(ids_vis, O_MASK)
-    max_ids_text = ids_text.size()[1]
     for i in range(ids_vis.size()[1]):
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
@@ -223,15 +220,15 @@ def human_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
             ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
         )
         if mode == "continuous":
-            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
-            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+            x_ind[:, i] = torch.ceil(x_scores[:, i])
+            y_ind[:, i] = torch.ceil(y_scores[:, i])
         elif mode == "discrete":
-            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, i]
+            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, i]
         else:
             raise ValueError("Invalid mode!")
 
-        o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text + i]
+        o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, i]
 
     return x_ind, y_ind, o_ind
 
@@ -242,7 +239,6 @@ def train_cond(
     x_out = torch.ones_like(x_ind)
     y_out = torch.ones_like(y_ind)
     o_out = torch.ones_like(o_ind)
-    max_ids_text = ids_text.size()[1]
     for i in range(ids_vis.size()[1]):
         tmp_x = x_ind[:, i].clone()
         tmp_y = y_ind[:, i].clone()
@@ -254,14 +250,14 @@ def train_cond(
             ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
         )
         if mode == "discrete":
-            x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text:][:, i]
-            y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text:][:, i]
+            x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, i]
+            y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, i]
         elif mode == "continuous":
-            x_out[:, i] = torch.ceil(x_scores[:, max_ids_text:][:, i])
-            y_out[:, i] = torch.ceil(y_scores[:, max_ids_text:][:, i])
+            x_out[:, i] = torch.ceil(x_scores[:, i])
+            y_out[:, i] = torch.ceil(y_scores[:, i])
         else:
             raise ValueError("Invalid mode!")
-        o_out[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text:][:, i]
+        o_out[:, i] = torch.argmax(o_scores, dim=-1)[:, i]
         x_ind[:, i] = tmp_x.clone()
         y_ind[:, i] = tmp_y.clone()
         o_ind[:, i] = tmp_f.clone()
@@ -285,7 +281,6 @@ def sc_discrete(
     y_out = y_ind.clone()
     o_out = o_ind.clone()
     mask = torch.zeros_like(ids_vis)
-    max_ids_text = ids_text.size()[1]
     for i in range(ids_vis.size()[1]):
         if ids_vis[0, i].item() not in group_inds:
             continue
@@ -299,9 +294,9 @@ def sc_discrete(
         x_scores, y_scores, o_scores = model(
             ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
         )
-        x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-        y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
-        o_out[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text + i]
+        x_out[:, i] = torch.argmax(x_scores, dim=-1)[:, i]
+        y_out[:, i] = torch.argmax(y_scores, dim=-1)[:, i]
+        o_out[:, i] = torch.argmax(o_scores, dim=-1)[:, i]
         x_ind[:, i] = tmp_x.clone()
         y_ind[:, i] = tmp_y.clone()
         o_ind[:, i] = tmp_f.clone()
@@ -315,7 +310,6 @@ def random_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     x_ind = torch.full_like(ids_vis, X_MASK)
     y_ind = torch.full_like(ids_vis, Y_MASK)
     o_ind = torch.full_like(ids_vis, O_MASK)
-    max_ids_text = ids_text.size()[1]
     indices = np.random.permutation(list(range(ids_vis.size()[1])))
     for i in indices:
         x_ind[:, i] = X_MASK
@@ -325,14 +319,14 @@ def random_order(mode, ids_text, ids_vis, pos_text, t_types, attn_mask, model):
             ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
         )
         if mode == "discrete":
-            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, max_ids_text + i]
-            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, max_ids_text + i]
+            x_ind[:, i] = torch.argmax(x_scores, dim=-1)[:, i]
+            y_ind[:, i] = torch.argmax(y_scores, dim=-1)[:, i]
         elif mode == "continuous":
-            x_ind[:, i] = torch.ceil(x_scores[:, max_ids_text + i])
-            y_ind[:, i] = torch.ceil(y_scores[:, max_ids_text + i])
+            x_ind[:, i] = torch.ceil(x_scores[:, i])
+            y_ind[:, i] = torch.ceil(y_scores[:, i])
         else:
             raise ValueError("Invalid mode!")
-        o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, max_ids_text + i]
+        o_ind[:, i] = torch.argmax(o_scores, dim=-1)[:, i]
 
     return x_ind, y_ind, o_ind
 
@@ -343,8 +337,7 @@ def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
     y_ind = torch.full_like(ids_vis, Y_MASK)
     o_ind = torch.full_like(ids_vis, O_MASK)
     batch_indices = list(range(ids_text.size()[0]))
-    max_ids_text = ids_text.size()[1]
-    pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
+    pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
         # Obtain model outputs
@@ -352,14 +345,14 @@ def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
             ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
         )
         # Set pad indices to low probs
-        x_scores[:, max_ids_text:][pad_indices] = -1e15
-        y_scores[:, max_ids_text:][pad_indices] = -1e15
-        o_scores[:, max_ids_text:][pad_indices] = -1e15
+        x_scores[pad_indices] = -1e15
+        y_scores[pad_indices] = -1e15
+        o_scores[pad_indices] = -1e15
         # If there are indices which are already chosen, change to a small number
         if len(predicted_indices) > 0:
-            x_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
-            y_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
-            o_scores[:, max_ids_text:][batch_indices, predicted_indices] = -1e15
+            x_scores[batch_indices, predicted_indices] = -1e15
+            y_scores[batch_indices, predicted_indices] = -1e15
+            o_scores[batch_indices, predicted_indices] = -1e15
 
         # Obtain the probabilities and the prediction for all elements
         prob_x, pred_x = torch.max(x_scores, dim=-1)
@@ -368,15 +361,15 @@ def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
         joint_prob = prob_x * prob_y * prob_f
 
         # Obtain the the indexes of the elements with the highest probability
-        index = torch.argmax(joint_prob[:, max_ids_text:], dim=-1)
+        index = torch.argmax(joint_prob, dim=-1)
 
         # Remember the chosen indices
         predicted_indices.append(index.tolist())
 
         # Change the index with the max probability with its prediction
-        x_ind[batch_indices, index] = pred_x[:, max_ids_text:][batch_indices, index]
-        y_ind[batch_indices, index] = pred_y[:, max_ids_text:][batch_indices, index]
-        o_ind[batch_indices, index] = pred_f[:, max_ids_text:][batch_indices, index]
+        x_ind[batch_indices, index] = pred_x[batch_indices, index]
+        y_ind[batch_indices, index] = pred_y[batch_indices, index]
+        o_ind[batch_indices, index] = pred_f[batch_indices, index]
 
     return x_ind, y_ind, o_ind
 
@@ -391,8 +384,7 @@ def lowest_entropy(ids_text, ids_vis, pos_text, t_types, attn_mask, model, devic
     y_ind = torch.full_like(ids_vis, Y_MASK)
     o_ind = torch.full_like(ids_vis, O_MASK)
     batch_indices = list(range(ids_text.size()[0]))
-    max_ids_text = ids_text.size()[1]
-    pad_indices = torch.where(attn_mask[:, max_ids_text:] == 0)
+    pad_indices = torch.where(attn_mask[:, ids_text.size()[1] :] == 0)
     predicted_indices = []
     for i in range(ids_vis.size()[1]):
         # Obtain model outputs
@@ -400,26 +392,26 @@ def lowest_entropy(ids_text, ids_vis, pos_text, t_types, attn_mask, model, devic
             ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
         )
         # Set pad indices to high entropy values
-        x_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
+        x_scores[pad_indices] = F.log_softmax(
             torch.ones(1, x_scores.size()[-1]).to(device), dim=-1
         )
-        y_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
+        y_scores[pad_indices] = F.log_softmax(
             torch.ones(1, y_scores.size()[-1]).to(device), dim=-1
         )
-        o_scores[:, max_ids_text:][pad_indices] = F.log_softmax(
+        o_scores[pad_indices] = F.log_softmax(
             torch.ones(1, o_scores.size()[-1]).to(device), dim=-1
         )
         # Set predicted indices to high entropy values
         if len(predicted_indices) > 0:
-            x_scores[:, max_ids_text:][
-                batch_indices, predicted_indices
-            ] = F.log_softmax(torch.ones(1, x_scores.size()[-1]).to(device), dim=-1)
-            y_scores[:, max_ids_text:][
-                batch_indices, predicted_indices
-            ] = F.log_softmax(torch.ones(1, y_scores.size()[-1]).to(device), dim=-1)
-            o_scores[:, max_ids_text:][
-                batch_indices, predicted_indices
-            ] = F.log_softmax(torch.ones(1, o_scores.size()[-1]).to(device), dim=-1)
+            x_scores[batch_indices, predicted_indices] = F.log_softmax(
+                torch.ones(1, x_scores.size()[-1]).to(device), dim=-1
+            )
+            y_scores[batch_indices, predicted_indices] = F.log_softmax(
+                torch.ones(1, y_scores.size()[-1]).to(device), dim=-1
+            )
+            o_scores[batch_indices, predicted_indices] = F.log_softmax(
+                torch.ones(1, o_scores.size()[-1]).to(device), dim=-1
+            )
 
         # Compute entropies
         entropies_x = entropy(x_scores)
@@ -428,19 +420,19 @@ def lowest_entropy(ids_text, ids_vis, pos_text, t_types, attn_mask, model, devic
         joint_entropy = entropies_x * entropies_y * entropies_f
 
         # Obtain the the indexes of the elements with the highest probability
-        index = torch.argmin(joint_entropy[:, max_ids_text:], dim=-1)
+        index = torch.argmin(joint_entropy, dim=-1)
 
         # Remember the chosen indices
         predicted_indices.append(index.tolist())
 
         # Change the index with the max probability with its prediction
-        x_ind[batch_indices, index] = torch.argmax(x_scores[:, max_ids_text:], dim=-1)[
+        x_ind[batch_indices, index] = torch.argmax(x_scores, dim=-1)[
             batch_indices, index
         ]
-        y_ind[batch_indices, index] = torch.argmax(y_scores[:, max_ids_text:], dim=-1)[
+        y_ind[batch_indices, index] = torch.argmax(y_scores, dim=-1)[
             batch_indices, index
         ]
-        o_ind[batch_indices, index] = torch.argmax(o_scores[:, max_ids_text:], dim=-1)[
+        o_ind[batch_indices, index] = torch.argmax(o_scores, dim=-1)[
             batch_indices, index
         ]
 

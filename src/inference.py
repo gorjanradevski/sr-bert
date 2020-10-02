@@ -94,7 +94,6 @@ def inference(
                 t_types.to(device),
                 attn_mask.to(device),
             )
-            max_ids_text = ids_text.size()[1]
             x_out, y_out, o_out = generation_strategy_factory(
                 gen_strategy,
                 model_type,
@@ -112,12 +111,12 @@ def inference(
             )
             evaluator.update_metrics(
                 x_out,
-                x_lab[:, max_ids_text:],
+                x_lab,
                 y_out,
-                y_lab[:, max_ids_text:],
+                y_lab,
                 o_out,
-                o_lab[:, max_ids_text:],
-                attn_mask[:, max_ids_text:],
+                o_lab,
+                attn_mask[:, ids_text.size()[1] :],
             )
 
         print(

@@ -387,7 +387,7 @@ class ClipartsPredictionEvaluator:
         return (
             np.round(precision * 100, decimals=1),
             np.round(recall * 100, decimals=1),
-            np.round(f1_score * 100, decimals=1)
+            np.round(f1_score * 100, decimals=1),
         )
 
     def posses_expressions_accuracy(self):

@@ -130,7 +130,6 @@ def generation(
                 t_types.to(device),
                 attn_mask.to(device),
             )
-            max_ids_text = ids_text.size()[1]
             x_out, y_out, o_out = generation_strategy_factory(
                 gen_strategy,
                 model_type,
@@ -159,9 +158,9 @@ def generation(
             dump_scene(
                 pngs_path,
                 visual_names,
-                x_lab[0, max_ids_text:],
-                y_lab[0, max_ids_text:],
-                o_lab[0, max_ids_text:],
+                x_lab[0],
+                y_lab[0],
+                o_lab[0],
                 dump_image_path,
                 bucketized=False,
             )

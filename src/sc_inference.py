@@ -117,7 +117,6 @@ def inference(
                 t_types.to(device),
                 attn_mask.to(device),
             )
-            max_ids_text = ids_text.size()[1]
             x_out, y_out, o_out, mask = sc_discrete(
                 group_elements,
                 ids_text,
@@ -134,15 +133,7 @@ def inference(
                 x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
                 y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
-            evaluator.update_metrics(
-                x_out,
-                x_lab[:, max_ids_text:],
-                y_out,
-                y_lab[:, max_ids_text:],
-                o_out,
-                o_lab[:, max_ids_text:],
-                mask,
-            )
+            evaluator.update_metrics(x_out, x_lab, y_out, y_lab, o_out, o_lab, mask)
 
         print(
             f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"

@@ -76,7 +76,7 @@ def train(
     )
     # Define training specifics
     config = BertConfig.from_pretrained(bert_name)
-    config.vocab_size = len(visual2index) + 1
+    config.vocab_size = len(visual2index) + 1  # Because of the padding token
     model = nn.DataParallel(SpatialDiscreteBert(config, bert_name)).to(device)
     # Loss and optimizer
     criterion = nn.NLLLoss()
@@ -185,7 +185,6 @@ def train(
                     t_types.to(device),
                     attn_mask.to(device),
                 )
-                max_ids_text = ids_text.size()[1]
                 x_out, y_out, o_out = train_cond(
                     "discrete",
                     ids_text,
@@ -204,12 +203,12 @@ def train(
                 )
                 evaluator.update_metrics(
                     x_out,
-                    x_lab[:, max_ids_text:],
+                    x_lab,
                     y_out,
-                    y_lab[:, max_ids_text:],
+                    y_lab,
                     o_out,
-                    o_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
+                    o_lab,
+                    attn_mask[:, ids_text.size()[1]:],
                 )
 
         abs_dist = evaluator.get_abs_dist()

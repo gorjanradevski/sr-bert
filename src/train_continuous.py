@@ -80,7 +80,7 @@ def train(
     )
     # Define training specifics
     config = BertConfig.from_pretrained(bert_name)
-    config.vocab_size = len(visual2index) + 1
+    config.vocab_size = len(visual2index) + 1  # Because of the padding token
     model = nn.DataParallel(SpatialContinuousBert(config, bert_name)).to(device)
     # Loss and optimizer
     criterion_f = nn.NLLLoss()
@@ -143,24 +143,16 @@ def train(
                     ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
                 )
                 # Get losses for the absolute distances
-                max_ids_text = ids_text.size()[1]
+                batch_size, max_ids_text = ids_text.size()
                 abs_loss = (
                     abs_distance(
-                        x_scores[:, max_ids_text:],
-                        x_lab[:, max_ids_text:],
-                        y_scores[:, max_ids_text:],
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
+                        x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
                     ).sum()
                     / ids_text.size()[0]
                 )
                 relative_loss = (
                     relative_distance(
-                        x_scores[:, max_ids_text:],
-                        x_lab[:, max_ids_text:],
-                        y_scores[:, max_ids_text:],
-                        y_lab[:, max_ids_text:],
-                        attn_mask[:, max_ids_text:],
+                        x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
                     ).sum()
                     / ids_text.size()[0]
                 )
@@ -208,7 +200,6 @@ def train(
                     t_types.to(device),
                     attn_mask.to(device),
                 )
-                max_ids_text = ids_text.size()[1]
                 x_out, y_out, o_out = train_cond(
                     "continuous",
                     ids_text,
@@ -227,12 +218,12 @@ def train(
                 )
                 evaluator.update_metrics(
                     x_out,
-                    x_lab[:, max_ids_text:],
+                    x_lab,
                     y_out,
-                    y_lab[:, max_ids_text:],
+                    y_lab,
                     o_out,
-                    o_lab[:, max_ids_text:],
-                    attn_mask[:, max_ids_text:],
+                    o_lab,
+                    attn_mask[:, ids_text.size()[1] :],
                 )
         abs_dist = evaluator.get_abs_dist()
         rel_dist = evaluator.get_rel_dist()

@@ -628,34 +628,9 @@ def collate_pad_batch(
         o_ind, batch_first=True, padding_value=O_PAD
     )
     # Pad the visual mappings and prepare final mappings
-    text_labs = torch.ones_like(ids_text) * -100
-    x_lab = torch.cat(
-        [
-            text_labs.float() if x_lab[0].dtype == torch.float32 else text_labs,
-            torch.nn.utils.rnn.pad_sequence(
-                x_lab, batch_first=True, padding_value=-100
-            ),
-        ],
-        dim=1,
-    )
-    y_lab = torch.cat(
-        [
-            text_labs.float() if y_lab[0].dtype == torch.float32 else text_labs,
-            torch.nn.utils.rnn.pad_sequence(
-                y_lab, batch_first=True, padding_value=-100
-            ),
-        ],
-        dim=1,
-    )
-    o_lab = torch.cat(
-        [
-            text_labs,
-            torch.nn.utils.rnn.pad_sequence(
-                o_lab, batch_first=True, padding_value=-100
-            ),
-        ],
-        dim=1,
-    )
+    x_lab = torch.nn.utils.rnn.pad_sequence(x_lab, batch_first=True, padding_value=-100)
+    y_lab = torch.nn.utils.rnn.pad_sequence(y_lab, batch_first=True, padding_value=-100)
+    o_lab = torch.nn.utils.rnn.pad_sequence(o_lab, batch_first=True, padding_value=-100)
     # Obtain token type ids
     t_types = torch.cat([torch.zeros_like(ids_text), torch.ones_like(ids_vis)], dim=1)
     # Obtain the attention mask

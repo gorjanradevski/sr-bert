@@ -111,7 +111,6 @@ def inference(
                 ]
             ).unsqueeze(0)
             # Get spatial arrangements
-            max_ids_text = ids_text.size()[1]
             # Create an attention mask and token types tensor
             attn_mask = torch.ones(1, ids_text.size()[1] + pred_vis.size()[1])
             t_types = torch.cat(
@@ -136,11 +135,11 @@ def inference(
                 pred_vis[0].tolist(),
                 gt_vis[0].tolist(),
                 x_out[0].tolist(),
-                x_lab[0, max_ids_text:].tolist(),
+                x_lab[0].tolist(),
                 y_out[0].tolist(),
-                y_lab[0, max_ids_text:].tolist(),
+                y_lab[0].tolist(),
                 o_out[0].tolist(),
-                o_lab[0, max_ids_text:].tolist(),
+                o_lab[0].tolist(),
             )
             common_attn_mask = torch.ones_like(common_pred_x)
             evaluator.update_metrics(

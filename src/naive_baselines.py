@@ -67,10 +67,6 @@ def naive_inference(
 
     evaluator = Evaluator(len(test_dataset))
     for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(test_loader):
-        max_ids_text = ids_text.size()[1]
-        x_lab = x_lab[:, max_ids_text:]
-        y_lab = y_lab[:, max_ids_text:]
-        o_lab = o_lab[:, max_ids_text:]
         if naive_type == "random":
             x_ind = torch.randint_like(x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE))
             y_ind = torch.randint_like(y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE))

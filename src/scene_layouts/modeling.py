@@ -45,7 +45,7 @@ class SpatialDiscreteBert(nn.Module):
 
     def forward(
         self,
-        input_ids_sen,
+        input_ids_text,
         input_ids_vis,
         text_positions,
         x_ind,
@@ -55,7 +55,7 @@ class SpatialDiscreteBert(nn.Module):
         attention_mask=None,
     ):
         # Word and clipart embeddings
-        word_embeddings = self.bert.embeddings.word_embeddings(input_ids_sen)
+        word_embeddings = self.bert.embeddings.word_embeddings(input_ids_text)
         vis_embeddings = self.cliparts_embeddings(input_ids_vis)
         input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1)
         # Text positions
@@ -69,12 +69,14 @@ class SpatialDiscreteBert(nn.Module):
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
         position_embeddings = torch.cat([text_embed, vis_embed], dim=1)
+        # Get max text ids
+        max_ids_text = input_ids_text.size()[1]
         sequence_output = self.bert(
             inputs_embeds=input_embeddings,
             position_embeddings=position_embeddings,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
-        )[0]
+        )[0][:, max_ids_text:, :]
         x_scores = self.x_head(sequence_output)
         y_scores = self.y_head(sequence_output)
         o_scores = self.o_head(sequence_output)
@@ -123,7 +125,7 @@ class SpatialContinuousBert(nn.Module):
 
     def forward(
         self,
-        input_ids_sen,
+        input_ids_text,
         input_ids_vis,
         text_positions,
         x_ind,
@@ -133,7 +135,7 @@ class SpatialContinuousBert(nn.Module):
         attention_mask=None,
     ):
         # Word and clipart embeddings
-        word_embeddings = self.bert.embeddings.word_embeddings(input_ids_sen)
+        word_embeddings = self.bert.embeddings.word_embeddings(input_ids_text)
         vis_embeddings = self.cliparts_embeddings(input_ids_vis)
         input_embeddings = torch.cat([word_embeddings, vis_embeddings], dim=1)
         # Text positions
@@ -147,12 +149,14 @@ class SpatialContinuousBert(nn.Module):
         vis_embed = self.pos_layer_norm(vis_embed)
         vis_embed = self.pos_dropout(vis_embed)
         position_embeddings = torch.cat([text_embed, vis_embed], dim=1)
+        # Get max text ids
+        max_ids_text = input_ids_text.size()[1]
         sequence_output = self.bert(
             inputs_embeds=input_embeddings,
             position_embeddings=position_embeddings,
             token_type_ids=token_type_ids,
             attention_mask=attention_mask,
-        )[0]
+        )[0][:, max_ids_text:, :]
 
         return (
             torch.sigmoid(self.xy_head(sequence_output))[:, :, 0] * (X_PAD - 2),
