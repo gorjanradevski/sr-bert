@@ -268,7 +268,7 @@ def relative_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     diag = torch.diagonal(sim, dim1=1, dim2=2)
     diag.fill_(0.0)
     # Obtain average over the selected group
-    sim = sim.mean(-1)
+    sim = sim.sum(-1) / ((sim != 0).sum(-1) + 1e-15)
     sim = sim.sum() / (mask.sum(-1) + 1e-15)
 
     return sim
@@ -282,7 +282,7 @@ def abs_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     y_labs_norm = y_labs.clone().float() / SCENE_HEIGHT_TEST
     dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
     dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
-    dist = torch.sqrt(dist_x + dist_y + (torch.ones_like(dist_x) * 1e-15))
+    dist = torch.sqrt(dist_x + dist_y + torch.full_like(dist_x, 1e-15))
     # Convert to similarity by applying Gaussian Kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
     sim = torch.exp(-0.5 * dist / 0.2)
