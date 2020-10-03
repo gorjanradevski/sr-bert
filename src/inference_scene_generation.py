@@ -4,6 +4,7 @@ from torch import nn
 from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import json
+import os
 from transformers import BertConfig
 from scene_layouts.generation_strategies import generation_strategy_factory
 
@@ -26,7 +27,7 @@ def inference(
     clip_pred_checkpoint_path: str,
     model_type: str,
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     gen_strategy: str,
     bert_name: str,
 ):
@@ -34,7 +35,9 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"--- Using device {device}! ---")
     # Create dataset
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     test_dataset = (
         DiscreteInferenceDataset(test_dataset_path, visual2index)
         if model_type == "discrete"
@@ -95,8 +98,8 @@ def inference(
             probs = torch.sigmoid(clip_pred_model(ids_text, ids_text_attn_mask))
             clip_art_preds = torch.zeros_like(probs)
             # Regular objects
-            clip_art_preds[:, :23][torch.where(probs[:, :23] > 0.4)] = 1
-            clip_art_preds[:, 93:][torch.where(probs[:, 93:] > 0.4)] = 1
+            clip_art_preds[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
+            clip_art_preds[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
             # Mike and Jenny
             batch_indices = torch.arange(ids_text.size()[0])
             max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
@@ -186,10 +189,10 @@ def parse_args():
         help="Path to the test dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument(
         "--gen_strategy",
@@ -214,7 +217,7 @@ def main():
         args.clip_pred_checkpoint_path,
         args.model_type,
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.gen_strategy,
         args.bert_name,
     )

@@ -169,22 +169,11 @@ class ClipartsPredictionModel(nn.Module):
     def __init__(self, config: BertConfig, bert_name: str):
         super(ClipartsPredictionModel, self).__init__()
         self.bert = BertModel.from_pretrained(bert_name)
-        # Non-person objects = 56, poses = 7, expressions = 5
-        self.object = nn.Linear(config.hidden_size, 56)
-        self.hb0_pose = nn.Linear(config.hidden_size, 7)
-        self.hb0_expr = nn.Linear(config.hidden_size, 5)
-        self.hb1_pose = nn.Linear(config.hidden_size, 7)
-        self.hb1_expr = nn.Linear(config.hidden_size, 5)
+        self.projector = nn.Linear(config.hidden_size, config.vocab_size)
 
     def forward(self, input_ids, attention_mask):
         last_state = self.bert(input_ids=input_ids, attention_mask=attention_mask)[0][
             :, 0, :
         ]
 
-        return (
-            self.object(last_state),
-            self.hb0_pose(last_state),
-            self.hb0_expr(last_state),
-            self.hb1_pose(last_state),
-            self.hb1_expr(last_state),
-        )
+        return self.projector(last_state)

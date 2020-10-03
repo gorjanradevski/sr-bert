@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import json
+import os
 from scene_layouts.evaluator import Evaluator
 from scene_layouts.datasets import (
     DiscreteInferenceDataset,
@@ -16,11 +17,13 @@ from scene_layouts.datasets import (
 def naive_inference(
     train_dataset_path: str,
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     naive_type: str,
 ):
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     train_dataset = DiscreteInferenceDataset(train_dataset_path, visual2index)
     test_dataset = DiscreteInferenceDataset(test_dataset_path, visual2index)
     print(f"Testing on {len(test_dataset)}")
@@ -128,10 +131,10 @@ def parse_args():
         help="Path to the test dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument(
         "--naive_type",
@@ -147,7 +150,7 @@ def main():
     naive_inference(
         args.train_dataset_path,
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.naive_type,
     )
 

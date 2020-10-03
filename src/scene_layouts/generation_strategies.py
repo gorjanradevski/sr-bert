@@ -3,7 +3,7 @@ import numpy as np
 from torch.nn import functional as F  # type: ignore
 from typing import List
 
-from scene_layouts.datasets import X_MASK, X_PAD, Y_MASK, Y_PAD, O_MASK, O_PAD
+from scene_layouts.datasets import X_MASK, Y_MASK, O_MASK
 
 
 class Hypothesis:
@@ -409,7 +409,7 @@ def lowest_entropy(ids_text, ids_vis, pos_text, t_types, attn_mask, model, devic
         entropies_x = entropy(x_scores)
         entropies_y = entropy(y_scores)
         entropies_f = entropy(o_scores)
-        joint_entropy = entropies_x * entropies_y * entropies_f
+        joint_entropy = entropies_x + entropies_y + entropies_f
 
         # Obtain the the indexes of the elements with the highest probability
         index = torch.argmin(joint_entropy, dim=-1)

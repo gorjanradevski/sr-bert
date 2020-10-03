@@ -1,8 +1,7 @@
-from operator import xor
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST
 import numpy as np
-from sklearn.metrics import f1_score, precision_recall_fscore_support, accuracy_score
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
 class Evaluator:
@@ -320,104 +319,94 @@ def flip_acc_sc(inds, labs, mask):
 
 
 class ClipartsPredictionEvaluator:
-    def __init__(self, dataset_size, visual2index):
+    def __init__(
+        self,
+        dataset_size,
+        visual2index,
+        index2pose_hb0,
+        index2pose_hb1,
+        index2expression_hb0,
+        index2expression_hb1,
+    ):
         self.dataset_size = dataset_size
         self.visual2index = visual2index
-        # Create prediction arrays
-        self.object_preds = np.zeros((self.dataset_size, 56))
-        self.hb0_hb1_poses_preds = np.zeros((self.dataset_size * 2,))
-        self.hb0_hb1_exprs_preds = np.zeros((self.dataset_size * 2,))
-        # Create target arrays
-        self.object_targets = np.zeros((self.dataset_size, 56))
-        self.hb0_hb1_poses_targets = np.zeros((self.dataset_size * 2,))
-        self.hb0_hb1_exprs_targets = np.zeros((self.dataset_size * 2,))
-        self.index_objects = 0
-        self.index_poses_exprs = 0
+        self.index2pose_hb0 = index2pose_hb0
+        self.index2pose_hb1 = index2pose_hb1
+        self.index2expression_hb0 = index2expression_hb0
+        self.index2expression_hb1 = index2expression_hb1
+        # Create target and target arrays
+        self.predictions = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.targets = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.index = 0
 
-    def update_counters(
-        self,
-        one_hot_objects_targets,
-        one_hot_objects_preds,
-        hb0_hb1_poses_targets,
-        hb0_hb1_poses_preds,
-        hb0_hb1_exprs_targets,
-        hb0_hb1_exprs_preds,
-    ):
-        batch_size = one_hot_objects_targets.shape[0]
-        # Update target counters
-        self.object_targets[
-            self.index_objects : self.index_objects + batch_size
-        ] = one_hot_objects_targets
-        self.hb0_hb1_poses_targets[
-            self.index_poses_exprs : self.index_poses_exprs + batch_size * 2
-        ] = hb0_hb1_poses_targets
-        self.hb0_hb1_exprs_targets[
-            self.index_poses_exprs : self.index_poses_exprs + batch_size * 2
-        ] = hb0_hb1_exprs_targets
-        # Update prediction counters
-        self.object_preds[
-            self.index_objects : self.index_objects + batch_size
-        ] = one_hot_objects_preds
-        self.hb0_hb1_poses_preds[
-            self.index_poses_exprs : self.index_poses_exprs + batch_size * 2
-        ] = hb0_hb1_poses_preds
-        self.hb0_hb1_exprs_preds[
-            self.index_poses_exprs : self.index_poses_exprs + batch_size * 2
-        ] = hb0_hb1_exprs_preds
-        self.index_objects += batch_size
-        self.index_poses_exprs += batch_size * 2
+    def update_counters(self, preds, targets):
+        batch_size = preds.shape[0]
+        self.predictions[self.index : self.index + batch_size] = preds
+        self.targets[self.index : self.index + batch_size] = targets
+        self.index += batch_size
 
     def reset_counters(self):
-        # Reset prediction arrays
-        self.object_preds = np.zeros((self.dataset_size, 56))
-        self.hb0_hb1_poses_preds = np.zeros((self.dataset_size * 2,))
-        self.hb0_hb1_exprs_preds = np.zeros((self.dataset_size * 2,))
-        # Reset target arrays
-        self.object_targets = np.zeros((self.dataset_size, 56))
-        self.hb0_hb1_poses_targets = np.zeros((self.dataset_size * 2,))
-        self.hb0_hb1_exprs_targets = np.zeros((self.dataset_size * 2,))
-        # Reset indexes
-        self.index_objects = 0
-        self.index_poses_exprs = 0
+        self.predictions = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.targets = np.zeros((self.dataset_size, len(self.visual2index)))
+        self.index = 0
 
-    def per_object_pr(self):
-        precision, recall, f1_score, _ = precision_recall_fscore_support(
-            self.object_targets, self.object_preds, average="micro"
+    def per_object_prf(self):
+        targets_obj = np.concatenate(
+            [self.targets[:, :23], self.targets[:, 93:]], axis=1
+        )
+        preds_obj = np.concatenate(
+            [self.predictions[:, :23], self.predictions[:, 93:]], axis=1
+        )
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            targets_obj, preds_obj, average="micro"
         )
         return (
             np.round(precision * 100, decimals=1),
             np.round(recall * 100, decimals=1),
-            np.round(f1_score * 100, decimals=1),
+            np.round(f1 * 100, decimals=1),
         )
 
     def posses_expressions_accuracy(self):
-        num_targets_poses = len(
-            [target for target in self.hb0_hb1_poses_targets if target.item() != -100]
+        num_targets_hbo = len(
+            [target for target in self.targets[:, 23:58] if target.sum() > 0]
         )
-        num_targets_exprs = len(
-            [target for target in self.hb0_hb1_exprs_targets if target.item() != -100]
+        num_targets_hb1 = len(
+            [target for target in self.targets[:, 58:93] if target.sum() > 0]
         )
-        targets_poses = np.zeros((num_targets_poses,))
-        predicts_poses = np.zeros((num_targets_poses,))
-        targets_exprs = np.zeros((num_targets_exprs,))
-        predicts_exprs = np.zeros((num_targets_exprs,))
-        index_pose = 0
-        index_expr = 0
-        for i in range(self.hb0_hb1_poses_targets.shape[0]):
-            if self.hb0_hb1_poses_targets[i].item() != -100:
+        targets_pose = np.zeros((num_targets_hbo + num_targets_hb1,))
+        targets_expr = np.zeros((num_targets_hbo + num_targets_hb1,))
+        predicts_pose = np.zeros((num_targets_hbo + num_targets_hb1,))
+        predicts_expr = np.zeros((num_targets_hbo + num_targets_hb1,))
+        index = 0
+        for i in range(self.targets.shape[0]):
+            if self.targets[i, 23:58].sum() > 0:
+                # Get target index
+                target_index = str(self.targets[i, 23:58].argmax() + 23)
+                # Get predictions index
+                pred_index = str(self.predictions[i, 23:58].argmax() + 23)
                 # Update pose arrays
-                targets_poses[index_pose] = self.hb0_hb1_poses_targets[i].item()
-                predicts_poses[index_pose] = self.hb0_hb1_poses_preds[i].item()
+                targets_pose[index] = self.index2pose_hb0[target_index]
+                predicts_pose[index] = self.index2pose_hb0[pred_index]
+                # Update expression arrays
+                targets_expr[index] = self.index2expression_hb0[target_index]
+                predicts_expr[index] = self.index2expression_hb0[pred_index]
                 # Update index
-                index_pose += 1
-            if self.hb0_hb1_exprs_targets[i].item() != -100:
-                # Update expr arrays
-                targets_exprs[index_expr] = self.hb0_hb1_exprs_targets[i].item()
-                predicts_exprs[index_expr] = self.hb0_hb1_exprs_preds[i].item()
+                index += 1
+            if self.targets[i, 58:93].sum() > 0:
+                # Get target index
+                target_index = str(self.targets[i, 58:93].argmax() + 58)
+                # Get predictions index
+                pred_index = str(self.predictions[i, 58:93].argmax() + 58)
+                # Update pose arrays
+                targets_pose[index] = self.index2pose_hb1[target_index]
+                predicts_pose[index] = self.index2pose_hb1[pred_index]
+                # Update expression arrays
+                targets_expr[index] = self.index2expression_hb1[target_index]
+                predicts_expr[index] = self.index2expression_hb1[pred_index]
                 # Update index
-                index_expr += 1
+                index += 1
 
         return (
-            np.round(accuracy_score(targets_poses, predicts_poses) * 100, decimals=1),
-            np.round(accuracy_score(targets_exprs, predicts_exprs) * 100, decimals=1),
+            np.round(accuracy_score(targets_pose, predicts_pose) * 100, decimals=1),
+            np.round(accuracy_score(targets_expr, predicts_expr) * 100, decimals=1),
         )

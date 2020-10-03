@@ -8,6 +8,7 @@ import sys
 import logging
 from datetime import datetime
 import json
+import os
 from transformers import BertConfig
 
 from scene_layouts.datasets import (
@@ -28,7 +29,7 @@ def train(
     checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     mask_probability: float,
     bert_name: str,
     batch_size: int,
@@ -49,7 +50,9 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     train_dataset = DiscreteTrainDataset(
         train_dataset_path, visual2index, mask_probability=mask_probability
     )
@@ -265,10 +268,10 @@ def parse_args():
         help="Path to the validation dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument(
         "--mask_probability", type=float, default=0.15, help="The mask probability."
@@ -317,7 +320,7 @@ def main():
         args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.mask_probability,
         args.bert_name,
         args.batch_size,

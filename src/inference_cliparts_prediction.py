@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import logging
 import json
+import os
 from transformers import BertConfig
 
 from scene_layouts.datasets import (
@@ -17,7 +18,7 @@ from scene_layouts.evaluator import ClipartsPredictionEvaluator
 
 def train(
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     bert_name: str,
     batch_size: int,
     checkpoint_path: str,
@@ -27,9 +28,23 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
+    index2pose_hb0 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2pose_hb0.json"))
+    )
+    index2pose_hb1 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2pose_hb1.json"))
+    )
+    index2expression_hb0 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2expression_hb0.json"))
+    )
+    index2expression_hb1 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2expression_hb1.json"))
+    )
     test_dataset = ClipartsPredictionDataset(test_dataset_path, visual2index)
-    logging.info(f"Inference on {len(test_dataset)}")
+    print(f"Testing on {len(test_dataset)}")
     # Create loaders
     test_loader = DataLoader(
         test_dataset,
@@ -42,70 +57,42 @@ def train(
     model = nn.DataParallel(ClipartsPredictionModel(config, bert_name)).to(device)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.train(False)
-    evaluator = ClipartsPredictionEvaluator(len(test_dataset), visual2index)
+    evaluator = ClipartsPredictionEvaluator(
+        len(test_dataset),
+        visual2index,
+        index2pose_hb0,
+        index2pose_hb1,
+        index2expression_hb0,
+        index2expression_hb1,
+    )
     # Set model in evaluation mode
     model.train(False)
     with torch.no_grad():
-        for (
-            ids_text,
-            attn_mask,
-            one_hot_objects_targets,
-            hb0_poses_targets,
-            hb0_exprs_targets,
-            hb1_poses_targets,
-            hb1_exprs_targets,
-        ) in tqdm(test_loader):
+        for (ids_text, attn_mask, target_visuals) in tqdm(test_loader):
             # forward
-            ids_text, attn_mask, one_hot_objects_targets, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
+            ids_text, attn_mask, target_visuals = (
                 ids_text.to(device),
                 attn_mask.to(device),
-                one_hot_objects_targets.to(device),
-                hb0_poses_targets.to(device),
-                hb0_exprs_targets.to(device),
-                hb1_poses_targets.to(device),
-                hb1_exprs_targets.to(device),
+                target_visuals.to(device),
             )
             # Get predictions
-            object_outs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
-                ids_text, attn_mask
-            )
-            object_probs = torch.sigmoid(object_outs)
-            one_hot_objects_preds = torch.zeros_like(object_probs)
+            probs = torch.sigmoid(model(ids_text, attn_mask))
+            one_hot_pred = torch.zeros_like(probs)
             # Regular objects
-            one_hot_objects_preds[torch.where(object_probs > 0.4)] = 1
-            # Mike and Jenny predictions
-            hb0_hb1_poses_preds = torch.cat(
-                [
-                    torch.argmax(hb0_pose_probs, axis=-1),
-                    torch.argmax(hb1_pose_probs, axis=-1),
-                ],
-                dim=0,
-            )
-            hb0_hb1_exprs_preds = torch.cat(
-                [
-                    torch.argmax(hb0_expr_probs, axis=-1),
-                    torch.argmax(hb1_expr_probs, axis=-1),
-                ],
-                dim=0,
-            )
-            # Mike and Jenny targets
-            hb0_hb1_poses_targets = torch.cat(
-                [hb0_poses_targets, hb1_poses_targets], dim=0
-            )
-            hb0_hb1_exprs_targets = torch.cat(
-                [hb0_exprs_targets, hb1_exprs_targets], dim=0
-            )
+            one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
+            one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
+            # Mike and Jenny
+            batch_indices = torch.arange(ids_text.size()[0])
+            max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
+            one_hot_pred[batch_indices, max_hb0 + 23] = 1
+            max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
+            one_hot_pred[batch_indices, max_hb1 + 58] = 1
             # Aggregate predictions/targets
             evaluator.update_counters(
-                one_hot_objects_targets.cpu().numpy(),
-                one_hot_objects_preds.cpu().numpy(),
-                hb0_hb1_poses_targets.cpu().numpy(),
-                hb0_hb1_poses_preds.cpu().numpy(),
-                hb0_hb1_exprs_targets.cpu().numpy(),
-                hb0_hb1_exprs_preds.cpu().numpy(),
+                one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
             )
 
-    precision, recall, f1_score = evaluator.per_object_pr()
+    precision, recall, f1_score = evaluator.per_object_prf()
     posses_acc, expr_acc = evaluator.posses_expressions_accuracy()
     logging.info("====================================================")
     logging.info(f"Precison is {precision}, recall is {recall}, F1 is {f1_score}")
@@ -130,10 +117,10 @@ def parse_args():
         help="Path to the validation dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument("--batch_size", type=int, default=32, help="The batch size.")
     parser.add_argument(
@@ -156,7 +143,7 @@ def main():
     args = parse_args()
     train(
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.bert_name,
         args.batch_size,
         args.checkpoint_path,

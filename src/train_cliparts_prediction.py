@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import logging
 import json
+import os
 from transformers import BertConfig
 
 from scene_layouts.datasets import (
@@ -19,14 +20,13 @@ from scene_layouts.evaluator import ClipartsPredictionEvaluator
 def train(
     train_dataset_path: str,
     val_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     bert_name: str,
     batch_size: int,
     learning_rate: float,
     weight_decay: float,
     epochs: int,
     clip_val: float,
-    object_loss_weight: float,
     save_model_path: str,
     log_filepath: str,
 ):
@@ -39,7 +39,21 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
+    index2pose_hb0 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2pose_hb0.json"))
+    )
+    index2pose_hb1 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2pose_hb1.json"))
+    )
+    index2expression_hb0 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2expression_hb0.json"))
+    )
+    index2expression_hb1 = json.load(
+        open(os.path.join(visuals_dicts_path, "index2expression_hb1.json"))
+    )
     train_dataset = ClipartsPredictionDataset(
         train_dataset_path, visual2index, train=True
     )
@@ -63,59 +77,37 @@ def train(
     config.vocab_size = len(visual2index)
     model = nn.DataParallel(ClipartsPredictionModel(config, bert_name)).to(device)
     # Loss and optimizer
-    object_criterion = nn.BCEWithLogitsLoss()
-    pose_expr_criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
     best_score = -1.0
-    evaluator = ClipartsPredictionEvaluator(len(val_dataset), visual2index)
+    evaluator = ClipartsPredictionEvaluator(
+        len(val_dataset),
+        visual2index,
+        index2pose_hb0,
+        index2pose_hb1,
+        index2expression_hb0,
+        index2expression_hb1,
+    )
     for epoch in range(epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
         evaluator.reset_counters()
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for (
-                ids_text,
-                attn_mask,
-                one_hot_objects_targets,
-                hb0_poses_targets,
-                hb0_exprs_targets,
-                hb1_poses_targets,
-                hb1_exprs_targets,
-            ) in train_loader:
+            for ids_text, attn_mask, target_visuals in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, attn_mask, one_hot_objects_targets, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
+                ids_text, attn_mask, target_visuals = (
                     ids_text.to(device),
                     attn_mask.to(device),
-                    one_hot_objects_targets.to(device),
-                    hb0_poses_targets.to(device),
-                    hb0_exprs_targets.to(device),
-                    hb1_poses_targets.to(device),
-                    hb1_exprs_targets.to(device),
+                    target_visuals.to(device),
                 )
-                object_probs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
-                    ids_text, attn_mask
-                )
+                probs = model(ids_text, attn_mask)
                 # Loss and backward
-                object_loss = (
-                    object_criterion(object_probs, one_hot_objects_targets)
-                    * object_loss_weight
-                )
-                hb0_pose_loss = pose_expr_criterion(hb0_pose_probs, hb0_poses_targets)
-                hb0_expr_loss = pose_expr_criterion(hb0_expr_probs, hb0_exprs_targets)
-                hb1_pose_loss = pose_expr_criterion(hb1_pose_probs, hb1_poses_targets)
-                hb1_expr_loss = pose_expr_criterion(hb1_expr_probs, hb1_exprs_targets)
-                loss = (
-                    object_loss
-                    + hb0_pose_loss
-                    + hb0_expr_loss
-                    + hb1_pose_loss
-                    + hb1_expr_loss
-                )
+                loss = criterion(probs, target_visuals)
                 loss.backward()
                 # Clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -128,66 +120,31 @@ def train(
         # Set model in evaluation mode
         model.train(False)
         with torch.no_grad():
-            for (
-                ids_text,
-                attn_mask,
-                one_hot_objects_targets,
-                hb0_poses_targets,
-                hb0_exprs_targets,
-                hb1_poses_targets,
-                hb1_exprs_targets,
-            ) in tqdm(val_loader):
+            for (ids_text, attn_mask, target_visuals) in tqdm(val_loader):
                 # forward
-                ids_text, attn_mask, one_hot_objects_targets, hb0_poses_targets, hb0_exprs_targets, hb1_poses_targets, hb1_exprs_targets = (
+                ids_text, attn_mask, target_visuals = (
                     ids_text.to(device),
                     attn_mask.to(device),
-                    one_hot_objects_targets.to(device),
-                    hb0_poses_targets.to(device),
-                    hb0_exprs_targets.to(device),
-                    hb1_poses_targets.to(device),
-                    hb1_exprs_targets.to(device),
+                    target_visuals.to(device),
                 )
                 # Get predictions
-                object_outs, hb0_pose_probs, hb0_expr_probs, hb1_pose_probs, hb1_expr_probs = model(
-                    ids_text, attn_mask
-                )
-                object_probs = torch.sigmoid(object_outs)
-                one_hot_objects_preds = torch.zeros_like(object_probs)
+                probs = torch.sigmoid(model(ids_text, attn_mask))
+                one_hot_pred = torch.zeros_like(probs)
                 # Regular objects
-                one_hot_objects_preds[torch.where(object_probs > 0.5)] = 1
-                # Mike and Jenny predictions
-                hb0_hb1_poses_preds = torch.cat(
-                    [
-                        torch.argmax(hb0_pose_probs, axis=-1),
-                        torch.argmax(hb1_pose_probs, axis=-1),
-                    ],
-                    dim=0,
-                )
-                hb0_hb1_exprs_preds = torch.cat(
-                    [
-                        torch.argmax(hb0_expr_probs, axis=-1),
-                        torch.argmax(hb1_expr_probs, axis=-1),
-                    ],
-                    dim=0,
-                )
-                # Mike and Jenny targets
-                hb0_hb1_poses_targets = torch.cat(
-                    [hb0_poses_targets, hb1_poses_targets], dim=0
-                )
-                hb0_hb1_exprs_targets = torch.cat(
-                    [hb0_exprs_targets, hb1_exprs_targets], dim=0
-                )
+                one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
+                one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
+                # Mike and Jenny
+                batch_indices = torch.arange(ids_text.size()[0])
+                max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
+                one_hot_pred[batch_indices, max_hb0 + 23] = 1
+                max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
+                one_hot_pred[batch_indices, max_hb1 + 58] = 1
                 # Aggregate predictions/targets
                 evaluator.update_counters(
-                    one_hot_objects_targets.cpu().numpy(),
-                    one_hot_objects_preds.cpu().numpy(),
-                    hb0_hb1_poses_targets.cpu().numpy(),
-                    hb0_hb1_poses_preds.cpu().numpy(),
-                    hb0_hb1_exprs_targets.cpu().numpy(),
-                    hb0_hb1_exprs_preds.cpu().numpy(),
+                    one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
                 )
 
-        precision, recall, f1_score = evaluator.per_object_pr()
+        precision, recall, f1_score = evaluator.per_object_prf()
         posses_acc, expr_acc = evaluator.posses_expressions_accuracy()
         total_score = f1_score + posses_acc + expr_acc
         if total_score > best_score:
@@ -223,23 +180,20 @@ def parse_args():
         help="Path to the validation dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
         "--epochs", type=int, default=1000, help="The number of epochs."
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=2e-5, help="The learning rate."
+        "--learning_rate", type=float, default=5e-5, help="The learning rate."
     )
     parser.add_argument(
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
-    )
-    parser.add_argument(
-        "--object_loss_weight", type=float, default=1.0, help="The object loss weight."
     )
     parser.add_argument(
         "--weight_decay", type=float, default=0.01, help="The weight decay."
@@ -268,14 +222,13 @@ def main():
     train(
         args.train_dataset_path,
         args.val_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.bert_name,
         args.batch_size,
         args.learning_rate,
         args.weight_decay,
         args.epochs,
         args.clip_val,
-        args.object_loss_weight,
         args.save_model_path,
         args.log_filepath,
     )

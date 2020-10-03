@@ -1,9 +1,10 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler, Subset
+from torch.utils.data import DataLoader, SequentialSampler
 from tqdm import tqdm
 import json
+import os
 from transformers import BertConfig
 from scene_layouts.generation_strategies import generation_strategy_factory
 
@@ -21,7 +22,7 @@ def inference(
     checkpoint_path: str,
     model_type: str,
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     gen_strategy: str,
     bert_name: str,
     without_text: bool,
@@ -32,7 +33,9 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"--- Using device {device}! ---")
     # Create dataset
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     test_dataset = (
         DiscreteInferenceDataset(
             test_dataset_path, visual2index, without_text=without_text
@@ -157,10 +160,10 @@ def parse_args():
         help="Path to the test dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
@@ -199,7 +202,7 @@ def main():
         args.checkpoint_path,
         args.model_type,
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.gen_strategy,
         args.bert_name,
         args.without_text,
