@@ -178,13 +178,13 @@ def parse_args():
         "--abs_dump_path",
         type=str,
         default=None,
-        help="Location of the absolute distance results.",
+        help="Location of the absolute similarity results.",
     )
     parser.add_argument(
         "--rel_dump_path",
         type=str,
         default=None,
-        help="Location of the relative distance results.",
+        help="Location of the relative similarity results.",
     )
 
     return parser.parse_args()

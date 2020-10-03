@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
 import os
@@ -38,11 +38,10 @@ def inference(
     visual2index = json.load(
         open(os.path.join(visuals_dicts_path, "visual2index.json"))
     )
-    test_dataset = Subset(
+    test_dataset = (
         DiscreteInferenceDataset(test_dataset_path, visual2index)
         if model_type == "discrete"
         else ContinuousInferenceDataset(test_dataset_path, visual2index),
-        list(range(10)),
     )
     print(f"Testing on {len(test_dataset)}")
     # Create loader

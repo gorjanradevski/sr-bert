@@ -92,7 +92,7 @@ def train(
         logging.warning(
             f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
         )
-        logging.warning(f"The previous best avg distance was {best_avg_metrics}!")
+        logging.warning(f"The previous best avg similarity was {best_avg_metrics}!")
 
     evaluator = Evaluator(len(val_dataset))
     for epoch in range(cur_epoch, epochs):
@@ -114,7 +114,7 @@ def train(
                     attn_mask.to(device),
                 )
                 x_scores, y_scores, o_scores = model(ids_text, ids_vis)
-                # Get losses for the absolute and relative distances
+                # Get losses for the absolute and relative similarities
                 abs_loss = (
                     abs_similarity(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
@@ -125,7 +125,8 @@ def train(
                 )
                 o_loss = criterion_f(o_scores.view(-1, O_PAD - 1), o_lab.view(-1)) * 10
                 # Backward
-                loss = abs_loss + relative_loss + o_loss
+                # Minus because the loss are according to the similarity
+                loss = -abs_loss - relative_loss + o_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
@@ -159,16 +160,16 @@ def train(
                 evaluator.update_metrics(
                     x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask
                 )
-        abs_dist = evaluator.get_abs_sim()
-        rel_dist = evaluator.get_rel_sim()
+        abs_sim = evaluator.get_abs_sim()
+        rel_sim = evaluator.get_rel_sim()
         o_acc = evaluator.get_o_acc()
-        cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
+        cur_avg_metrics = (abs_sim + rel_sim + o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:
             best_avg_metrics = cur_avg_metrics
             logging.info("====================================================")
             logging.info("Found new best with average metrics per scene:")
-            logging.info(f"- Absolute distance: {abs_dist}")
-            logging.info(f"- Relative distance: {rel_dist}")
+            logging.info(f"- Absolute similarity: {abs_sim}")
+            logging.info(f"- Relative similarity: {rel_sim}")
             logging.info(f"- Orientation accuracy: {o_acc}")
             logging.info(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
@@ -181,7 +182,7 @@ def train(
                 "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "distance": best_avg_metrics,
+                "similarity": best_avg_metrics,
             },
             intermediate_save_checkpoint_path,
         )
