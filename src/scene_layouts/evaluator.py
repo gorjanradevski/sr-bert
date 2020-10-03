@@ -177,6 +177,7 @@ def relative_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
     diag = torch.diagonal(sim, dim1=1, dim2=2)
     diag.fill_(0.0)
     # Obtain average distance for each scene without considering the padding tokens
+    # and the main diagonal
     sim = sim.sum(-1) / (attn_mask.sum(-1) - 1)
     sim = sim.sum(-1) / (attn_mask.sum(-1) - 1)
 
@@ -261,9 +262,12 @@ def relative_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     # Convert to similarity by applying Gaussian Kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
     sim = torch.exp(-0.5 * dist / 0.2)
-    sim = sim * sim.unsqueeze(-1).expand(sim.size())
-    sim = sim.mean(-1)
-    sim = sim.sum(-1) / (mask.sum(-1) + 1e-15)
+    sim = sim * mask.unsqueeze(-1).expand(sim.size())
+    # Set diagonal to 0
+    diag = torch.diagonal(sim, dim1=1, dim2=2)
+    diag.fill_(0.0)
+    # Obtain average over the selected group
+    sim = sim.sum() / (mask.sum(-1) + 1e-15)
 
     return sim
 
