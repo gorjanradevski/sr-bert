@@ -232,7 +232,7 @@ def train_cond(
     for i in range(ids_vis.size()[1]):
         tmp_x = x_ind[:, i].clone()
         tmp_y = y_ind[:, i].clone()
-        tmp_f = o_ind[:, i].clone()
+        tmp_o = o_ind[:, i].clone()
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         o_ind[:, i] = O_MASK
@@ -250,7 +250,7 @@ def train_cond(
         o_out[:, i] = torch.argmax(o_scores, dim=-1)[:, i]
         x_ind[:, i] = tmp_x.clone()
         y_ind[:, i] = tmp_y.clone()
-        o_ind[:, i] = tmp_f.clone()
+        o_ind[:, i] = tmp_o.clone()
 
     return x_out, y_out, o_out
 
@@ -277,7 +277,7 @@ def sc_discrete(
         mask[0, i] = 1
         tmp_x = x_ind[:, i].clone()
         tmp_y = y_ind[:, i].clone()
-        tmp_f = o_ind[:, i].clone()
+        tmp_o = o_ind[:, i].clone()
         x_ind[:, i] = X_MASK
         y_ind[:, i] = Y_MASK
         o_ind[:, i] = O_MASK
@@ -289,7 +289,7 @@ def sc_discrete(
         o_out[:, i] = torch.argmax(o_scores, dim=-1)[:, i]
         x_ind[:, i] = tmp_x.clone()
         y_ind[:, i] = tmp_y.clone()
-        o_ind[:, i] = tmp_f.clone()
+        o_ind[:, i] = tmp_o.clone()
 
     return x_out, y_out, o_out, mask
 
@@ -349,8 +349,8 @@ def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
         # Obtain the probabilities and the prediction for all elements
         prob_x, pred_x = torch.max(x_scores, dim=-1)
         prob_y, pred_y = torch.max(y_scores, dim=-1)
-        prob_f, pred_f = torch.max(o_scores, dim=-1)
-        joint_prob = prob_x * prob_y * prob_f
+        prob_o, pred_o = torch.max(o_scores, dim=-1)
+        joint_prob = prob_x * prob_y * prob_o
 
         # Obtain the the indexes of the elements with the highest probability
         index = torch.argmax(joint_prob, dim=-1)
@@ -361,7 +361,7 @@ def highest_confidence(ids_text, ids_vis, pos_text, t_types, attn_mask, model):
         # Change the index with the max probability with its prediction
         x_ind[batch_indices, index] = pred_x[batch_indices, index]
         y_ind[batch_indices, index] = pred_y[batch_indices, index]
-        o_ind[batch_indices, index] = pred_f[batch_indices, index]
+        o_ind[batch_indices, index] = pred_o[batch_indices, index]
 
     return x_ind, y_ind, o_ind
 
@@ -408,8 +408,8 @@ def lowest_entropy(ids_text, ids_vis, pos_text, t_types, attn_mask, model, devic
         # Compute entropies
         entropies_x = entropy(x_scores)
         entropies_y = entropy(y_scores)
-        entropies_f = entropy(o_scores)
-        joint_entropy = entropies_x + entropies_y + entropies_f
+        entropies_o = entropy(o_scores)
+        joint_entropy = entropies_x + entropies_y + entropies_o
 
         # Obtain the the indexes of the elements with the highest probability
         index = torch.argmin(joint_entropy, dim=-1)

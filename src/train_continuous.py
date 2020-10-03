@@ -231,7 +231,7 @@ def train(
             logging.info("Found new best with average metrics per scene:")
             logging.info(f"- Absolute distance: {abs_dist}")
             logging.info(f"- Relative distance: {rel_dist}")
-            logging.info(f"- Flip accuracy: {o_acc}")
+            logging.info(f"- Orientation accuracy: {o_acc}")
             logging.info(f"on epoch {epoch+1}. Saving model!!!")
             torch.save(model.state_dict(), save_model_path)
             logging.info("====================================================")

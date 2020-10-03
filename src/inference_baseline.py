@@ -82,7 +82,7 @@ def inference(
         print(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
-        print(f"The avg ACCURACY for the flip is: {evaluator.get_o_acc()}")
+        print(f"The avg ACCURACY for the orientation is: {evaluator.get_o_acc()}")
         if abs_dump_path is not None and rel_dump_path is not None:
             evaluator.dump_results(abs_dump_path, rel_dump_path)
 

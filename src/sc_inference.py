@@ -139,7 +139,7 @@ def inference(
             f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(
-            f"The avg FLIP accc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
+            f"The avg orientation accc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
         )
 
 

@@ -24,9 +24,9 @@ class Evaluator:
         self.rel_dist[self.index : self.index + batch_size] = (
             relative_distance(x_out, x_lab, y_out, y_lab, attn_mask).cpu().numpy()
         )
-        # Update flip accuracy
+        # Update orientation accuracy
         self.o_acc[self.index : self.index + batch_size] += (
-            flip_acc(o_out, o_lab, attn_mask, flips).cpu().numpy()
+            orientation_acc(o_out, o_lab, attn_mask, flips).cpu().numpy()
         )
         # Update U-obj coord
         self.u_obj_coord[self.index : self.index + batch_size] = (
@@ -149,18 +149,6 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
     return dist
 
 
-# def u_obj_coord(x_inds, x_labs, y_inds, y_labs, attn_mask):
-#     # Obtain normal dist
-#     normal_sim = u_obj_coord_single(x_inds, x_labs, y_inds, y_labs, attn_mask)
-#     x_labs_flipped = flip_scene(x_labs)
-#     flipped_sim = u_obj_coord_single(
-#         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
-#     )
-#     sim = torch.max(normal_sim, flipped_sim)
-
-#     return sim
-
-
 def u_obj_coord(x_inds, x_labs, y_inds, y_labs, attn_mask):
     x_inds_norm = x_inds.clone().float() / 500
     y_inds_norm = y_inds.clone().float() / 400
@@ -218,7 +206,7 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
     return dist
 
 
-def flip_acc(inds, labs, attn_mask, flips):
+def orientation_acc(inds, labs, attn_mask, flips):
     inds = torch.abs(inds - flips.unsqueeze(-1))
 
     return (inds == labs).sum(-1).float() / attn_mask.sum(-1)
@@ -229,7 +217,7 @@ class ScEvaluator:
         self.total_elements = total_elements
         self.abs_dist = np.zeros(self.total_elements)
         self.rel_dist = np.zeros(self.total_elements)
-        self.flip_acc = np.zeros(self.total_elements)
+        self.orientation_acc = np.zeros(self.total_elements)
         self.index = 0
 
     def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, mask):
@@ -242,8 +230,8 @@ class ScEvaluator:
         self.rel_dist[self.index : self.index + batch_size] = (
             relative_distance_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
         )
-        self.flip_acc[self.index : self.index + batch_size] = (
-            flip_acc_sc(o_out, o_lab, mask).cpu().numpy()
+        self.orientation_acc[self.index : self.index + batch_size] = (
+            orientation_acc_sc(o_out, o_lab, mask).cpu().numpy()
         )
 
         self.index += batch_size
@@ -251,7 +239,7 @@ class ScEvaluator:
     def reset_metrics(self):
         self.abs_dist = np.zeros(self.total_elements)
         self.rel_dist = np.zeros(self.total_elements)
-        self.flip_acc = np.zeros(self.total_elements)
+        self.orientation_acc = np.zeros(self.total_elements)
         self.index = 0
 
     def get_abs_dist(self):
@@ -266,7 +254,8 @@ class ScEvaluator:
 
     def get_o_acc(self):
         return np.round(
-            (self.flip_acc.sum() / np.count_nonzero(self.flip_acc)) * 100, decimals=1
+            (self.orientation_acc.sum() / np.count_nonzero(self.orientation_acc)) * 100,
+            decimals=1,
         )
 
     def get_abs_error_bar(self):
@@ -283,7 +272,10 @@ class ScEvaluator:
 
     def get_o_acc_error_bar(self):
         return np.round(
-            (np.std(self.flip_acc, ddof=1) / np.sqrt(np.count_nonzero(self.flip_acc)))
+            (
+                np.std(self.orientation_acc, ddof=1)
+                / np.sqrt(np.count_nonzero(self.orientation_acc))
+            )
             * 100,
             decimals=1,
         )
@@ -313,7 +305,7 @@ def abs_distance_sc(x_inds, x_labs, y_inds, y_labs, mask):
     return dist
 
 
-def flip_acc_sc(inds, labs, mask):
+def orientation_acc_sc(inds, labs, mask):
     acc = ((inds == labs).float() + 1e-15) * mask
     return acc.sum(-1) / (mask.sum(-1) + 1e-15)
 
