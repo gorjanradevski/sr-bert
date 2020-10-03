@@ -29,26 +29,16 @@ def naive_inference(
     print(f"Testing on {len(test_dataset)}")
     # Create loaders
     train_loader = DataLoader(
-        train_dataset,
-        batch_size=1,
-        num_workers=4,
-        collate_fn=collate_pad_batch,
+        train_dataset, batch_size=1, num_workers=4, collate_fn=collate_pad_batch
     )
     test_loader = DataLoader(
-        test_dataset,
-        batch_size=1,
-        num_workers=4,
-        collate_fn=collate_pad_batch,
+        test_dataset, batch_size=1, num_workers=4, collate_fn=collate_pad_batch
     )
     print("Aggregating from training set")
     visualindex2avgcoordinates = {}
     visualindex2occurence = {}
-    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(
-        train_loader
-    ):
-        for vis_id, x, y in zip(
-            ids_vis[0], x_lab[0, ids_text.size()[1] :], y_lab[0, ids_text.size()[1] :]
-        ):
+    for (_, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(train_loader):
+        for vis_id, x, y in zip(ids_vis[0], x_lab[0], y_lab[0]):
             if vis_id.item() not in visualindex2avgcoordinates:
                 visualindex2avgcoordinates[vis_id.item()] = torch.tensor([0.0, 0.0])
             if vis_id.item() not in visualindex2occurence:
@@ -62,9 +52,8 @@ def naive_inference(
         visualindex2avgcoordinates[visualindex] = (
             coordinates / visualindex2occurence[visualindex]
         )
-
     evaluator = Evaluator(len(test_dataset))
-    for (ids_text, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(test_loader):
+    for (_, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(test_loader):
         if naive_type == "random":
             x_ind = torch.randint_like(x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE))
             y_ind = torch.randint_like(y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE))
@@ -116,13 +105,13 @@ def parse_args():
     parser.add_argument(
         "--train_dataset_path",
         type=str,
-        default="data/train_dataset_testing.json",
+        default="data/train_dataset.json",
         help="Path to the test dataset.",
     )
     parser.add_argument(
         "--test_dataset_path",
         type=str,
-        default="data/test_dataset_testing.json",
+        default="data/test_dataset.json",
         help="Path to the test dataset.",
     )
     parser.add_argument(
@@ -134,7 +123,7 @@ def parse_args():
     parser.add_argument(
         "--naive_type",
         default="random",
-        help="Type of naive inference: random or center",
+        help="Type of naive inference: random, center or avg",
     )
 
     return parser.parse_args()

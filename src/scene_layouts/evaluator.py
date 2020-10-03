@@ -162,8 +162,8 @@ def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
 
 
 def u_obj_coord(x_inds, x_labs, y_inds, y_labs, attn_mask):
-    x_inds_norm = x_inds.clone() / 500
-    y_inds_norm = y_inds.clone() / 400
+    x_inds_norm = x_inds.clone().float() / 500
+    y_inds_norm = y_inds.clone().float() / 400
     x_labs_norm = x_labs.clone().float() / 500
     y_labs_norm = y_labs.clone().float() / 400
     # Obtain dist for X and Y

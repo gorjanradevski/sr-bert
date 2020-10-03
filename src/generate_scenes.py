@@ -84,10 +84,7 @@ def generation(
     print(f"Testing on {len(test_dataset)}")
     # Create loader
     test_loader = DataLoader(
-        test_dataset,
-        batch_size=1,
-        num_workers=4,
-        collate_fn=collate_pad_batch,
+        test_dataset, batch_size=1, num_workers=4, collate_fn=collate_pad_batch
     )
     # Prepare model
     config = BertConfig.from_pretrained(bert_name)

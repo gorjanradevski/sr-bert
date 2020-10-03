@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import logging
 import json
+import os
 from scene_layouts.evaluator import Evaluator
 from rnn_baseline.modeling import baseline_factory
 from rnn_baseline.datasets import InferenceDataset, collate_pad_batch, build_vocab
@@ -16,7 +17,7 @@ def inference(
     checkpoint_path: str,
     train_dataset_path: str,
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     batch_size: int,
     abs_dump_path: str,
     rel_dump_path: str,
@@ -25,7 +26,9 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     word2freq, word2index, index2word = build_vocab(json.load(open(train_dataset_path)))
     test_dataset = InferenceDataset(
         test_dataset_path, word2freq, word2index, visual2index
@@ -33,10 +36,7 @@ def inference(
     logging.info(f"Performing inference on {len(test_dataset)}")
     # Create loaders
     test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        num_workers=4,
-        collate_fn=collate_pad_batch,
+        test_dataset, batch_size=batch_size, num_workers=4, collate_fn=collate_pad_batch
     )
     num_cliparts = len(visual2index) + 1
     vocab_size = len(word2index)
@@ -115,10 +115,10 @@ def parse_args():
         help="Path to the validation dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
@@ -144,7 +144,7 @@ def main():
         args.checkpoint_path,
         args.train_dataset_path,
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.batch_size,
         args.abs_dump_path,
         args.rel_dump_path,

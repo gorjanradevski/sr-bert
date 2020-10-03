@@ -8,6 +8,7 @@ import sys
 import logging
 from datetime import datetime
 import json
+import os
 from scene_layouts.evaluator import Evaluator
 from rnn_baseline.modeling import baseline_factory
 from rnn_baseline.datasets import (
@@ -23,7 +24,7 @@ def train(
     checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     baseline_name: str,
     batch_size: int,
     learning_rate: float,
@@ -43,8 +44,10 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
-    visual2index = json.load(open(visual2index_path))
-    word2freq, word2index, index2word = build_vocab(json.load(open(train_dataset_path)))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
+    word2freq, word2index, _ = build_vocab(json.load(open(train_dataset_path)))
     train_dataset = TrainDataset(
         train_dataset_path, word2freq, word2index, visual2index
     )
@@ -62,10 +65,7 @@ def train(
         collate_fn=collate_pad_batch,
     )
     val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        num_workers=4,
-        collate_fn=collate_pad_batch,
+        val_dataset, batch_size=batch_size, num_workers=4, collate_fn=collate_pad_batch
     )
     # Define training specifics
     num_cliparts = len(visual2index) + 1
@@ -207,10 +207,10 @@ def parse_args():
         help="Path to the validation dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size.")
     parser.add_argument(
@@ -227,12 +227,6 @@ def parse_args():
         type=str,
         default="models/best.pt",
         help="Where to save the model.",
-    )
-    parser.add_argument(
-        "--intermediate_save_checkpoint_path",
-        type=str,
-        default="models/intermediate.pt",
-        help="Where to save the intermediate checkpoint.",
     )
     parser.add_argument(
         "--weight_decay", type=float, default=0.0, help="The weight decay."
@@ -256,7 +250,7 @@ def main():
         args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.baseline_name,
         args.batch_size,
         args.learning_rate,
