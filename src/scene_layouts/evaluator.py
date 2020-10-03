@@ -1,3 +1,4 @@
+from nltk.probability import DictionaryProbDist
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST, SCENE_HEIGHT_TEST
 import numpy as np
@@ -267,6 +268,7 @@ def relative_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     diag = torch.diagonal(sim, dim1=1, dim2=2)
     diag.fill_(0.0)
     # Obtain average over the selected group
+    sim = sim.mean(-1)
     sim = sim.sum() / (mask.sum(-1) + 1e-15)
 
     return sim
