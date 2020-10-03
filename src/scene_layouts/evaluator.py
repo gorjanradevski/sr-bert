@@ -37,22 +37,22 @@ class Evaluator:
         self.index = 0
 
     def get_abs_sim(self):
-        return np.round(self.abs_sim.mean(), decimals=2)
+        return np.round(self.abs_sim.mean(), decimals=3)
 
     def get_rel_sim(self):
-        return np.round(self.rel_sim.mean(), decimals=2)
+        return np.round(self.rel_sim.mean(), decimals=3)
 
     def get_o_acc(self):
-        return np.round(self.o_acc.mean() * 100, decimals=2)
+        return np.round(self.o_acc.mean() * 100, decimals=3)
 
     def get_abs_error_bar(self):
         return np.round(
-            np.std(self.abs_sim, ddof=1) / np.sqrt(self.total_elements), decimals=2
+            np.std(self.abs_sim, ddof=1) / np.sqrt(self.total_elements), decimals=3
         )
 
     def get_rel_error_bar(self):
         return np.round(
-            np.std(self.rel_sim, ddof=1) / np.sqrt(self.total_elements), decimals=2
+            np.std(self.rel_sim, ddof=1) / np.sqrt(self.total_elements), decimals=3
         )
 
     def dump_results(self, abs_dump_path: str, rel_dump_path: str):
@@ -220,10 +220,10 @@ class ScEvaluator:
         self.index = 0
 
     def get_abs_sim(self):
-        return np.round(self.abs_sim.sum() / np.count_nonzero(self.abs_sim), decimals=2)
+        return np.round(self.abs_sim.sum() / np.count_nonzero(self.abs_sim), decimals=3)
 
     def get_rel_sim(self):
-        return np.round(self.rel_sim.sum() / np.count_nonzero(self.rel_sim), decimals=2)
+        return np.round(self.rel_sim.sum() / np.count_nonzero(self.rel_sim), decimals=3)
 
     def get_o_acc(self):
         return np.round(
@@ -234,13 +234,13 @@ class ScEvaluator:
     def get_abs_error_bar(self):
         return np.round(
             np.std(self.abs_sim, ddof=1) / np.sqrt(np.count_nonzero(self.abs_sim)),
-            decimals=2,
+            decimals=3,
         )
 
     def get_rel_error_bar(self):
         return np.round(
             np.std(self.rel_sim, ddof=1) / np.sqrt(np.count_nonzero(self.rel_sim)),
-            decimals=2,
+            decimals=3,
         )
 
     def get_o_acc_error_bar(self):
