@@ -88,10 +88,10 @@ def naive_inference(
         )
 
     print(
-        f"The avg ABSOLUTE dist per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"
+        f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
     )
     print(
-        f"The avg RELATIVE dist per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
+        f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
     )
     print(f"The average ACCURACY per scene for F is: {evaluator.get_o_acc()}")
 

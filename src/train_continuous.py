@@ -11,7 +11,7 @@ import json
 import os
 from transformers import BertConfig
 from scene_layouts.generation_strategies import train_cond
-from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
+from scene_layouts.evaluator import abs_similarity, relative_similarity, Evaluator
 
 from scene_layouts.datasets import (
     ContinuousTrainDataset,
@@ -141,13 +141,13 @@ def train(
                 # Get losses for the absolute distances
                 batch_size, max_ids_text = ids_text.size()
                 abs_loss = (
-                    abs_distance(
+                    abs_similarity(
                         x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
                     ).sum()
                     / ids_text.size()[0]
                 )
                 relative_loss = (
-                    relative_distance(
+                    relative_similarity(
                         x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
                     ).sum()
                     / ids_text.size()[0]
@@ -221,8 +221,8 @@ def train(
                     o_lab,
                     attn_mask[:, ids_text.size()[1] :],
                 )
-        abs_dist = evaluator.get_abs_dist()
-        rel_dist = evaluator.get_rel_dist()
+        abs_dist = evaluator.get_abs_sim()
+        rel_dist = evaluator.get_rel_sim()
         o_acc = evaluator.get_o_acc()
         cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:

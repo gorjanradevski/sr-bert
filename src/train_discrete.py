@@ -207,8 +207,8 @@ def train(
                     attn_mask[:, ids_text.size()[1] :],
                 )
 
-        abs_dist = evaluator.get_abs_dist()
-        rel_dist = evaluator.get_rel_dist()
+        abs_dist = evaluator.get_abs_sim()
+        rel_dist = evaluator.get_rel_sim()
         o_acc = evaluator.get_o_acc()
         cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:

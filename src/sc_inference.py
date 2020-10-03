@@ -133,13 +133,13 @@ def inference(
             evaluator.update_metrics(x_out, x_lab, y_out, y_lab, o_out, o_lab, mask)
 
         print(
-            f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_dist()} +/- {evaluator.get_abs_error_bar()}"
+            f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
         )
         print(
-            f"The avg RELATIVE dst per scene is: {evaluator.get_rel_dist()} +/- {evaluator.get_rel_error_bar()}"
+            f"The avg RELATIVE dst per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(
-            f"The avg orientation accc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
+            f"The avg orientation acc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
         )
 
 

@@ -153,8 +153,8 @@ def train(
                 evaluator.update_metrics(
                     x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask
                 )
-        abs_dist = evaluator.get_abs_dist()
-        rel_dist = evaluator.get_rel_dist()
+        abs_dist = evaluator.get_abs_sim()
+        rel_dist = evaluator.get_rel_sim()
         o_acc = evaluator.get_o_acc()
         cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:

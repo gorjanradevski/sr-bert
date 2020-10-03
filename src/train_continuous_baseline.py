@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 import json
 import os
-from scene_layouts.evaluator import abs_distance, relative_distance, Evaluator
+from scene_layouts.evaluator import abs_similarity, relative_similarity, Evaluator
 from rnn_baseline.modeling import baseline_factory
 from rnn_baseline.datasets import (
     TrainDataset,
@@ -116,11 +116,11 @@ def train(
                 x_scores, y_scores, o_scores = model(ids_text, ids_vis)
                 # Get losses for the absolute and relative distances
                 abs_loss = (
-                    abs_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
+                    abs_similarity(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
                 relative_loss = (
-                    relative_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
+                    relative_similarity(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
                 o_loss = criterion_f(o_scores.view(-1, O_PAD - 1), o_lab.view(-1)) * 10
@@ -159,8 +159,8 @@ def train(
                 evaluator.update_metrics(
                     x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask
                 )
-        abs_dist = evaluator.get_abs_dist()
-        rel_dist = evaluator.get_rel_dist()
+        abs_dist = evaluator.get_abs_sim()
+        rel_dist = evaluator.get_rel_sim()
         o_acc = evaluator.get_o_acc()
         cur_avg_metrics = (abs_dist + rel_dist - o_acc) / 3
         if cur_avg_metrics < best_avg_metrics:

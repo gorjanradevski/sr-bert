@@ -1,5 +1,5 @@
 import torch
-from scene_layouts.datasets import SCENE_WIDTH_TEST
+from scene_layouts.datasets import SCENE_WIDTH_TEST, SCENE_HEIGHT_TEST
 import numpy as np
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
@@ -7,66 +7,57 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 class Evaluator:
     def __init__(self, total_elements):
         self.total_elements = total_elements
-        self.abs_dist = np.zeros(self.total_elements)
-        self.rel_dist = np.zeros(self.total_elements)
+        self.abs_sim = np.zeros(self.total_elements)
+        self.rel_sim = np.zeros(self.total_elements)
         self.o_acc = np.zeros(self.total_elements)
-        self.u_obj_coord = np.zeros(self.total_elements)
         self.index = 0
 
     def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask):
-        # Update absolute distance
+        # Update absolute similarity
         batch_size = x_out.size()[0]
-        abs_dist, flips = abs_distance(
+        abs_sim, flips = abs_similarity(
             x_out, x_lab, y_out, y_lab, attn_mask, check_flipped=True
         )
-        self.abs_dist[self.index : self.index + batch_size] = abs_dist.cpu().numpy()
-        # Update relative distance
-        self.rel_dist[self.index : self.index + batch_size] = (
-            relative_distance(x_out, x_lab, y_out, y_lab, attn_mask).cpu().numpy()
+        self.abs_sim[self.index : self.index + batch_size] = abs_sim.cpu().numpy()
+        # Update relative similarity
+        self.rel_sim[self.index : self.index + batch_size] = (
+            relative_similarity(x_out, x_lab, y_out, y_lab, attn_mask).cpu().numpy()
         )
         # Update orientation accuracy
         self.o_acc[self.index : self.index + batch_size] += (
             orientation_acc(o_out, o_lab, attn_mask, flips).cpu().numpy()
         )
-        # Update U-obj coord
-        self.u_obj_coord[self.index : self.index + batch_size] = (
-            u_obj_coord(x_out, x_lab, y_out, y_lab, attn_mask).cpu().numpy()
-        )
 
         self.index += batch_size
 
     def reset_metrics(self):
-        self.abs_dist = np.zeros(self.total_elements)
-        self.rel_dist = np.zeros(self.total_elements)
+        self.abs_sim = np.zeros(self.total_elements)
+        self.rel_sim = np.zeros(self.total_elements)
         self.o_acc = np.zeros(self.total_elements)
-        self.u_obj_coord = np.zeros(self.total_elements)
         self.index = 0
 
-    def get_abs_dist(self):
-        return np.round(self.abs_dist.mean(), decimals=1)
+    def get_abs_sim(self):
+        return np.round(self.abs_sim.mean(), decimals=1)
 
-    def get_rel_dist(self):
-        return np.round(self.rel_dist.mean(), decimals=1)
+    def get_rel_sim(self):
+        return np.round(self.rel_sim.mean(), decimals=1)
 
     def get_o_acc(self):
         return np.round(self.o_acc.mean() * 100, decimals=1)
 
-    def get_u_obj_coord(self):
-        return np.round(self.u_obj_coord.mean(), decimals=3)
-
     def get_abs_error_bar(self):
         return np.round(
-            np.std(self.abs_dist, ddof=1) / np.sqrt(self.total_elements), decimals=3
+            np.std(self.abs_sim, ddof=1) / np.sqrt(self.total_elements), decimals=3
         )
 
     def get_rel_error_bar(self):
         return np.round(
-            np.std(self.rel_dist, ddof=1) / np.sqrt(self.total_elements), decimals=3
+            np.std(self.rel_sim, ddof=1) / np.sqrt(self.total_elements), decimals=3
         )
 
     def dump_results(self, abs_dump_path: str, rel_dump_path: str):
-        np.save(abs_dump_path, self.abs_dist, allow_pickle=False)
-        np.save(rel_dump_path, self.rel_dist, allow_pickle=False)
+        np.save(abs_dump_path, self.abs_sim, allow_pickle=False)
+        np.save(rel_dump_path, self.rel_sim, allow_pickle=False)
 
     def find_common_cliparts(
         self,
@@ -111,66 +102,46 @@ def flip_scene(labs: torch.Tensor):
     return labs_flipped
 
 
-def abs_distance(
+def abs_similarity(
     x_inds, x_labs, y_inds, y_labs, attn_mask, check_flipped: bool = False
 ):
-    # Obtain normal dist
-    dist_normal = abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask)
+    # Obtain normal similarity
+    sim_normal = abs_similarity_single(x_inds, x_labs, y_inds, y_labs, attn_mask)
     if check_flipped is False:
-        return dist_normal
+        return sim_normal
 
     x_labs_flipped = flip_scene(x_labs)
-    dist_flipped = abs_distance_single(
+    sim_flipped = abs_similarity_single(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
-    dist = torch.min(dist_normal, dist_flipped)
+    sim = torch.max(sim_normal, sim_flipped)
 
-    return dist, (dist == dist_flipped).float()
+    return sim, (sim == sim_flipped).float()
 
 
-def abs_distance_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
-    x_inds_norm = x_inds.clone()
-    y_inds_norm = y_inds.clone()
-    x_labs_norm = x_labs.clone().float()
-    y_labs_norm = y_labs.clone().float()
+def abs_similarity_single(x_inds, x_labs, y_inds, y_labs, attn_mask):
+    x_inds_norm = x_inds.clone().float() / SCENE_WIDTH_TEST
+    y_inds_norm = y_inds.clone().float() / SCENE_HEIGHT_TEST
+    x_labs_norm = x_labs.clone().float() / SCENE_WIDTH_TEST
+    y_labs_norm = y_labs.clone().float() / SCENE_HEIGHT_TEST
     # Obtain dist for X and Y
     dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
     dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
-    dist = torch.sqrt(dist_x + dist_y + (torch.ones_like(dist_x) * 1e-15))
-    # Remove the distance for the padding tokens
-    dist = dist * attn_mask
-    # Remove the distance for the masked tokens (During training)
-    mask_masked = torch.ones_like(x_labs)
-    mask_masked[torch.where(x_labs < 0)] = 0.0
-    dist = dist * mask_masked
-    # Obtain average distance for each scene without considering the padding tokens
-    dist = dist.sum(-1) / attn_mask.sum(-1)
-
-    return dist
-
-
-def u_obj_coord(x_inds, x_labs, y_inds, y_labs, attn_mask):
-    x_inds_norm = x_inds.clone().float() / 500
-    y_inds_norm = y_inds.clone().float() / 400
-    x_labs_norm = x_labs.clone().float() / 500
-    y_labs_norm = y_labs.clone().float() / 400
-    # Obtain dist for X and Y
-    sim_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
-    sim_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
-    sim = torch.sqrt(sim_x + sim_y + (torch.ones_like(sim_x) * 1e-15))
-    # Remove the distance for the padding tokens
-    sim = sim * attn_mask
-    # Obtain average distance for each scene without considering the padding tokens
-    sim = sim.sum(-1) / attn_mask.sum(-1)
+    dist = torch.sqrt(dist_x + dist_y + torch.full_like(dist_x, 1e-15))
+    # Convert to similarity by applying Gaussian Kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
-    sim = torch.exp(-0.5 * sim / 0.2)
+    sim = torch.exp(-0.5 * dist / 0.2)
+    # Set 0 similarity for the padding tokens
+    sim = sim * attn_mask
+    # Obtain average sim for each scene without considering the padding tokens
+    sim = sim.sum(-1) / attn_mask.sum(-1)
 
     return sim
 
 
 def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
-    X_inds_norm = X.clone().float()
-    Y_inds_norm = Y.clone().float()
+    X_inds_norm = X.clone().float() / SCENE_WIDTH_TEST
+    Y_inds_norm = Y.clone().float() / SCENE_HEIGHT_TEST
     x_dist = torch.pow(
         torch.unsqueeze(X_inds_norm, 1) - torch.unsqueeze(X_inds_norm, 2), 2
     ).float()
@@ -178,10 +149,10 @@ def elementwise_distances(X: torch.Tensor, Y: torch.Tensor):
         torch.unsqueeze(Y_inds_norm, 1) - torch.unsqueeze(Y_inds_norm, 2), 2
     ).float()
 
-    return torch.sqrt(x_dist + y_dist + (torch.ones_like(x_dist) * 1e-15))
+    return torch.sqrt(x_dist + y_dist + torch.full_like(x_dist, 1e-15))
 
 
-def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
+def relative_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = torch.abs(
         elementwise_distances(x_inds, y_inds) - elementwise_distances(x_labs, y_labs)
     ).float()
@@ -193,17 +164,22 @@ def relative_distance(x_inds, x_labs, y_inds, y_labs, attn_mask):
     )
     # Remove the distance for the masked tokens (During training)
     mask_masked = torch.ones_like(x_labs)
-    mask_masked[torch.where(x_labs < 0)] = 0.0
+    mask_masked[torch.where(x_labs < 0)] = 0
     dist = (
         dist
         * mask_masked.unsqueeze(1).expand(dist.size())
         * mask_masked.unsqueeze(-1).expand(dist.size())
     )
-    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
+    # Convert to similarity by applying Gaussian Kernel
+    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
+    sim = torch.exp(-0.5 * dist / 0.2)
+    # Set diagonal to 0
+    sim = sim.fill_diagonal_(0.0)
     # Obtain average distance for each scene without considering the padding tokens
     dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
+    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
 
-    return dist
+    return sim
 
 
 def orientation_acc(inds, labs, attn_mask, flips):
@@ -215,20 +191,20 @@ def orientation_acc(inds, labs, attn_mask, flips):
 class ScEvaluator:
     def __init__(self, total_elements):
         self.total_elements = total_elements
-        self.abs_dist = np.zeros(self.total_elements)
-        self.rel_dist = np.zeros(self.total_elements)
+        self.abs_sim = np.zeros(self.total_elements)
+        self.rel_sim = np.zeros(self.total_elements)
         self.orientation_acc = np.zeros(self.total_elements)
         self.index = 0
 
     def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, mask):
-        # Update absolute distance
+        # Update absolute similarity
         batch_size = x_out.size()[0]
-        self.abs_dist[self.index : self.index + batch_size] = (
-            abs_distance_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
+        self.abs_sim[self.index : self.index + batch_size] = (
+            abs_similarity_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
         )
-        # Update relative distance
-        self.rel_dist[self.index : self.index + batch_size] = (
-            relative_distance_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
+        # Update relative similarity
+        self.rel_sim[self.index : self.index + batch_size] = (
+            relative_similarity_sc(x_out, x_lab, y_out, y_lab, mask).cpu().numpy()
         )
         self.orientation_acc[self.index : self.index + batch_size] = (
             orientation_acc_sc(o_out, o_lab, mask).cpu().numpy()
@@ -237,20 +213,16 @@ class ScEvaluator:
         self.index += batch_size
 
     def reset_metrics(self):
-        self.abs_dist = np.zeros(self.total_elements)
-        self.rel_dist = np.zeros(self.total_elements)
+        self.abs_sim = np.zeros(self.total_elements)
+        self.rel_sim = np.zeros(self.total_elements)
         self.orientation_acc = np.zeros(self.total_elements)
         self.index = 0
 
-    def get_abs_dist(self):
-        return np.round(
-            self.abs_dist.sum() / np.count_nonzero(self.abs_dist), decimals=3
-        )
+    def get_abs_sim(self):
+        return np.round(self.abs_sim.sum() / np.count_nonzero(self.abs_sim), decimals=3)
 
-    def get_rel_dist(self):
-        return np.round(
-            self.rel_dist.sum() / np.count_nonzero(self.rel_dist), decimals=3
-        )
+    def get_rel_sim(self):
+        return np.round(self.rel_sim.sum() / np.count_nonzero(self.rel_sim), decimals=3)
 
     def get_o_acc(self):
         return np.round(
@@ -260,13 +232,13 @@ class ScEvaluator:
 
     def get_abs_error_bar(self):
         return np.round(
-            np.std(self.abs_dist, ddof=1) / np.sqrt(np.count_nonzero(self.abs_dist)),
+            np.std(self.abs_sim, ddof=1) / np.sqrt(np.count_nonzero(self.abs_sim)),
             decimals=3,
         )
 
     def get_rel_error_bar(self):
         return np.round(
-            np.std(self.rel_dist, ddof=1) / np.sqrt(np.count_nonzero(self.rel_dist)),
+            np.std(self.rel_sim, ddof=1) / np.sqrt(np.count_nonzero(self.rel_sim)),
             decimals=3,
         )
 
@@ -281,28 +253,38 @@ class ScEvaluator:
         )
 
 
-def relative_distance_sc(x_inds, x_labs, y_inds, y_labs, mask):
+def relative_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     dist = torch.abs(
         elementwise_distances(x_inds, y_inds) - elementwise_distances(x_labs, y_labs)
     ).float()
-    dist = dist * mask.unsqueeze(-1).expand(dist.size())
-    dist = dist.mean(-1)
-    dist = dist.sum(-1) / (mask.sum(-1) + 1e-15)
+    # Convert to similarity by applying Gaussian Kernel
+    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
+    sim = torch.exp(-0.5 * dist / 0.2)
+    sim = sim * sim.unsqueeze(-1).expand(dist.size())
+    sim = sim.mean(-1)
+    sim = sim.sum(-1) / (mask.sum(-1) + 1e-15)
 
-    return dist
+    return sim
 
 
-def abs_distance_sc(x_inds, x_labs, y_inds, y_labs, mask):
+def abs_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     # Obtain dist for X and Y
-    dist_x = torch.pow(x_inds - x_labs, 2).float()
-    dist_y = torch.pow(y_inds - y_labs, 2).float()
+    x_inds_norm = x_inds.clone().float() / SCENE_WIDTH_TEST
+    y_inds_norm = y_inds.clone().float() / SCENE_HEIGHT_TEST
+    x_labs_norm = x_labs.clone().float() / SCENE_WIDTH_TEST
+    y_labs_norm = y_labs.clone().float() / SCENE_HEIGHT_TEST
+    dist_x = torch.pow(x_inds_norm - x_labs_norm, 2).float()
+    dist_y = torch.pow(y_inds_norm - y_labs_norm, 2).float()
     dist = torch.sqrt(dist_x + dist_y + (torch.ones_like(dist_x) * 1e-15))
-    # Remove the distance from the non-target elements
-    dist = dist * mask
+    # Convert to similarity by applying Gaussian Kernel
+    # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
+    sim = torch.exp(-0.5 * dist / 0.2)
+    # Set 0 similarity for the non-target elements
+    sim = sim * mask
     # Obtain average distance for each scene without considering the padding tokens
-    dist = dist.sum(-1) / (mask.sum(-1) + 1e-15)
+    sim = sim.sum(-1) / (mask.sum(-1) + 1e-15)
 
-    return dist
+    return sim
 
 
 def orientation_acc_sc(inds, labs, mask):
