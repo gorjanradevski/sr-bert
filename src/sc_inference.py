@@ -1,9 +1,10 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
+import os
 from transformers import BertConfig
 from typing import Dict
 
@@ -43,7 +44,7 @@ def inference(
     checkpoint_path: str,
     model_type: str,
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     group_name: str,
     bert_name: str,
     without_text: bool,
@@ -52,7 +53,9 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"--- Using device {device}! ---")
     # Create dataset
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     group_elements = get_group_elements(visual2index, group_name)
     test_dataset = (
         DiscreteInferenceDataset(
@@ -64,15 +67,12 @@ def inference(
         )
     )
     print(f"Testing on {len(test_dataset)}")
-    # Create sampler
-    test_sampler = SequentialSampler(test_dataset)
     # Create loader
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=test_sampler,
     )
     # Prepare model
     assert model_type in ["discrete", "continuous"]
@@ -173,10 +173,10 @@ def parse_args():
         help="Path to the test dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
@@ -203,7 +203,7 @@ def main():
         args.checkpoint_path,
         args.model_type,
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.group_name,
         args.bert_name,
         args.without_text,

@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import logging
 import json
@@ -31,15 +31,12 @@ def inference(
         test_dataset_path, word2freq, word2index, visual2index
     )
     logging.info(f"Performing inference on {len(test_dataset)}")
-    # Create samplers
-    test_sampler = SequentialSampler(test_dataset)
     # Create loaders
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=test_sampler,
     )
     num_cliparts = len(visual2index) + 1
     vocab_size = len(word2index)

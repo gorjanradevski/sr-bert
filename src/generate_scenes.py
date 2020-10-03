@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
 from transformers import BertConfig
@@ -56,7 +56,7 @@ def generation(
     checkpoint_path: str,
     model_type: str,
     test_dataset_path: str,
-    visual2index_path: str,
+    visuals_dicts_path: str,
     gen_strategy: str,
     bert_name: str,
     without_text: bool,
@@ -68,7 +68,9 @@ def generation(
     print(f"--- Using device {device}! ---")
     # Create dataset
     assert model_type in ["discrete", "continuous"]
-    visual2index = json.load(open(visual2index_path))
+    visual2index = json.load(
+        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+    )
     index2visual = {v: k for k, v in visual2index.items()}
     test_dataset = (
         DiscreteInferenceDataset(
@@ -80,15 +82,12 @@ def generation(
         )
     )
     print(f"Testing on {len(test_dataset)}")
-    # Create sampler
-    test_sampler = SequentialSampler(test_dataset)
     # Create loader
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=test_sampler,
     )
     # Prepare model
     config = BertConfig.from_pretrained(bert_name)
@@ -110,9 +109,9 @@ def generation(
             ids_text,
             ids_vis,
             pos_text,
-            x_ind,
-            y_ind,
-            o_ind,
+            _,
+            _,
+            _,
             x_lab,
             y_lab,
             o_lab,
@@ -120,13 +119,10 @@ def generation(
             attn_mask,
         ) in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask = (
+            ids_text, ids_vis, pos_text, t_types, attn_mask = (
                 ids_text.to(device),
                 ids_vis.to(device),
                 pos_text.to(device),
-                x_ind.to(device),
-                y_ind.to(device),
-                o_ind.to(device),
                 t_types.to(device),
                 attn_mask.to(device),
             )
@@ -136,9 +132,6 @@ def generation(
                 ids_text,
                 ids_vis,
                 pos_text,
-                x_ind,
-                y_ind,
-                o_ind,
                 t_types,
                 attn_mask,
                 model,
@@ -205,10 +198,10 @@ def parse_args():
         help="Path to the test dataset.",
     )
     parser.add_argument(
-        "--visual2index_path",
+        "--visuals_dicts_path",
         type=str,
-        default="data/visual2index.json",
-        help="Path to the visual2index mapping json.",
+        default="data/visuals_dicts/",
+        help="Path to the directory with the visuals dictionaries.",
     )
     parser.add_argument(
         "--without_text", action="store_true", help="Whether to use the text."
@@ -247,7 +240,7 @@ def main():
         args.checkpoint_path,
         args.model_type,
         args.test_dataset_path,
-        args.visual2index_path,
+        args.visuals_dicts_path,
         args.gen_strategy,
         args.bert_name,
         args.without_text,

@@ -432,12 +432,12 @@ def collate_pad_batch(
     ids_text = torch.nn.utils.rnn.pad_sequence(
         ids_text, batch_first=True, padding_value=0
     )
+    # Obtain the text positions
+    pos_text = pos_text.unsqueeze(0).expand(ids_text.size())
     # Pad the visuals
     ids_vis = torch.nn.utils.rnn.pad_sequence(
         ids_vis, batch_first=True, padding_value=0
     )
-    # Obtain the text positions
-    pos_text = pos_text.unsqueeze(0).expand(ids_text.size())
     # Pad all visual inputs
     x_ind = torch.nn.utils.rnn.pad_sequence(
         x_ind, batch_first=True, padding_value=X_PAD

@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import sys
 import logging
@@ -53,14 +53,11 @@ def train(
     )
     logging.info(f"Training on {len(train_dataset)}")
     logging.info(f"Validating on {len(val_dataset)}")
-    # Create samplers
-    train_sampler = RandomSampler(train_dataset)
-    val_sampler = SequentialSampler(val_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        sampler=train_sampler,
+        shuffle=True,
         num_workers=4,
         collate_fn=collate_pad_batch,
     )
@@ -69,7 +66,6 @@ def train(
         batch_size=batch_size,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=val_sampler,
     )
     # Define training specifics
     num_cliparts = len(visual2index) + 1

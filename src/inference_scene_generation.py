@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, SequentialSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
 import os
@@ -44,15 +44,12 @@ def inference(
         else ContinuousInferenceDataset(test_dataset_path, visual2index)
     )
     print(f"Testing on {len(test_dataset)}")
-    # Create sampler
-    test_sampler = SequentialSampler(test_dataset)
     # Create loader
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=test_sampler,
     )
     # Prepare SR-BERT model
     assert model_type in ["discrete", "continuous"]

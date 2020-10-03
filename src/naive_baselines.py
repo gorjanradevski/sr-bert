@@ -1,6 +1,6 @@
 import argparse
 import torch
-from torch.utils.data import DataLoader, SequentialSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import json
 import os
@@ -27,23 +27,18 @@ def naive_inference(
     train_dataset = DiscreteInferenceDataset(train_dataset_path, visual2index)
     test_dataset = DiscreteInferenceDataset(test_dataset_path, visual2index)
     print(f"Testing on {len(test_dataset)}")
-    # Create samplers
-    train_sampler = SequentialSampler(train_dataset)
-    test_sampler = SequentialSampler(test_dataset)
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
         batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=train_sampler,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=1,
         num_workers=4,
         collate_fn=collate_pad_batch,
-        sampler=test_sampler,
     )
     print("Aggregating from training set")
     visualindex2avgcoordinates = {}
