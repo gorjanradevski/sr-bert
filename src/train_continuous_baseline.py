@@ -120,7 +120,9 @@ def train(
                     / ids_text.size()[0]
                 )
                 relative_loss = (
-                    relative_similarity(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
+                    relative_similarity(
+                        x_scores, x_lab, y_scores, y_lab, attn_mask
+                    ).sum()
                     / ids_text.size()[0]
                 )
                 o_loss = criterion_f(o_scores.view(-1, O_PAD - 1), o_lab.view(-1)) * 10

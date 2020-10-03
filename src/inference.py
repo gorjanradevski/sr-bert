@@ -117,10 +117,10 @@ def inference(
             )
 
         print(
-            f"The avg ABSOLUTE dst per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
+            f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
         )
         print(
-            f"The avg RELATIVE dst per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
+            f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
         )
         print(f"The avg ACCURACY for the orientation is: {evaluator.get_o_acc()}")
         if abs_dump_path is not None and rel_dump_path is not None:

@@ -149,7 +149,9 @@ def inference(
                 common_attn_mask,
             )
 
-        print(f"The U-obj coord per scene is: {evaluator.get_u_obj_coord()}")
+        print(
+            f"The absolute similarity per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
+        )
 
 
 def parse_args():

@@ -37,22 +37,22 @@ class Evaluator:
         self.index = 0
 
     def get_abs_sim(self):
-        return np.round(self.abs_sim.mean(), decimals=1)
+        return np.round(self.abs_sim.mean(), decimals=2)
 
     def get_rel_sim(self):
-        return np.round(self.rel_sim.mean(), decimals=1)
+        return np.round(self.rel_sim.mean(), decimals=2)
 
     def get_o_acc(self):
-        return np.round(self.o_acc.mean() * 100, decimals=1)
+        return np.round(self.o_acc.mean() * 100, decimals=2)
 
     def get_abs_error_bar(self):
         return np.round(
-            np.std(self.abs_sim, ddof=1) / np.sqrt(self.total_elements), decimals=3
+            np.std(self.abs_sim, ddof=1) / np.sqrt(self.total_elements), decimals=2
         )
 
     def get_rel_error_bar(self):
         return np.round(
-            np.std(self.rel_sim, ddof=1) / np.sqrt(self.total_elements), decimals=3
+            np.std(self.rel_sim, ddof=1) / np.sqrt(self.total_elements), decimals=2
         )
 
     def dump_results(self, abs_dump_path: str, rel_dump_path: str):
@@ -174,10 +174,11 @@ def relative_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
     sim = torch.exp(-0.5 * dist / 0.2)
     # Set diagonal to 0
-    sim = sim.fill_diagonal_(0.0)
+    diag = torch.diagonal(sim, dim1=1, dim2=2)
+    diag.fill_(0.0)
     # Obtain average distance for each scene without considering the padding tokens
-    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
-    dist = dist.sum(-1) / (attn_mask.sum(-1) - 1)
+    sim = sim.sum(-1) / (attn_mask.sum(-1) - 1)
+    sim = sim.sum(-1) / (attn_mask.sum(-1) - 1)
 
     return sim
 
@@ -219,10 +220,10 @@ class ScEvaluator:
         self.index = 0
 
     def get_abs_sim(self):
-        return np.round(self.abs_sim.sum() / np.count_nonzero(self.abs_sim), decimals=3)
+        return np.round(self.abs_sim.sum() / np.count_nonzero(self.abs_sim), decimals=2)
 
     def get_rel_sim(self):
-        return np.round(self.rel_sim.sum() / np.count_nonzero(self.rel_sim), decimals=3)
+        return np.round(self.rel_sim.sum() / np.count_nonzero(self.rel_sim), decimals=2)
 
     def get_o_acc(self):
         return np.round(
@@ -233,13 +234,13 @@ class ScEvaluator:
     def get_abs_error_bar(self):
         return np.round(
             np.std(self.abs_sim, ddof=1) / np.sqrt(np.count_nonzero(self.abs_sim)),
-            decimals=3,
+            decimals=2,
         )
 
     def get_rel_error_bar(self):
         return np.round(
             np.std(self.rel_sim, ddof=1) / np.sqrt(np.count_nonzero(self.rel_sim)),
-            decimals=3,
+            decimals=2,
         )
 
     def get_o_acc_error_bar(self):
@@ -249,7 +250,7 @@ class ScEvaluator:
                 / np.sqrt(np.count_nonzero(self.orientation_acc))
             )
             * 100,
-            decimals=1,
+            decimals=2,
         )
 
 
@@ -260,7 +261,7 @@ def relative_similarity_sc(x_inds, x_labs, y_inds, y_labs, mask):
     # Convert to similarity by applying Gaussian Kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
     sim = torch.exp(-0.5 * dist / 0.2)
-    sim = sim * sim.unsqueeze(-1).expand(dist.size())
+    sim = sim * sim.unsqueeze(-1).expand(sim.size())
     sim = sim.mean(-1)
     sim = sim.sum(-1) / (mask.sum(-1) + 1e-15)
 
