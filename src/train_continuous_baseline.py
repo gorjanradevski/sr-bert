@@ -4,7 +4,6 @@ import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import sys
 import logging
 import json
 import os
@@ -72,7 +71,7 @@ def train(
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    best_avg_metrics = sys.maxsize
+    best_avg_metrics = -1.0
     evaluator = Evaluator(len(val_dataset))
     for epoch in range(epochs):
         # Set model in train mode
@@ -139,7 +138,7 @@ def train(
                 )
         abs_sim = evaluator.get_abs_sim()
         rel_sim = evaluator.get_rel_sim()
-        o_acc = evaluator.get_o_acc()
+        o_acc = evaluator.get_o_acc() / 100 # All normalized
         cur_avg_metrics = (abs_sim + rel_sim + o_acc) / 3
         if cur_avg_metrics > best_avg_metrics:
             best_avg_metrics = cur_avg_metrics
