@@ -178,7 +178,8 @@ def relative_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
     diag.fill_(0.0)
     # Obtain average distance for each scene without considering the padding tokens
     # and the main diagonal
-    sim = sim.sum(-1) / (attn_mask.sum(-1) - 1)
+    # Unsqueeze because it should work within a batch
+    sim = sim.sum(-1) / (attn_mask.sum(-1).unsqueeze(-1) - 1)
     sim = sim.sum(-1) / (attn_mask.sum(-1) - 1)
 
     return sim
