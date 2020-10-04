@@ -8,7 +8,8 @@ import sys
 import logging
 import json
 import os
-from scene_layouts.evaluator import abs_similarity, relative_similarity, Evaluator
+from scene_layouts.evaluator import Evaluator
+from scene_layouts.utils import abs_distance, relative_distance
 from rnn_baseline.modeling import baseline_factory
 from rnn_baseline.datasets import (
     TrainDataset,
@@ -92,19 +93,17 @@ def train(
                 x_scores, y_scores, o_scores = model(ids_text, ids_vis)
                 # Get losses for the absolute and relative similarities
                 abs_loss = (
-                    abs_similarity(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
+                    abs_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
                 relative_loss = (
-                    relative_similarity(
-                        x_scores, x_lab, y_scores, y_lab, attn_mask
-                    ).sum()
+                    relative_distance(x_scores, x_lab, y_scores, y_lab, attn_mask).sum()
                     / ids_text.size()[0]
                 )
                 o_loss = criterion_f(o_scores.view(-1, O_PAD - 1), o_lab.view(-1)) * 10
                 # Backward
                 # Minus because the loss are according to the similarity
-                loss = -abs_loss - relative_loss + o_loss
+                loss = abs_loss + relative_loss + o_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)

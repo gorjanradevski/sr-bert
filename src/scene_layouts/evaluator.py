@@ -15,9 +15,7 @@ class Evaluator:
     def update_metrics(self, x_out, x_lab, y_out, y_lab, o_out, o_lab, attn_mask):
         # Update absolute similarity
         batch_size = x_out.size()[0]
-        abs_sim, flips = abs_similarity(
-            x_out, x_lab, y_out, y_lab, attn_mask, check_flipped=True
-        )
+        abs_sim, flips = abs_similarity(x_out, x_lab, y_out, y_lab, attn_mask)
         self.abs_sim[self.index : self.index + batch_size] = abs_sim.cpu().numpy()
         # Update relative similarity
         self.rel_sim[self.index : self.index + batch_size] = (
@@ -102,18 +100,15 @@ def flip_scene(labs: torch.Tensor):
     return labs_flipped
 
 
-def abs_similarity(
-    x_inds, x_labs, y_inds, y_labs, attn_mask, check_flipped: bool = False
-):
+def abs_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
     # Obtain normal similarity
     sim_normal = abs_similarity_single(x_inds, x_labs, y_inds, y_labs, attn_mask)
-    if check_flipped is False:
-        return sim_normal
-
+    # Obtain flipped similarity
     x_labs_flipped = flip_scene(x_labs)
     sim_flipped = abs_similarity_single(
         x_inds, x_labs_flipped, y_inds, y_labs, attn_mask
     )
+    # Get the maximum of both
     sim = torch.max(sim_normal, sim_flipped)
 
     return sim, (sim == sim_flipped).float()
@@ -161,14 +156,6 @@ def relative_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
         dist
         * attn_mask.unsqueeze(1).expand(dist.size())
         * attn_mask.unsqueeze(-1).expand(dist.size())
-    )
-    # Remove the distance for the masked tokens (During training)
-    mask_masked = torch.ones_like(x_labs)
-    mask_masked[torch.where(x_labs < 0)] = 0
-    dist = (
-        dist
-        * mask_masked.unsqueeze(1).expand(dist.size())
-        * mask_masked.unsqueeze(-1).expand(dist.size())
     )
     # Convert to similarity by applying Gaussian Kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366

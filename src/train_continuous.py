@@ -11,7 +11,8 @@ import json
 import os
 from transformers import BertConfig
 from scene_layouts.generation_strategies import train_cond
-from scene_layouts.evaluator import abs_similarity, relative_similarity, Evaluator
+from scene_layouts.evaluator import Evaluator
+from scene_layouts.utils import abs_distance, relative_distance
 
 from scene_layouts.datasets import (
     ContinuousTrainDataset,
@@ -141,13 +142,13 @@ def train(
                 # Get loss for absolute and relative similarity
                 batch_size, max_ids_text = ids_text.size()
                 abs_loss = (
-                    abs_similarity(
+                    abs_distance(
                         x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
                     ).sum()
                     / ids_text.size()[0]
                 )
                 relative_loss = (
-                    relative_similarity(
+                    relative_distance(
                         x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
                     ).sum()
                     / ids_text.size()[0]
@@ -155,7 +156,7 @@ def train(
                 o_loss = criterion_f(o_scores.view(-1, O_PAD + 1), o_lab.view(-1))
                 # Backward
                 # Minus because the loss is computed according to the similarity
-                loss = -abs_loss - relative_loss + o_loss
+                loss = abs_loss + relative_loss + o_loss
                 loss.backward()
                 # clip the gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
