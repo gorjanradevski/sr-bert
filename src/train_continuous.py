@@ -80,7 +80,7 @@ def train(
     config.vocab_size = len(visual2index) + 1  # Because of the padding token
     model = nn.DataParallel(SpatialContinuousBert(config, bert_name)).to(device)
     # Loss and optimizer
-    criterion_f = nn.NLLLoss()
+    criterion_o = nn.NLLLoss()
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
@@ -153,7 +153,7 @@ def train(
                     ).sum()
                     / ids_text.size()[0]
                 )
-                o_loss = criterion_f(o_scores.view(-1, O_PAD + 1), o_lab.view(-1))
+                o_loss = criterion_o(o_scores.view(-1, O_PAD + 1), o_lab.view(-1))
                 # Backward
                 # Minus because the loss is computed according to the similarity
                 loss = abs_loss + relative_loss + o_loss
