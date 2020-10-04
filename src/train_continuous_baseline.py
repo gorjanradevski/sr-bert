@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import sys
 import logging
-from datetime import datetime
 import json
 import os
 from scene_layouts.evaluator import abs_similarity, relative_similarity, Evaluator
@@ -21,7 +20,6 @@ from scene_layouts.datasets import BUCKET_SIZE, O_PAD
 
 
 def train(
-    checkpoint_path: str,
     train_dataset_path: str,
     val_dataset_path: str,
     visuals_dicts_path: str,
@@ -32,14 +30,9 @@ def train(
     epochs: int,
     clip_val: float,
     save_model_path: str,
-    intermediate_save_checkpoint_path: str,
-    log_filepath: str,
 ):
     # Set up logging
-    if log_filepath:
-        logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
@@ -78,26 +71,9 @@ def train(
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    cur_epoch = 0
     best_avg_metrics = sys.maxsize
-    if checkpoint_path is not None:
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        cur_epoch = checkpoint["epoch"]
-        best_avg_metrics = checkpoint["metrics"]
-        # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
-        del checkpoint
-
-        logging.warning(
-            f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
-        )
-        logging.warning(f"The previous best avg similarity was {best_avg_metrics}!")
-
     evaluator = Evaluator(len(val_dataset))
-    for epoch in range(cur_epoch, epochs):
-        start_time = datetime.now()
-        logging.info(f"Starting epoch {epoch + 1} at {start_time}...")
+    for epoch in range(epochs):
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
@@ -178,17 +154,6 @@ def train(
             logging.info("====================================================")
         else:
             logging.info(f"Avg metrics on epoch {epoch+1} is: {cur_avg_metrics}. ")
-        logging.info("Saving intermediate checkpoint...")
-        torch.save(
-            {
-                "epoch": epoch + 1,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "similarity": best_avg_metrics,
-            },
-            intermediate_save_checkpoint_path,
-        )
-        logging.info(f"Finished epoch {epoch+1} in {datetime.now() - start_time}.")
 
 
 def parse_args():
@@ -197,12 +162,6 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(description="Trains a RNN baseline model.")
-    parser.add_argument(
-        "--checkpoint_path",
-        type=str,
-        default=None,
-        help="Checkpoint to a pretrained model.",
-    )
     parser.add_argument(
         "--train_dataset_path",
         type=str,
@@ -238,22 +197,13 @@ def parse_args():
         help="Where to save the model.",
     )
     parser.add_argument(
-        "--intermediate_save_checkpoint_path",
-        type=str,
-        default="models/intermediate.pt",
-        help="Where to save the intermediate checkpoint.",
-    )
-    parser.add_argument(
         "--weight_decay", type=float, default=0.0, help="The weight decay."
-    )
-    parser.add_argument(
-        "--log_filepath", type=str, default=None, help="The logging file."
     )
     parser.add_argument(
         "--baseline_name",
         type=str,
         default="attn_continuous",
-        help="Where to save the intermediate checkpoint.",
+        help="Type of the continuous baseline",
     )
 
     return parser.parse_args()
@@ -262,7 +212,6 @@ def parse_args():
 def main():
     args = parse_args()
     train(
-        args.checkpoint_path,
         args.train_dataset_path,
         args.val_dataset_path,
         args.visuals_dicts_path,
@@ -273,8 +222,6 @@ def main():
         args.epochs,
         args.clip_val,
         args.save_model_path,
-        args.intermediate_save_checkpoint_path,
-        args.log_filepath,
     )
 
 

@@ -29,7 +29,7 @@ def inference(
     visual2index = json.load(
         open(os.path.join(visuals_dicts_path, "visual2index.json"))
     )
-    word2freq, word2index, index2word = build_vocab(json.load(open(train_dataset_path)))
+    word2freq, word2index, _ = build_vocab(json.load(open(train_dataset_path)))
     test_dataset = InferenceDataset(
         test_dataset_path, word2freq, word2index, visual2index
     )

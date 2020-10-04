@@ -125,12 +125,9 @@ class ArrangementsDiscreteDecoder(nn.Module):
         )
         self.text_enc = TextEncoder(vocab_size, hidden_size)
         self.text_attn = TextAttention(hidden_size)
-        self.arrangements_decoder = nn.GRU(
-            hidden_size * 4, hidden_size, bidirectional=False, batch_first=True
-        )
-        self.x_head = nn.Linear(hidden_size, X_PAD - 1)
-        self.y_head = nn.Linear(hidden_size, Y_PAD - 1)
-        self.o_head = nn.Linear(hidden_size, O_PAD - 1)
+        self.x_head = nn.Linear(hidden_size * 4, X_PAD - 1)
+        self.y_head = nn.Linear(hidden_size * 4, Y_PAD - 1)
+        self.o_head = nn.Linear(hidden_size * 4, O_PAD - 1)
         self.device = device
         self.log_softmax = nn.LogSoftmax(dim=-1)
 

@@ -1,4 +1,3 @@
-from nltk.probability import DictionaryProbDist
 import torch
 from scene_layouts.datasets import SCENE_WIDTH_TEST, SCENE_HEIGHT_TEST
 import numpy as np
