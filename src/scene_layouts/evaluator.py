@@ -25,7 +25,6 @@ class Evaluator:
         self.o_acc[self.index : self.index + batch_size] += (
             orientation_acc(o_out, o_lab, attn_mask, flips).cpu().numpy()
         )
-
         self.index += batch_size
 
     def reset_metrics(self):
@@ -151,18 +150,18 @@ def relative_similarity(x_inds, x_labs, y_inds, y_labs, attn_mask):
     dist = torch.abs(
         elementwise_distances(x_inds, y_inds) - elementwise_distances(x_labs, y_labs)
     ).float()
-    # Remove the distance for the padding tokens - Both columns and rows
-    dist = (
-        dist
-        * attn_mask.unsqueeze(1).expand(dist.size())
-        * attn_mask.unsqueeze(-1).expand(dist.size())
-    )
     # Convert to similarity by applying Gaussian Kernel
     # https://github.com/uvavision/Text2Scene/blob/master/lib/abstract_utils.py#L366
     sim = torch.exp(-0.5 * dist / 0.2)
     # Set diagonal to 0
     diag = torch.diagonal(sim, dim1=1, dim2=2)
     diag.fill_(0.0)
+    # Remove the similarity from the padding tokens
+    sim = (
+        sim
+        * attn_mask.unsqueeze(1).expand(sim.size())
+        * attn_mask.unsqueeze(-1).expand(sim.size())
+    )
     # Obtain average distance for each scene without considering the padding tokens
     # and the main diagonal
     # Unsqueeze because it should work within a batch
