@@ -88,14 +88,14 @@ def inference(
                 o_lab.to(device),
             )
             # Get cliparts predictions
-            ids_text_attn_mask = torch.ones_like(ids_text)
+            ids_text_attn_mask = torch.ones_like(ids_text).to(device)
             probs = torch.sigmoid(clip_pred_model(ids_text, ids_text_attn_mask))
-            clip_art_preds = torch.zeros_like(probs)
+            clip_art_preds = torch.zeros_like(probs).to(device)
             # Regular objects
             clip_art_preds[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
             clip_art_preds[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
             # Mike and Jenny
-            batch_indices = torch.arange(ids_text.size()[0])
+            batch_indices = torch.arange(ids_text.size()[0]).to(device)
             max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
             clip_art_preds[batch_indices, max_hb0 + 23] = 1
             max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
@@ -106,7 +106,7 @@ def inference(
                     for i in range(clip_art_preds.size()[1])
                     if clip_art_preds[0, i] == 1
                 ]
-            ).unsqueeze(0)
+            ).unsqueeze(0).to(device)
             # Get spatial arrangements
             # Create an attention mask and token types tensor
             attn_mask = torch.ones(1, ids_text.size()[1] + pred_vis.size()[1]).to(
