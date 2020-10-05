@@ -109,10 +109,12 @@ def inference(
             ).unsqueeze(0)
             # Get spatial arrangements
             # Create an attention mask and token types tensor
-            attn_mask = torch.ones(1, ids_text.size()[1] + pred_vis.size()[1])
+            attn_mask = torch.ones(1, ids_text.size()[1] + pred_vis.size()[1]).to(
+                device
+            )
             t_types = torch.cat(
                 [torch.zeros_like(ids_text), torch.ones_like(pred_vis)], dim=1
-            )
+            ).to(device)
             x_out, y_out, o_out = generation_strategy_factory(
                 gen_strategy,
                 model_type,
