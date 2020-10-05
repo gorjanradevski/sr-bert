@@ -41,7 +41,7 @@ def inference(
     test_dataset = (
         DiscreteInferenceDataset(test_dataset_path, visual2index)
         if model_type == "discrete"
-        else ContinuousInferenceDataset(test_dataset_path, visual2index),
+        else ContinuousInferenceDataset(test_dataset_path, visual2index)
     )
     print(f"Testing on {len(test_dataset)}")
     # Create loader
