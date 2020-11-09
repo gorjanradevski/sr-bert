@@ -1,6 +1,6 @@
 # Decoding language spatial relations to 2D spatial arrangements
 
-This repository is the official implementation of "Decoding language spatial relations to 2D spatial arrangements" [Gorjan Radevski](http://gorjanradevski.github.io/), [Guillem Collel](https://sites.google.com/site/guillemct1/), [Tinne Tuytelaars](https://homes.esat.kuleuven.be/~tuytelaa/), [Marie-Francine Moens](https://people.cs.kuleuven.be/~sien.moens/) published at [Findings of EMNLP 2020](https://www.aclweb.org/anthology/volumes/2020.findings-emnlp/).
+This repository is the official implementation of [Decoding language spatial relations to 2D spatial arrangements](https://www.aclweb.org/anthology/2020.findings-emnlp.408/) authored by [Gorjan Radevski](http://gorjanradevski.github.io/), [Guillem Collel](https://sites.google.com/site/guillemct1/), [Tinne Tuytelaars](https://homes.esat.kuleuven.be/~tuytelaa/), [Marie-Francine Moens](https://people.cs.kuleuven.be/~sien.moens/) published at [Findings of EMNLP 2020](https://www.aclweb.org/anthology/volumes/2020.findings-emnlp/).
 
 ## Requirements
 

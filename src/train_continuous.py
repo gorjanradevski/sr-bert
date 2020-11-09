@@ -1,51 +1,38 @@
 import argparse
+import json
+import logging
+import os
+from datetime import datetime
+
 import torch
 import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import logging
-from datetime import datetime
-import json
-import os
 from transformers import BertConfig
-from scene_layouts.generation_strategies import train_cond
-from scene_layouts.evaluator import Evaluator
-from scene_layouts.utils import abs_distance, relative_distance
 
 from scene_layouts.datasets import (
-    ContinuousTrainDataset,
-    ContinuousInferenceDataset,
-    collate_pad_batch,
-    O_PAD,
     BUCKET_SIZE,
+    O_PAD,
+    ContinuousInferenceDataset,
+    ContinuousTrainDataset,
+    collate_pad_batch,
 )
+from scene_layouts.evaluator import Evaluator
+from scene_layouts.generation_strategies import train_cond
 from scene_layouts.modeling import SpatialContinuousBert
+from scene_layouts.utils import abs_distance, relative_distance
 
 
-def train(
-    checkpoint_path: str,
-    train_dataset_path: str,
-    val_dataset_path: str,
-    visuals_dicts_path: str,
-    mask_probability: float,
-    gen_strategy: str,
-    bert_name: str,
-    batch_size: int,
-    learning_rate: float,
-    weight_decay: float,
-    epochs: int,
-    clip_val: float,
-    save_model_path: str,
-    intermediate_save_checkpoint_path: str,
-    log_filepath: str,
-):
+def train(args):
     # Set up logging
-    if log_filepath:
-        logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
+    if args.log_filepath:
+        logging.basicConfig(
+            level=logging.INFO, filename=args.log_filepath, filemode="w"
+        )
     else:
         logging.basicConfig(level=logging.INFO)
-    assert gen_strategy in [
+    assert args.gen_strategy in [
         "one_step_all_continuous",
         "left_to_right_continuous",
         "one_step_all_left_to_right_continuous",
@@ -55,38 +42,41 @@ def train(
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(
-        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+        open(os.path.join(args.visuals_dicts_path, "visual2index.json"))
     )
     train_dataset = ContinuousTrainDataset(
-        train_dataset_path, visual2index, mask_probability=mask_probability
+        args.train_dataset_path, visual2index, mask_probability=args.mask_probability
     )
-    val_dataset = ContinuousInferenceDataset(val_dataset_path, visual2index)
+    val_dataset = ContinuousInferenceDataset(args.val_dataset_path, visual2index)
     logging.info(f"Training on {len(train_dataset)}")
     logging.info(f"Validating on {len(val_dataset)}")
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
-        batch_size=batch_size,
+        batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
         collate_fn=collate_pad_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, num_workers=4, collate_fn=collate_pad_batch
+        val_dataset,
+        batch_size=args.batch_size,
+        num_workers=4,
+        collate_fn=collate_pad_batch,
     )
     # Define training specifics
-    config = BertConfig.from_pretrained(bert_name)
+    config = BertConfig.from_pretrained(args.bert_name)
     config.vocab_size = len(visual2index) + 1  # Because of the padding token
-    model = nn.DataParallel(SpatialContinuousBert(config, bert_name)).to(device)
+    model = nn.DataParallel(SpatialContinuousBert(config, args.bert_name)).to(device)
     # Loss and optimizer
     criterion_o = nn.NLLLoss()
     optimizer = optim.Adam(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
     cur_epoch = 0
     best_avg_metrics = -1.0
-    if checkpoint_path is not None:
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+    if args.checkpoint_path is not None:
+        checkpoint = torch.load(args.checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         cur_epoch = checkpoint["epoch"]
@@ -95,70 +85,63 @@ def train(
         del checkpoint
 
         logging.warning(
-            f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
+            f"Starting training from checkpoint {args.checkpoint_path} with starting epoch {cur_epoch}!"
         )
         logging.warning(f"The previous best avg similarity was {best_avg_metrics}!")
 
     evaluator = Evaluator(len(val_dataset))
-    for epoch in range(cur_epoch, epochs):
+    for epoch in range(cur_epoch, args.epochs):
         start_time = datetime.now()
         logging.info(f"Starting epoch {epoch + 1} at {start_time}...")
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for (
-                ids_text,
-                ids_vis,
-                pos_text,
-                x_ind,
-                y_ind,
-                o_ind,
-                x_lab,
-                y_lab,
-                o_lab,
-                t_types,
-                attn_mask,
-            ) in train_loader:
+            for batch in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
-                    ids_text.to(device),
-                    ids_vis.to(device),
-                    pos_text.to(device),
-                    x_ind.to(device),
-                    y_ind.to(device),
-                    o_ind.to(device),
-                    x_lab.to(device),
-                    y_lab.to(device),
-                    o_lab.to(device),
-                    t_types.to(device),
-                    attn_mask.to(device),
-                )
+                batch = {key: val.to(device) for key, val in batch.items()}
                 x_scores, y_scores, o_scores = model(
-                    ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, t_types, attn_mask
+                    batch["ids_text"],
+                    batch["ids_vis"],
+                    batch["pos_text"],
+                    batch["x_ind"],
+                    batch["y_ind"],
+                    batch["o_ind"],
+                    batch["t_types"],
+                    batch["attn_mask"],
                 )
                 # Get loss for absolute and relative similarity
-                batch_size, max_ids_text = ids_text.size()
+                batch_size, max_ids_text = batch["ids_text"].size()
                 abs_loss = (
                     abs_distance(
-                        x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
+                        x_scores,
+                        batch["x_lab"],
+                        y_scores,
+                        batch["y_lab"],
+                        batch["attn_mask"][:, max_ids_text:],
                     ).sum()
-                    / ids_text.size()[0]
+                    / batch["ids_text"].size()[0]
                 )
                 relative_loss = (
                     relative_distance(
-                        x_scores, x_lab, y_scores, y_lab, attn_mask[:, max_ids_text:]
+                        x_scores,
+                        batch["x_lab"],
+                        y_scores,
+                        batch["y_lab"],
+                        batch["attn_mask"][:, max_ids_text:],
                     ).sum()
-                    / ids_text.size()[0]
+                    / batch["ids_text"].size()[0]
                 )
-                o_loss = criterion_o(o_scores.view(-1, O_PAD + 1), o_lab.view(-1))
+                o_loss = criterion_o(
+                    o_scores.view(-1, O_PAD + 1), batch["o_lab"].view(-1)
+                )
                 # Backward
                 # Minus because the loss is computed according to the similarity
                 loss = abs_loss + relative_loss + o_loss
                 loss.backward()
                 # clip the gradients
-                torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_val)
                 # update weights
                 optimizer.step()
                 # Update progress bar
@@ -170,43 +153,19 @@ def train(
         # Reset counters
         evaluator.reset_metrics()
         with torch.no_grad():
-            for (
-                ids_text,
-                ids_vis,
-                pos_text,
-                x_ind,
-                y_ind,
-                o_ind,
-                x_lab,
-                y_lab,
-                o_lab,
-                t_types,
-                attn_mask,
-            ) in tqdm(val_loader):
+            for batch in tqdm(val_loader):
                 # forward
-                ids_text, ids_vis, pos_text, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab, t_types, attn_mask = (
-                    ids_text.to(device),
-                    ids_vis.to(device),
-                    pos_text.to(device),
-                    x_ind.to(device),
-                    y_ind.to(device),
-                    o_ind.to(device),
-                    x_lab.to(device),
-                    y_lab.to(device),
-                    o_lab.to(device),
-                    t_types.to(device),
-                    attn_mask.to(device),
-                )
+                batch = {key: val.to(device) for key, val in batch.items()}
                 x_out, y_out, o_out = train_cond(
                     "continuous",
-                    ids_text,
-                    ids_vis,
-                    pos_text,
-                    x_ind,
-                    y_ind,
-                    o_ind,
-                    t_types,
-                    attn_mask,
+                    batch["ids_text"],
+                    batch["ids_vis"],
+                    batch["pos_text"],
+                    batch["x_ind"],
+                    batch["y_ind"],
+                    batch["o_ind"],
+                    batch["t_types"],
+                    batch["attn_mask"],
                     model,
                 )
                 x_out, y_out = (
@@ -215,12 +174,12 @@ def train(
                 )
                 evaluator.update_metrics(
                     x_out,
-                    x_lab,
+                    batch["x_lab"],
                     y_out,
-                    y_lab,
+                    batch["y_lab"],
                     o_out,
-                    o_lab,
-                    attn_mask[:, ids_text.size()[1] :],
+                    batch["o_lab"],
+                    batch["attn_mask"][:, batch["ids_text"].size()[1] :],
                 )
         abs_sim = evaluator.get_abs_sim()
         rel_sim = evaluator.get_rel_sim()
@@ -234,7 +193,7 @@ def train(
             logging.info(f"- Relative similarity: {rel_sim}")
             logging.info(f"- Orientation accuracy: {o_acc}")
             logging.info(f"on epoch {epoch+1}. Saving model!!!")
-            torch.save(model.state_dict(), save_model_path)
+            torch.save(model.state_dict(), args.save_model_path)
             logging.info("====================================================")
         else:
             logging.info(f"Avg metrics on epoch {epoch+1} is: {cur_avg_metrics}. ")
@@ -246,7 +205,7 @@ def train(
                 "optimizer_state_dict": optimizer.state_dict(),
                 "similarity": best_avg_metrics,
             },
-            intermediate_save_checkpoint_path,
+            args.intermediate_save_checkpoint_path,
         )
         logging.info(f"Finished epoch {epoch+1} in {datetime.now() - start_time}.")
 
@@ -256,7 +215,9 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Trains a Text2Position model.")
+    parser = argparse.ArgumentParser(
+        description="Trains a Continuous Spatial-BERT model."
+    )
     parser.add_argument(
         "--checkpoint_path",
         type=str,
@@ -330,23 +291,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    train(
-        args.checkpoint_path,
-        args.train_dataset_path,
-        args.val_dataset_path,
-        args.visuals_dicts_path,
-        args.mask_probability,
-        args.gen_strategy,
-        args.bert_name,
-        args.batch_size,
-        args.learning_rate,
-        args.weight_decay,
-        args.epochs,
-        args.clip_val,
-        args.save_model_path,
-        args.intermediate_save_checkpoint_path,
-        args.log_filepath,
-    )
+    train(args)
 
 
 if __name__ == "__main__":

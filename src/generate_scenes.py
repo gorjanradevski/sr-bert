@@ -1,22 +1,23 @@
 import argparse
-import torch
-from torch import nn
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 import json
-from transformers import BertConfig
-from scene_layouts.generation_strategies import generation_strategy_factory
-from PIL import Image
 import os
 from typing import List
 
+import torch
+from PIL import Image
+from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from transformers import BertConfig
+
 from scene_layouts.datasets import (
-    DiscreteInferenceDataset,
-    ContinuousInferenceDataset,
-    collate_pad_batch,
     BUCKET_SIZE,
+    ContinuousInferenceDataset,
+    DiscreteInferenceDataset,
+    collate_pad_batch,
 )
-from scene_layouts.modeling import SpatialDiscreteBert, SpatialContinuousBert
+from scene_layouts.generation_strategies import generation_strategy_factory
+from scene_layouts.modeling import SpatialContinuousBert, SpatialDiscreteBert
 
 
 def dump_scene(
@@ -52,33 +53,23 @@ def dump_scene(
     background.save(dump_image_path)
 
 
-def generation(
-    checkpoint_path: str,
-    model_type: str,
-    test_dataset_path: str,
-    visuals_dicts_path: str,
-    gen_strategy: str,
-    bert_name: str,
-    without_text: bool,
-    dump_scenes_path: str,
-    pngs_path: str,
-):
+def generation(args):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"--- Using device {device}! ---")
     # Create dataset
-    assert model_type in ["discrete", "continuous"]
+    assert args.model_type in ["discrete", "continuous"]
     visual2index = json.load(
-        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+        open(os.path.join(args.visuals_dicts_path, "visual2index.json"))
     )
     index2visual = {v: k for k, v in visual2index.items()}
     test_dataset = (
         DiscreteInferenceDataset(
-            test_dataset_path, visual2index, without_text=without_text
+            args.test_dataset_path, visual2index, without_text=args.without_text
         )
-        if model_type == "discrete"
+        if args.model_type == "discrete"
         else ContinuousInferenceDataset(
-            test_dataset_path, visual2index, without_text=without_text
+            args.test_dataset_path, visual2index, without_text=args.without_text
         )
     )
     print(f"Testing on {len(test_dataset)}")
@@ -87,50 +78,32 @@ def generation(
         test_dataset, batch_size=1, num_workers=4, collate_fn=collate_pad_batch
     )
     # Prepare model
-    config = BertConfig.from_pretrained(bert_name)
+    config = BertConfig.from_pretrained(args.bert_name)
     config.vocab_size = len(visual2index) + 1
     model = nn.DataParallel(
-        SpatialDiscreteBert(config, bert_name)
-        if model_type == "discrete"
-        else SpatialContinuousBert(config, bert_name)
+        SpatialDiscreteBert(config, args.bert_name)
+        if args.model_type == "discrete"
+        else SpatialContinuousBert(config, args.bert_name)
     ).to(device)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.load_state_dict(torch.load(args.checkpoint_path, map_location=device))
     model.train(False)
-    print(f"Starting generation from checkpoint {checkpoint_path}!")
-    if without_text:
+    print(f"Starting generation from checkpoint {args.checkpoint_path}!")
+    if args.without_text:
         print("The model won't use the text to generate the scenes.")
-    print(f"Using {gen_strategy}!")
+    print(f"Using {args.gen_strategy}!")
     index = 0
     with torch.no_grad():
-        for (
-            ids_text,
-            ids_vis,
-            pos_text,
-            _,
-            _,
-            _,
-            x_lab,
-            y_lab,
-            o_lab,
-            t_types,
-            attn_mask,
-        ) in tqdm(test_loader):
+        for batch in tqdm(test_loader):
             # forward
-            ids_text, ids_vis, pos_text, t_types, attn_mask = (
-                ids_text.to(device),
-                ids_vis.to(device),
-                pos_text.to(device),
-                t_types.to(device),
-                attn_mask.to(device),
-            )
+            batch = {key: val.to(device) for key, val in batch.items()}
             x_out, y_out, o_out = generation_strategy_factory(
-                gen_strategy,
-                model_type,
-                ids_text,
-                ids_vis,
-                pos_text,
-                t_types,
-                attn_mask,
+                args.gen_strategy,
+                args.model_type,
+                batch["ids_text"],
+                batch["ids_vis"],
+                batch["pos_text"],
+                batch["t_types"],
+                batch["attn_mask"],
                 model,
                 device,
             )
@@ -138,28 +111,30 @@ def generation(
             x_out, y_out, o_out = x_out.cpu(), y_out.cpu(), o_out.cpu()
             visual_names = [
                 index2visual[index.item()]
-                for index in ids_vis[0]
+                for index in batch["ids_vis"][0]
                 if index.item() in index2visual
             ]
             # Dump original
             dump_image_path = os.path.join(
-                dump_scenes_path, str(index) + f"-{gen_strategy}" + "-original.png"
+                args.dump_scenes_path,
+                str(index) + f"-{args.gen_strategy}" + "-original.png",
             )
             dump_scene(
-                pngs_path,
+                args.pngs_path,
                 visual_names,
-                x_lab[0],
-                y_lab[0],
-                o_lab[0],
+                batch["x_lab"][0],
+                batch["y_lab"][0],
+                batch["o_lab"][0],
                 dump_image_path,
                 bucketized=False,
             )
             # Dump model generated
             dump_image_path = os.path.join(
-                dump_scenes_path, str(index) + f"-{gen_strategy}" + "-generated.png"
+                args.dump_scenes_path,
+                str(index) + f"-{args.gen_strategy}" + "-generated.png",
             )
             dump_scene(
-                pngs_path,
+                args.pngs_path,
                 visual_names,
                 x_out[0],
                 y_out[0],
@@ -175,7 +150,9 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Generates scenes with a SpatialBERT.")
+    parser = argparse.ArgumentParser(
+        description="Generates scenes with a Spatial-BERT."
+    )
     parser.add_argument(
         "--model_type",
         type=str,
@@ -233,17 +210,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    generation(
-        args.checkpoint_path,
-        args.model_type,
-        args.test_dataset_path,
-        args.visuals_dicts_path,
-        args.gen_strategy,
-        args.bert_name,
-        args.without_text,
-        args.dump_scenes_path,
-        args.pngs_path,
-    )
+    generation(args)
 
 
 if __name__ == "__main__":

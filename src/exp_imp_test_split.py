@@ -1,8 +1,9 @@
-import json
 import argparse
-from tqdm import tqdm
-import re
+import json
 import os
+import re
+
+from tqdm import tqdm
 
 # https://academicguides.waldenu.edu/writingcenter/grammar/prepositions
 # https://github.com/gcollell/spatial-commonsense/blob/master/code/pre-process_data.py#L32
@@ -55,8 +56,8 @@ def contains_word(word, text):
     return bool(matches)
 
 
-def split_dataset(load_test_dataset_path: str, dump_test_dataset_splits: str):
-    test_dataset = json.load(open(load_test_dataset_path))
+def split_dataset(args):
+    test_dataset = json.load(open(args.load_test_dataset_path))
     dataset_splits = {
         "explicit_0-25": [],
         "explicit_25-50": [],
@@ -89,7 +90,7 @@ def split_dataset(load_test_dataset_path: str, dump_test_dataset_splits: str):
     for split_name, split_scenes in dataset_splits.items():
         print(f"Dumping {split_name} with {len(split_scenes)} scenes")
         dump_path = os.path.join(
-            dump_test_dataset_splits, f"test_dataset_{split_name}.json"
+            args.dump_test_dataset_splits, f"test_dataset_{split_name}.json"
         )
         print(f"Dumping at {dump_path}")
         json.dump(split_scenes, open(dump_path, "w"))
@@ -101,7 +102,9 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Creates a split of the test set.")
+    parser = argparse.ArgumentParser(
+        description="Creates a exp. vs impl. split of the test set."
+    )
     parser.add_argument(
         "--load_test_dataset_path",
         type=str,
@@ -120,7 +123,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    split_dataset(args.load_test_dataset_path, args.dump_test_dataset_splits)
+    split_dataset(args)
 
 
 if __name__ == "__main__":

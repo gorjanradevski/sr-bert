@@ -1,38 +1,29 @@
 import argparse
+import json
+import logging
+import os
+
 import torch
 import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import logging
-import json
-import os
 from transformers import BertConfig
 
 from scene_layouts.datasets import (
     ClipartsPredictionDataset,
     collate_pad_cliparts_prediction_batch,
 )
-from scene_layouts.modeling import ClipartsPredictionModel
 from scene_layouts.evaluator import ClipartsPredictionEvaluator
+from scene_layouts.modeling import ClipartsPredictionModel
 
 
-def train(
-    train_dataset_path: str,
-    val_dataset_path: str,
-    visuals_dicts_path: str,
-    bert_name: str,
-    batch_size: int,
-    learning_rate: float,
-    weight_decay: float,
-    epochs: int,
-    clip_val: float,
-    save_model_path: str,
-    log_filepath: str,
-):
+def train(args):
     # Set up logging
-    if log_filepath:
-        logging.basicConfig(level=logging.INFO, filename=log_filepath, filemode="w")
+    if args.log_filepath:
+        logging.basicConfig(
+            level=logging.INFO, filename=args.log_filepath, filemode="w"
+        )
     else:
         logging.basicConfig(level=logging.INFO)
     # Check for CUDA
@@ -40,46 +31,46 @@ def train(
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(
-        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+        open(os.path.join(args.visuals_dicts_path, "visual2index.json"))
     )
     index2pose_hb0 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2pose_hb0.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2pose_hb0.json"))
     )
     index2pose_hb1 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2pose_hb1.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2pose_hb1.json"))
     )
     index2expression_hb0 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2expression_hb0.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2expression_hb0.json"))
     )
     index2expression_hb1 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2expression_hb1.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2expression_hb1.json"))
     )
     train_dataset = ClipartsPredictionDataset(
-        train_dataset_path, visual2index, train=True
+        args.train_dataset_path, visual2index, train=True
     )
-    val_dataset = ClipartsPredictionDataset(val_dataset_path, visual2index)
+    val_dataset = ClipartsPredictionDataset(args.val_dataset_path, visual2index)
     logging.info(f"Training on {len(train_dataset)}")
     logging.info(f"Validating on {len(val_dataset)}")
     # Create loaders
     train_loader = DataLoader(
         train_dataset,
-        batch_size=batch_size,
+        batch_size=args.batch_size,
         shuffle=True,
         collate_fn=collate_pad_cliparts_prediction_batch,
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=batch_size,
+        batch_size=args.batch_size,
         collate_fn=collate_pad_cliparts_prediction_batch,
     )
     # Define training specifics
-    config = BertConfig.from_pretrained(bert_name)
+    config = BertConfig.from_pretrained(args.bert_name)
     config.vocab_size = len(visual2index)
-    model = nn.DataParallel(ClipartsPredictionModel(config, bert_name)).to(device)
+    model = nn.DataParallel(ClipartsPredictionModel(config, args.bert_name)).to(device)
     # Loss and optimizer
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.AdamW(
-        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
     )
     best_score = -1.0
     evaluator = ClipartsPredictionEvaluator(
@@ -90,27 +81,23 @@ def train(
         index2expression_hb0,
         index2expression_hb1,
     )
-    for epoch in range(epochs):
+    for epoch in range(args.epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
         evaluator.reset_counters()
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for ids_text, attn_mask, target_visuals in train_loader:
+            for batch in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
-                ids_text, attn_mask, target_visuals = (
-                    ids_text.to(device),
-                    attn_mask.to(device),
-                    target_visuals.to(device),
-                )
-                probs = model(ids_text, attn_mask)
+                batch = {key: val.to(device) for key, val in batch.items()}
+                probs = model(batch["ids_text"], batch["attn_mask"])
                 # Loss and backward
-                loss = criterion(probs, target_visuals)
+                loss = criterion(probs, batch["target_visuals"])
                 loss.backward()
                 # Clip the gradients
-                torch.nn.utils.clip_grad_norm_(model.parameters(), clip_val)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_val)
                 # Update weights
                 optimizer.step()
                 # Update progress bar
@@ -120,28 +107,24 @@ def train(
         # Set model in evaluation mode
         model.train(False)
         with torch.no_grad():
-            for (ids_text, attn_mask, target_visuals) in tqdm(val_loader):
+            for batch in tqdm(val_loader):
                 # forward
-                ids_text, attn_mask, target_visuals = (
-                    ids_text.to(device),
-                    attn_mask.to(device),
-                    target_visuals.to(device),
-                )
+                batch = {key: val.to(device) for key, val in batch.items()}
                 # Get predictions
-                probs = torch.sigmoid(model(ids_text, attn_mask))
+                probs = torch.sigmoid(model(batch["ids_text"], batch["attn_mask"]))
                 one_hot_pred = torch.zeros_like(probs)
                 # Regular objects
                 one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
                 one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
                 # Mike and Jenny
-                batch_indices = torch.arange(ids_text.size()[0])
+                batch_indices = torch.arange(batch["ids_text"].size()[0])
                 max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
                 one_hot_pred[batch_indices, max_hb0 + 23] = 1
                 max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
                 one_hot_pred[batch_indices, max_hb1 + 58] = 1
                 # Aggregate predictions/targets
                 evaluator.update_counters(
-                    one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
+                    one_hot_pred.cpu().numpy(), batch["target_visuals"].cpu().numpy()
                 )
 
         precision, recall, f1_score = evaluator.per_object_prf()
@@ -158,7 +141,7 @@ def train(
                 f"Posess accuracy is {posses_acc}, and expressions accuracy is {expr_acc}"
             )
             logging.info("====================================================")
-            torch.save(model.state_dict(), save_model_path)
+            torch.save(model.state_dict(), args.save_model_path)
 
 
 def parse_args():
@@ -219,19 +202,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    train(
-        args.train_dataset_path,
-        args.val_dataset_path,
-        args.visuals_dicts_path,
-        args.bert_name,
-        args.batch_size,
-        args.learning_rate,
-        args.weight_decay,
-        args.epochs,
-        args.clip_val,
-        args.save_model_path,
-        args.log_filepath,
-    )
+    train(args)
 
 
 if __name__ == "__main__":

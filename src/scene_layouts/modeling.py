@@ -1,8 +1,8 @@
-from torch import nn
 import torch
+from torch import nn
 from transformers import BertConfig, BertModel, BertOnlyMLMHead
 
-from scene_layouts.datasets import X_PAD, Y_PAD, O_PAD
+from scene_layouts.datasets import O_PAD, X_PAD, Y_PAD
 
 
 class SpatialDiscreteBert(nn.Module):

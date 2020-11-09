@@ -1,61 +1,56 @@
 import argparse
+import json
+import logging
+import os
+
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import logging
-import json
-import os
 from transformers import BertConfig
 
 from scene_layouts.datasets import (
     ClipartsPredictionDataset,
     collate_pad_cliparts_prediction_batch,
 )
-from scene_layouts.modeling import ClipartsPredictionModel
 from scene_layouts.evaluator import ClipartsPredictionEvaluator
+from scene_layouts.modeling import ClipartsPredictionModel
 
 
-def train(
-    test_dataset_path: str,
-    visuals_dicts_path: str,
-    bert_name: str,
-    batch_size: int,
-    checkpoint_path: str,
-):
+def train(args):
     logging.basicConfig(level=logging.INFO)
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.warning(f"--- Using device {device}! ---")
     # Create datasets
     visual2index = json.load(
-        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+        open(os.path.join(args.visuals_dicts_path, "visual2index.json"))
     )
     index2pose_hb0 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2pose_hb0.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2pose_hb0.json"))
     )
     index2pose_hb1 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2pose_hb1.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2pose_hb1.json"))
     )
     index2expression_hb0 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2expression_hb0.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2expression_hb0.json"))
     )
     index2expression_hb1 = json.load(
-        open(os.path.join(visuals_dicts_path, "index2expression_hb1.json"))
+        open(os.path.join(args.visuals_dicts_path, "index2expression_hb1.json"))
     )
-    test_dataset = ClipartsPredictionDataset(test_dataset_path, visual2index)
+    test_dataset = ClipartsPredictionDataset(args.test_dataset_path, visual2index)
     print(f"Testing on {len(test_dataset)}")
     # Create loaders
     test_loader = DataLoader(
         test_dataset,
-        batch_size=batch_size,
+        batch_size=args.batch_size,
         collate_fn=collate_pad_cliparts_prediction_batch,
     )
     # Define training specifics
-    config = BertConfig.from_pretrained(bert_name)
+    config = BertConfig.from_pretrained(args.bert_name)
     config.vocab_size = len(visual2index)
-    model = nn.DataParallel(ClipartsPredictionModel(config, bert_name)).to(device)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model = nn.DataParallel(ClipartsPredictionModel(config, args.bert_name)).to(device)
+    model.load_state_dict(torch.load(args.checkpoint_path, map_location=device))
     model.train(False)
     evaluator = ClipartsPredictionEvaluator(
         len(test_dataset),
@@ -68,28 +63,24 @@ def train(
     # Set model in evaluation mode
     model.train(False)
     with torch.no_grad():
-        for (ids_text, attn_mask, target_visuals) in tqdm(test_loader):
+        for batch in tqdm(test_loader):
             # forward
-            ids_text, attn_mask, target_visuals = (
-                ids_text.to(device),
-                attn_mask.to(device),
-                target_visuals.to(device),
-            )
+            batch = {key: val.to(device) for key, val in batch.items()}
             # Get predictions
-            probs = torch.sigmoid(model(ids_text, attn_mask))
+            probs = torch.sigmoid(model(batch["ids_text"], batch["attn_mask"]))
             one_hot_pred = torch.zeros_like(probs)
             # Regular objects
             one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
             one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
             # Mike and Jenny
-            batch_indices = torch.arange(ids_text.size()[0])
+            batch_indices = torch.arange(batch["ids_text"].size()[0])
             max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
             one_hot_pred[batch_indices, max_hb0 + 23] = 1
             max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
             one_hot_pred[batch_indices, max_hb1 + 58] = 1
             # Aggregate predictions/targets
             evaluator.update_counters(
-                one_hot_pred.cpu().numpy(), target_visuals.cpu().numpy()
+                one_hot_pred.cpu().numpy(), batch["one_hot_visuals"].cpu().numpy()
             )
 
     precision, recall, f1_score = evaluator.per_object_prf()
@@ -141,13 +132,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    train(
-        args.test_dataset_path,
-        args.visuals_dicts_path,
-        args.bert_name,
-        args.batch_size,
-        args.checkpoint_path,
-    )
+    train(args)
 
 
 if __name__ == "__main__":

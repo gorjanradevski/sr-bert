@@ -1,19 +1,15 @@
-import json
 import argparse
-from tqdm import tqdm
+import json
 import os
 from copy import deepcopy
 
+from tqdm import tqdm
 
-def split_dataset(
-    load_train_dataset_path: str,
-    load_val_dataset_path: str,
-    load_test_dataset_path: str,
-    dump_test_dataset_splits: str,
-):
-    train_dataset = json.load(open(load_train_dataset_path))
-    val_dataset = json.load(open(load_val_dataset_path))
-    test_dataset = json.load(open(load_test_dataset_path))
+
+def split_dataset(args):
+    train_dataset = json.load(open(args.load_train_dataset_path))
+    val_dataset = json.load(open(args.load_val_dataset_path))
+    test_dataset = json.load(open(args.load_test_dataset_path))
     training_relations = set()
     for scene in tqdm(train_dataset):
         for relation_set in scene["relations"].values():
@@ -53,7 +49,7 @@ def split_dataset(
     for split_name, split_scenes in dataset_splits.items():
         print(f"Dumping {split_name} with {len(split_scenes)} scenes")
         dump_path = os.path.join(
-            dump_test_dataset_splits, f"test_dataset_unseen_{split_name}.json"
+            args.dump_test_dataset_splits, f"test_dataset_unseen_{split_name}.json"
         )
         print(f"Dumping at {dump_path}")
         json.dump(split_scenes, open(dump_path, "w"))
@@ -67,13 +63,13 @@ def split_dataset(
 
     # Filtering the training set
     dump_train_filtered_path = os.path.join(
-        dump_test_dataset_splits, "train_dataset_filtered.json"
+        args.dump_test_dataset_splits, "train_dataset_filtered.json"
     )
     dump_filtered_set(more_than_2_relations, train_dataset, dump_train_filtered_path)
 
     # Filtering the validation set
     dump_val_filtered_path = os.path.join(
-        dump_test_dataset_splits, "val_dataset_filtered.json"
+        args.dump_test_dataset_splits, "val_dataset_filtered.json"
     )
     dump_filtered_set(more_than_2_relations, val_dataset, dump_val_filtered_path)
 
@@ -100,7 +96,9 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Creates a split of the test set.")
+    parser = argparse.ArgumentParser(
+        description="Creates a oo-split split of the test set."
+    )
     parser.add_argument(
         "--load_train_dataset_path",
         type=str,
@@ -131,12 +129,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    split_dataset(
-        args.load_train_dataset_path,
-        args.load_val_dataset_path,
-        args.load_test_dataset_path,
-        args.dump_test_dataset_splits,
-    )
+    split_dataset(args)
 
 
 if __name__ == "__main__":

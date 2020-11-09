@@ -1,8 +1,7 @@
 import torch
+from scene_layouts.datasets import O_PAD, X_PAD, Y_PAD
 from torch import nn
 from torch.nn import functional as F
-
-from scene_layouts.datasets import X_PAD, Y_PAD, O_PAD
 
 
 class TextEncoder(nn.Module):

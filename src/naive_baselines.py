@@ -1,31 +1,28 @@
 import argparse
+import json
+import os
+
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import json
-import os
-from scene_layouts.evaluator import Evaluator
+
 from scene_layouts.datasets import (
-    DiscreteInferenceDataset,
-    collate_pad_batch,
+    BUCKET_SIZE,
     X_MASK,
     Y_MASK,
-    BUCKET_SIZE,
+    DiscreteInferenceDataset,
+    collate_pad_batch,
 )
+from scene_layouts.evaluator import Evaluator
 
 
-def naive_inference(
-    train_dataset_path: str,
-    test_dataset_path: str,
-    visuals_dicts_path: str,
-    naive_type: str,
-):
+def naive_inference(args):
     # Create datasets
     visual2index = json.load(
-        open(os.path.join(visuals_dicts_path, "visual2index.json"))
+        open(os.path.join(args.visuals_dicts_path, "visual2index.json"))
     )
-    train_dataset = DiscreteInferenceDataset(train_dataset_path, visual2index)
-    test_dataset = DiscreteInferenceDataset(test_dataset_path, visual2index)
+    train_dataset = DiscreteInferenceDataset(args.train_dataset_path, visual2index)
+    test_dataset = DiscreteInferenceDataset(args.test_dataset_path, visual2index)
     print(f"Testing on {len(test_dataset)}")
     # Create loaders
     train_loader = DataLoader(
@@ -37,8 +34,10 @@ def naive_inference(
     print("Aggregating from training set")
     visualindex2avgcoordinates = {}
     visualindex2occurence = {}
-    for (_, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(train_loader):
-        for vis_id, x, y in zip(ids_vis[0], x_lab[0], y_lab[0]):
+    for batch in tqdm(train_loader):
+        for vis_id, x, y in zip(
+            batch["ids_vis"][0], batch["x_lab"][0], batch["y_lab"][0]
+        ):
             if vis_id.item() not in visualindex2avgcoordinates:
                 visualindex2avgcoordinates[vis_id.item()] = torch.tensor([0.0, 0.0])
             if vis_id.item() not in visualindex2occurence:
@@ -53,21 +52,25 @@ def naive_inference(
             coordinates / visualindex2occurence[visualindex]
         )
     evaluator = Evaluator(len(test_dataset))
-    for (_, ids_vis, _, _, _, _, x_lab, y_lab, o_lab, _, _) in tqdm(test_loader):
-        if naive_type == "random":
-            x_ind = torch.randint_like(x_lab, low=0, high=((X_MASK - 1) * BUCKET_SIZE))
-            y_ind = torch.randint_like(y_lab, low=0, high=((Y_MASK - 1) * BUCKET_SIZE))
-            o_ind = torch.randint_like(o_lab, low=0, high=2)
-        elif naive_type == "center":
-            x_ind = torch.ones_like(x_lab) * ((X_MASK - 1) * BUCKET_SIZE // 2)
-            y_ind = torch.ones_like(y_lab) * ((Y_MASK - 1) * BUCKET_SIZE // 2)
-            o_ind = torch.zeros_like(o_lab)
-        elif naive_type == "avg":
+    for batch in tqdm(test_loader):
+        if args.naive_type == "random":
+            x_ind = torch.randint_like(
+                batch["x_lab"], low=0, high=((X_MASK - 1) * BUCKET_SIZE)
+            )
+            y_ind = torch.randint_like(
+                batch["y_lab"], low=0, high=((Y_MASK - 1) * BUCKET_SIZE)
+            )
+            o_ind = torch.randint_like(batch["o_lab"], low=0, high=2)
+        elif args.naive_type == "center":
+            x_ind = torch.ones_like(batch["x_lab"]) * ((X_MASK - 1) * BUCKET_SIZE // 2)
+            y_ind = torch.ones_like(batch["y_lab"]) * ((Y_MASK - 1) * BUCKET_SIZE // 2)
+            o_ind = torch.zeros_like(batch["o_lab"])
+        elif args.naive_type == "avg":
             x_ind = torch.tensor(
                 [
                     [
                         visualindex2avgcoordinates[id_vis.item()][0]
-                        for id_vis in ids_vis[0]
+                        for id_vis in batch["ids_vis"][0]
                     ]
                 ]
             )
@@ -75,16 +78,22 @@ def naive_inference(
                 [
                     [
                         visualindex2avgcoordinates[id_vis.item()][1]
-                        for id_vis in ids_vis[0]
+                        for id_vis in batch["ids_vis"][0]
                     ]
                 ]
             )
-            o_ind = torch.randint_like(o_lab, low=0, high=2)
+            o_ind = torch.randint_like(batch["o_lab"], low=0, high=2)
         else:
-            raise ValueError(f"Naive inference type {naive_type} not recognized!")
+            raise ValueError(f"Naive inference type {args.naive_type} not recognized!")
 
         evaluator.update_metrics(
-            x_ind, x_lab, y_ind, y_lab, o_ind, o_lab, torch.ones_like(x_lab)
+            x_ind,
+            batch["x_lab"],
+            y_ind,
+            batch["y_lab"],
+            o_ind,
+            batch["o_lab"],
+            torch.ones_like(batch["x_lab"]),
         )
 
     print(
@@ -101,7 +110,9 @@ def parse_args():
     Returns:
         Arguments
     """
-    parser = argparse.ArgumentParser(description="Does a naive baseline.")
+    parser = argparse.ArgumentParser(
+        description="Performs inference with a naive baseline."
+    )
     parser.add_argument(
         "--train_dataset_path",
         type=str,
@@ -131,12 +142,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    naive_inference(
-        args.train_dataset_path,
-        args.test_dataset_path,
-        args.visuals_dicts_path,
-        args.naive_type,
-    )
+    naive_inference(args)
 
 
 if __name__ == "__main__":

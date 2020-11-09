@@ -1,11 +1,12 @@
-from torch.utils.data import Dataset as TorchDataset
 import json
-import nltk
-from tqdm import tqdm
 from typing import Dict, Tuple
-import torch
+
+import nltk
 import numpy as np
-from scene_layouts.datasets import X_MASK, Y_MASK, BUCKET_SIZE
+import torch
+from scene_layouts.datasets import BUCKET_SIZE, X_MASK, Y_MASK
+from torch.utils.data import Dataset as TorchDataset
+from tqdm import tqdm
 
 MAX_FREQ = 5
 
@@ -157,7 +158,7 @@ def collate_pad_batch(
         Tuple[torch.Tensor],
         Tuple[torch.Tensor],
     ]
-):
+) -> Dict[str, torch.Tensor]:
     ids_text, ids_vis, x_labs, y_labs, o_labs = zip(*batch)
     # Pad the sentences
     ids_text = torch.nn.utils.rnn.pad_sequence(
@@ -181,4 +182,11 @@ def collate_pad_batch(
     mask = ids_vis.clone()
     mask[torch.where(mask > 0)] = 1
 
-    return ids_text, ids_vis, x_labs, y_labs, o_labs, mask
+    return {
+        "ids_text": ids_text,
+        "ids_vis": ids_vis,
+        "x_labs": x_labs,
+        "y_labs": y_labs,
+        "o_labs": o_labs,
+        "mask": mask,
+    }

@@ -1,7 +1,8 @@
+import argparse
 import json
 import os
-import argparse
 from typing import Dict
+
 from natsort import natsorted
 
 
@@ -71,26 +72,21 @@ def parse_sentences(
     return index2sentences
 
 
-def create_datasets(
-    dump_full_dataset_path: str,
-    dump_train_dataset_path: str,
-    dump_val_dataset_path: str,
-    dump_test_dataset_path: str,
-    dump_visual2index_path: str,
-    abstract_scenes_path: str,
-):
+def create_datasets(args):
     index2sentences = parse_sentences(
-        abstract_scenes_path, "SimpleSentences1_10020.txt"
+        args.abstract_scenes_path, "SimpleSentences1_10020.txt"
     )
     index2sentences = parse_sentences(
-        abstract_scenes_path, "SimpleSentences2_10020.txt", index2sentences
+        args.abstract_scenes_path, "SimpleSentences2_10020.txt", index2sentences
     )
-    index2relations = parse_relations(abstract_scenes_path, "TuplesText1_10020.txt")
     index2relations = parse_relations(
-        abstract_scenes_path, "TuplesText2_10020.txt", index2relations
+        args.abstract_scenes_path, "TuplesText1_10020.txt"
+    )
+    index2relations = parse_relations(
+        args.abstract_scenes_path, "TuplesText2_10020.txt", index2relations
     )
     index2scene = {}
-    with open(os.path.join(abstract_scenes_path, "Scenes_10020.txt")) as scenes:
+    with open(os.path.join(args.abstract_scenes_path, "Scenes_10020.txt")) as scenes:
         _ = scenes.readline()
         for i in range(10020):
             index, num_visuals = scenes.readline().split()
@@ -147,17 +143,17 @@ def create_datasets(
     val_dataset.append(same_index_scenes[-2])
     test_dataset.append(same_index_scenes[-1])
 
-    json.dump(train_dataset, open(dump_train_dataset_path, "w"))
-    print(f"Train dataset dumped {dump_train_dataset_path}")
-    json.dump(val_dataset, open(dump_val_dataset_path, "w"))
-    print(f"Val dataset dumped {dump_val_dataset_path}")
-    json.dump(test_dataset, open(dump_test_dataset_path, "w"))
-    print(f"Test dataset dumped {dump_test_dataset_path}")
-    json.dump(dataset, open(dump_full_dataset_path, "w"))
-    print(f"Full dataset dumped at {dump_full_dataset_path}")
+    json.dump(train_dataset, open(args.dump_train_dataset_path, "w"))
+    print(f"Train dataset dumped {args.dump_train_dataset_path}")
+    json.dump(val_dataset, open(args.dump_val_dataset_path, "w"))
+    print(f"Val dataset dumped {args.dump_val_dataset_path}")
+    json.dump(test_dataset, open(args.dump_test_dataset_path, "w"))
+    print(f"Test dataset dumped {args.dump_test_dataset_path}")
+    json.dump(dataset, open(args.dump_full_dataset_path, "w"))
+    print(f"Full dataset dumped at {args.dump_full_dataset_path}")
 
     # Dump visual2index json file
-    if dump_visual2index_path is not None:
+    if args.dump_visual2index_path is not None:
         excluded = {
             "background.png",
             "selected.png",
@@ -167,13 +163,13 @@ def create_datasets(
         }
         visual2index = {}
         index = 1
-        pngs_file_path = os.path.join(abstract_scenes_path, "Pngs")
+        pngs_file_path = os.path.join(args.abstract_scenes_path, "Pngs")
         for filename in natsorted(os.listdir(pngs_file_path)):
             if filename in excluded:
                 continue
             visual2index[filename] = index
             index += 1
-        json.dump(visual2index, open(dump_visual2index_path, "w"))
+        json.dump(visual2index, open(args.dump_visual2index_path, "w"))
 
         print("Visual2index json file dumped.")
 
@@ -184,7 +180,7 @@ def parse_args():
         Arguments
     """
     parser = argparse.ArgumentParser(
-        description="Creates a train and val json datasets."
+        description="Creates a training, validation and test datasets."
     )
     parser.add_argument(
         "--dump_full_dataset_path",
@@ -228,14 +224,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    create_datasets(
-        args.dump_full_dataset_path,
-        args.dump_train_dataset_path,
-        args.dump_val_dataset_path,
-        args.dump_test_dataset_path,
-        args.dump_visual2index_path,
-        args.abstract_scenes_path,
-    )
+    create_datasets(args)
 
 
 if __name__ == "__main__":

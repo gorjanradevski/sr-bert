@@ -1,9 +1,10 @@
-import torch
-import numpy as np
-from torch.nn import functional as F  # type: ignore
 from typing import List
 
-from scene_layouts.datasets import X_MASK, Y_MASK, O_MASK
+import numpy as np
+import torch
+from torch.nn import functional as F  # type: ignore
+
+from scene_layouts.datasets import O_MASK, X_MASK, Y_MASK
 
 
 class Hypothesis:

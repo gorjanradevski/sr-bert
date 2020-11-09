@@ -401,7 +401,7 @@ class ClipartsPredictionDataset(TorchDataset):
         return input_ids_sentence, one_hot_visuals
 
 
-def collate_pad_cliparts_prediction_batch(batch):
+def collate_pad_cliparts_prediction_batch(batch) -> Dict[str, torch.Tensor]:
     ids_text, one_hot_visuals = zip(*batch)
     ids_text = torch.nn.utils.rnn.pad_sequence(
         ids_text, batch_first=True, padding_value=0
@@ -409,7 +409,11 @@ def collate_pad_cliparts_prediction_batch(batch):
     attn_mask = ids_text.clone()
     attn_mask[torch.where(attn_mask > 0)] = 1
 
-    return ids_text, attn_mask, torch.stack([*one_hot_visuals], dim=0)
+    return {
+        "ids_text": ids_text,
+        "attn_mask": attn_mask,
+        "one_hot_visuals": torch.stack([*one_hot_visuals], dim=0),
+    }
 
 
 def collate_pad_batch(
@@ -423,7 +427,7 @@ def collate_pad_batch(
         Tuple[torch.Tensor],
         Tuple[torch.Tensor],
     ]
-):
+) -> Dict[str, torch.Tensor]:
     ids_text, ids_vis, x_ind, y_ind, o_ind, x_lab, y_lab, o_lab = zip(*batch)
     # Get max text length to get the text positions
     max_text_length = max([element.size()[0] for element in ids_text])
@@ -458,16 +462,16 @@ def collate_pad_batch(
     attn_mask = torch.cat([ids_text, ids_vis], dim=1)
     attn_mask[torch.where(attn_mask > 0)] = 1
 
-    return (
-        ids_text,
-        ids_vis,
-        pos_text,
-        x_ind,
-        y_ind,
-        o_ind,
-        x_lab,
-        y_lab,
-        o_lab,
-        t_types,
-        attn_mask,
-    )
+    return {
+        "ids_text": ids_text,
+        "ids_vis": ids_vis,
+        "pos_text": pos_text,
+        "x_ind": x_ind,
+        "y_ind": y_ind,
+        "o_ind": o_ind,
+        "x_lab": x_lab,
+        "y_lab": y_lab,
+        "o_lab": o_lab,
+        "t_types": t_types,
+        "attn_mask": attn_mask,
+    }

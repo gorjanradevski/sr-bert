@@ -1,7 +1,8 @@
-import torch
-from scene_layouts.datasets import SCENE_WIDTH_TEST, SCENE_HEIGHT_TEST
 import numpy as np
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+import torch
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+
+from scene_layouts.datasets import SCENE_HEIGHT_TEST, SCENE_WIDTH_TEST
 
 
 class Evaluator:
