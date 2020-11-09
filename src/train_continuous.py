@@ -4,7 +4,6 @@ import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import sys
 import logging
 from datetime import datetime
 import json

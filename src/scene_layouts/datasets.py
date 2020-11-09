@@ -43,7 +43,6 @@ class TrainDataset:
                 0, 500 // BUCKET_SIZE - x_indexes.max().item() + 1, size=(1,)
             )
             x_indexes_moved = x_indexes.clone() + move_magnitude
-
         # Up or down; True - up, False - down
         if torch.bernoulli(torch.tensor([0.5])).bool().item():
             # If top, find the minimum movement
