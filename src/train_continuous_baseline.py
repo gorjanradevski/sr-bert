@@ -176,7 +176,7 @@ def parse_args():
     parser.add_argument(
         "--val_dataset_path",
         type=str,
-        default="data/test_dataset.json",
+        default="data/val_dataset.json",
         help="Path to the validation dataset.",
     )
     parser.add_argument(
