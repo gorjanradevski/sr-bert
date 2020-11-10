@@ -17,7 +17,8 @@ from scene_layouts.evaluator import ClipartsPredictionEvaluator
 from scene_layouts.modeling import ClipartsPredictionModel
 
 
-def train(args):
+@torch.no_grad()
+def inference(args):
     logging.basicConfig(level=logging.INFO)
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,26 +63,25 @@ def train(args):
     )
     # Set model in evaluation mode
     model.train(False)
-    with torch.no_grad():
-        for batch in tqdm(test_loader):
-            # forward
-            batch = {key: val.to(device) for key, val in batch.items()}
-            # Get predictions
-            probs = torch.sigmoid(model(batch["ids_text"], batch["attn_mask"]))
-            one_hot_pred = torch.zeros_like(probs)
-            # Regular objects
-            one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
-            one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
-            # Mike and Jenny
-            batch_indices = torch.arange(batch["ids_text"].size()[0])
-            max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
-            one_hot_pred[batch_indices, max_hb0 + 23] = 1
-            max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
-            one_hot_pred[batch_indices, max_hb1 + 58] = 1
-            # Aggregate predictions/targets
-            evaluator.update_counters(
-                one_hot_pred.cpu().numpy(), batch["one_hot_visuals"].cpu().numpy()
-            )
+    for batch in tqdm(test_loader):
+        # forward
+        batch = {key: val.to(device) for key, val in batch.items()}
+        # Get predictions
+        probs = torch.sigmoid(model(batch["ids_text"], batch["attn_mask"]))
+        one_hot_pred = torch.zeros_like(probs)
+        # Regular objects
+        one_hot_pred[:, :23][torch.where(probs[:, :23] > 0.35)] = 1
+        one_hot_pred[:, 93:][torch.where(probs[:, 93:] > 0.35)] = 1
+        # Mike and Jenny
+        batch_indices = torch.arange(batch["ids_text"].size()[0])
+        max_hb0 = torch.argmax(probs[:, 23:58], axis=-1)
+        one_hot_pred[batch_indices, max_hb0 + 23] = 1
+        max_hb1 = torch.argmax(probs[:, 58:93], axis=-1)
+        one_hot_pred[batch_indices, max_hb1 + 58] = 1
+        # Aggregate predictions/targets
+        evaluator.update_counters(
+            one_hot_pred.cpu().numpy(), batch["one_hot_visuals"].cpu().numpy()
+        )
 
     precision, recall, f1_score = evaluator.per_object_prf()
     posses_acc, expr_acc = evaluator.posses_expressions_accuracy()
@@ -105,7 +105,7 @@ def parse_args():
         "--test_dataset_path",
         type=str,
         default="data/test_dataset.json",
-        help="Path to the validation dataset.",
+        help="Path to the test dataset.",
     )
     parser.add_argument(
         "--visuals_dicts_path",
@@ -117,7 +117,7 @@ def parse_args():
     parser.add_argument(
         "--checkpoint_path",
         type=str,
-        default="models/best.pt",
+        default="models/cliparts_pred_tan.pt",
         help="Path to a checkpoint.",
     )
     parser.add_argument(
@@ -132,7 +132,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    train(args)
+    inference(args)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ def get_group_elements(visual2index: Dict[str, int], group_name: str):
         raise ValueError(f"{group_name} doesn't exist!")
 
 
+@torch.no_grad()
 def inference(args):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -79,45 +80,38 @@ def inference(args):
     if args.without_text:
         print("The model won't use the text to perfrom the inference.")
     evaluator = ScEvaluator(len(test_dataset))
-    with torch.no_grad():
-        for batch in tqdm(test_loader):
-            # forward
-            batch = {key: val.to(device) for key, val in batch.items()}
-            x_out, y_out, o_out, mask = sc_discrete(
-                group_elements,
-                batch["ids_text"],
-                batch["ids_vis"],
-                batch["pos_text"],
-                batch["x_ind"],
-                batch["y_ind"],
-                batch["o_ind"],
-                batch["t_types"],
-                batch["attn_mask"],
-                model,
-            )
-            x_out, y_out = (
-                x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
-                y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
-            )
-            evaluator.update_metrics(
-                x_out,
-                batch["x_lab"],
-                y_out,
-                batch["y_lab"],
-                o_out,
-                batch["o_lab"],
-                mask,
-            )
+    for batch in tqdm(test_loader):
+        # forward
+        batch = {key: val.to(device) for key, val in batch.items()}
+        x_out, y_out, o_out, mask = sc_discrete(
+            group_elements,
+            batch["ids_text"],
+            batch["ids_vis"],
+            batch["pos_text"],
+            batch["x_ind"],
+            batch["y_ind"],
+            batch["o_ind"],
+            batch["t_types"],
+            batch["attn_mask"],
+            model,
+        )
+        x_out, y_out = (
+            x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+            y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+        )
+        evaluator.update_metrics(
+            x_out, batch["x_lab"], y_out, batch["y_lab"], o_out, batch["o_lab"], mask
+        )
 
-        print(
-            f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
-        )
-        print(
-            f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
-        )
-        print(
-            f"The avg orientation acc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
-        )
+    print(
+        f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
+    )
+    print(
+        f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
+    )
+    print(
+        f"The avg orientation acc per scene is: {evaluator.get_o_acc()} +/- {evaluator.get_o_acc_error_bar()}"
+    )
 
 
 def parse_args():

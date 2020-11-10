@@ -53,6 +53,7 @@ def dump_scene(
     background.save(dump_image_path)
 
 
+@torch.no_grad()
 def generation(args):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,57 +93,56 @@ def generation(args):
         print("The model won't use the text to generate the scenes.")
     print(f"Using {args.gen_strategy}!")
     index = 0
-    with torch.no_grad():
-        for batch in tqdm(test_loader):
-            # forward
-            batch = {key: val.to(device) for key, val in batch.items()}
-            x_out, y_out, o_out = generation_strategy_factory(
-                args.gen_strategy,
-                args.model_type,
-                batch["ids_text"],
-                batch["ids_vis"],
-                batch["pos_text"],
-                batch["t_types"],
-                batch["attn_mask"],
-                model,
-                device,
-            )
+    for batch in tqdm(test_loader):
+        # forward
+        batch = {key: val.to(device) for key, val in batch.items()}
+        x_out, y_out, o_out = generation_strategy_factory(
+            args.gen_strategy,
+            args.model_type,
+            batch["ids_text"],
+            batch["ids_vis"],
+            batch["pos_text"],
+            batch["t_types"],
+            batch["attn_mask"],
+            model,
+            device,
+        )
 
-            x_out, y_out, o_out = x_out.cpu(), y_out.cpu(), o_out.cpu()
-            visual_names = [
-                index2visual[index.item()]
-                for index in batch["ids_vis"][0]
-                if index.item() in index2visual
-            ]
-            # Dump original
-            dump_image_path = os.path.join(
-                args.dump_scenes_path,
-                str(index) + f"-{args.gen_strategy}" + "-original.png",
-            )
-            dump_scene(
-                args.pngs_path,
-                visual_names,
-                batch["x_lab"][0],
-                batch["y_lab"][0],
-                batch["o_lab"][0],
-                dump_image_path,
-                bucketized=False,
-            )
-            # Dump model generated
-            dump_image_path = os.path.join(
-                args.dump_scenes_path,
-                str(index) + f"-{args.gen_strategy}" + "-generated.png",
-            )
-            dump_scene(
-                args.pngs_path,
-                visual_names,
-                x_out[0],
-                y_out[0],
-                o_out[0],
-                dump_image_path,
-                bucketized=True,
-            )
-            index += 10
+        x_out, y_out, o_out = x_out.cpu(), y_out.cpu(), o_out.cpu()
+        visual_names = [
+            index2visual[index.item()]
+            for index in batch["ids_vis"][0]
+            if index.item() in index2visual
+        ]
+        # Dump original
+        dump_image_path = os.path.join(
+            args.dump_scenes_path,
+            str(index) + f"-{args.gen_strategy}" + "-original.png",
+        )
+        dump_scene(
+            args.pngs_path,
+            visual_names,
+            batch["x_lab"][0],
+            batch["y_lab"][0],
+            batch["o_lab"][0],
+            dump_image_path,
+            bucketized=False,
+        )
+        # Dump model generated
+        dump_image_path = os.path.join(
+            args.dump_scenes_path,
+            str(index) + f"-{args.gen_strategy}" + "-generated.png",
+        )
+        dump_scene(
+            args.pngs_path,
+            visual_names,
+            x_out[0],
+            y_out[0],
+            o_out[0],
+            dump_image_path,
+            bucketized=True,
+        )
+        index += args.gen_frequency
 
 
 def parse_args():
@@ -183,7 +183,7 @@ def parse_args():
     parser.add_argument(
         "--gen_strategy",
         type=str,
-        default="human_order_discrete",
+        default="human_order",
         help="How to generate the positions during inference",
     )
     parser.add_argument(
@@ -203,6 +203,12 @@ def parse_args():
         type=str,
         default="bert-base-uncased",
         help="The bert model name.",
+    )
+    parser.add_argument(
+        "--gen_frequency",
+        type=int,
+        default=10,
+        help="With what frequency to generate scenes (default is every 10th).",
     )
 
     return parser.parse_args()

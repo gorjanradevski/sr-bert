@@ -19,6 +19,7 @@ from scene_layouts.generation_strategies import generation_strategy_factory
 from scene_layouts.modeling import SpatialContinuousBert, SpatialDiscreteBert
 
 
+@torch.no_grad()
 def inference(args):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -57,44 +58,43 @@ def inference(args):
         print("The model won't use the text to perfrom the inference.")
     print(f"Using {args.gen_strategy}!")
     evaluator = Evaluator(len(test_dataset))
-    with torch.no_grad():
-        for batch in tqdm(test_loader):
-            # forward
-            batch = {key: val.to(device) for key, val in batch.items()}
-            x_out, y_out, o_out = generation_strategy_factory(
-                args.gen_strategy,
-                args.model_type,
-                batch["ids_text"],
-                batch["ids_vis"],
-                batch["pos_text"],
-                batch["t_types"],
-                batch["attn_mask"],
-                model,
-                device,
-            )
-            x_out, y_out = (
-                x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
-                y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
-            )
-            evaluator.update_metrics(
-                x_out,
-                batch["x_lab"],
-                y_out,
-                batch["y_lab"],
-                o_out,
-                batch["o_lab"],
-                batch["attn_mask"][:, batch["ids_text"].size()[1] :],
-            )
+    for batch in tqdm(test_loader):
+        # forward
+        batch = {key: val.to(device) for key, val in batch.items()}
+        x_out, y_out, o_out = generation_strategy_factory(
+            args.gen_strategy,
+            args.model_type,
+            batch["ids_text"],
+            batch["ids_vis"],
+            batch["pos_text"],
+            batch["t_types"],
+            batch["attn_mask"],
+            model,
+            device,
+        )
+        x_out, y_out = (
+            x_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+            y_out * BUCKET_SIZE + BUCKET_SIZE / 2,
+        )
+        evaluator.update_metrics(
+            x_out,
+            batch["x_lab"],
+            y_out,
+            batch["y_lab"],
+            o_out,
+            batch["o_lab"],
+            batch["attn_mask"][:, batch["ids_text"].size()[1] :],
+        )
 
-        print(
-            f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
-        )
-        print(
-            f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
-        )
-        print(f"The avg ACCURACY for the orientation is: {evaluator.get_o_acc()}")
-        if args.abs_dump_path is not None and args.rel_dump_path is not None:
-            evaluator.dump_results(args.abs_dump_path, args.rel_dump_path)
+    print(
+        f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
+    )
+    print(
+        f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
+    )
+    print(f"The avg ACCURACY for the orientation is: {evaluator.get_o_acc()}")
+    if args.abs_dump_path is not None and args.rel_dump_path is not None:
+        evaluator.dump_results(args.abs_dump_path, args.rel_dump_path)
 
 
 def parse_args():

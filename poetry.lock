@@ -203,7 +203,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 name = "gdown"
 version = "3.12.2"
 description = "Google Drive direct download of big files."
-category = "dev"
+category = "main"
 optional = false
 python-versions = "*"
 
@@ -792,7 +792,7 @@ python-versions = ">=3.5"
 name = "pysocks"
 version = "1.7.1"
 description = "A Python SOCKS client module. See https://github.com/Anorov/PySocks for more information."
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
@@ -1141,7 +1141,7 @@ testing = ["pytest (>=3.5,<3.7.3 || >3.7.3)", "pytest-checkdocs (>=1.2.3)", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "a3955ef719a1a655da7175d01d835675da6a74d907394d3d8465adfdf08b1cb3"
+content-hash = "e0d8059acd09c7e3aed8bc26a8d3c24732428861bcb00ebc3326222160899eca"
 
 [metadata.files]
 appdirs = [

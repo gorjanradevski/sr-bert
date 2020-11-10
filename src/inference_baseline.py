@@ -14,6 +14,7 @@ from scene_layouts.datasets import BUCKET_SIZE
 from scene_layouts.evaluator import Evaluator
 
 
+@torch.no_grad()
 def inference(args):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -43,43 +44,42 @@ def inference(args):
     model.train(False)
     print(f"Starting inference from checkpoint {args.checkpoint_path}!")
     evaluator = Evaluator(len(test_dataset))
-    with torch.no_grad():
-        for batch in tqdm(test_loader):
-            # forward
-            batch = {key: val.to(device) for key, val in batch.items()}
-            x_scores, y_scores, o_scores = model(batch["ids_text"], batch["ids_vis"])
-            if "discrete" in args.baseline_name:
-                x_out, y_out = (
-                    torch.argmax(x_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
-                    torch.argmax(y_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
-                )
-            elif "continuous" in args.baseline_name:
-                x_out, y_out = (
-                    x_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
-                    y_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
-                )
-            else:
-                raise ValueError("Invalid model type!")
-            o_out = torch.argmax(o_scores, dim=-1)
-            evaluator.update_metrics(
-                x_out,
-                batch["x_lab"],
-                y_out,
-                batch["y_lab"],
-                o_out,
-                batch["o_lab"],
-                batch["attn_mask"],
+    for batch in tqdm(test_loader):
+        # forward
+        batch = {key: val.to(device) for key, val in batch.items()}
+        x_scores, y_scores, o_scores = model(batch["ids_text"], batch["ids_vis"])
+        if "discrete" in args.baseline_name:
+            x_out, y_out = (
+                torch.argmax(x_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
+                torch.argmax(y_scores, dim=-1) * BUCKET_SIZE + BUCKET_SIZE / 2,
             )
+        elif "continuous" in args.baseline_name:
+            x_out, y_out = (
+                x_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
+                y_scores * BUCKET_SIZE + BUCKET_SIZE / 2,
+            )
+        else:
+            raise ValueError("Invalid model type!")
+        o_out = torch.argmax(o_scores, dim=-1)
+        evaluator.update_metrics(
+            x_out,
+            batch["x_lab"],
+            y_out,
+            batch["y_lab"],
+            o_out,
+            batch["o_lab"],
+            batch["attn_mask"],
+        )
 
-        print(
-            f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
-        )
-        print(
-            f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
-        )
-        print(f"The avg ACCURACY for the orientation is: {evaluator.get_o_acc()}")
-        if args.abs_dump_path is not None and args.rel_dump_path is not None:
-            evaluator.dump_results(args.abs_dump_path, args.rel_dump_path)
+    print(
+        f"The avg ABSOLUTE sim per scene is: {evaluator.get_abs_sim()} +/- {evaluator.get_abs_error_bar()}"
+    )
+    print(
+        f"The avg RELATIVE sim per scene is: {evaluator.get_rel_sim()} +/- {evaluator.get_rel_error_bar()}"
+    )
+    print(f"The avg ACCURACY for the orientation is: {evaluator.get_o_acc()}")
+    if args.abs_dump_path is not None and args.rel_dump_path is not None:
+        evaluator.dump_results(args.abs_dump_path, args.rel_dump_path)
 
 
 def parse_args():
