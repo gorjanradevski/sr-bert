@@ -11,7 +11,7 @@ jupyter = "^1.0"
 tqdm = "^4.41"
 nltk = "^3.4"
 matplotlib = "^3.1"
-Pillow = "^6.2"
+Pillow = "^7.1"
 transformers = {git = "https://github.com/gorjanradevski/transformers.git"}
 scikit-learn = "^0.22.2"
 pandas = "^1.0.3"
