@@ -16,7 +16,7 @@ The [Abstract Scenes Dataset](https://vision.ece.vt.edu/clipart/) can be downloa
 
 ```shell
 wget https://vision.ece.vt.edu/clipart/dataset/AbstractScenes_v1.1.zip data/
-unzip -qq data/AbstractScenes_v1.1.zip data/
+unzip -qq data/AbstractScenes_v1.1.zip -d data/
 ```
 
 Our proposed dataset split and the dictionaries that map from clip-art names to the clip-art indices can be downloaded and prepared as:
@@ -26,7 +26,7 @@ poetry run gdown --id 1qEsb8Hv0zSBbWLEoeRxFTFLak17DN8CD -O data/train_dataset.js
 poetry run gdown --id 1P0LF_8ZXmMgfaIbX7n25SUWA9Hw66vuL -O data/val_dataset.json
 poetry run gdown --id 13iYr6jckFpa42zXY_H3oRRv8gu4A7-fT -O data/test_dataset.json
 poetry run gdown --id 1MwhnYXrr3kwo9RVrqfkU2vFD-XCZO-sW -O data/visual_dicts.zip
-unzip -qq data/visual_dics.zip .
+unzip -qq data/visual_dics.zip -d .
 ```
 
 Some of the models used can be downloaded as:
@@ -38,7 +38,7 @@ poetry run gdown --id 1qwr7Qzwn_kraQYMxmVu3z8yq5q0ooRsR -O models/cliparts_pred_
 poetry run gdown --id 1GNCpGxDn4abUpUff9AStMziGinsHC51r -O models/discrete_15p_tan.pt
 ```
 
-## Training new models, running inference from a pre-trained checkpoint
+## Training new models or doing inference from a pre-trained checkpoint
 
 > We assume that (1) we're inside the project root, (2) Poetry is installed, and (3) the datasets and the models are fetched.
 
@@ -55,7 +55,7 @@ poetry run python src/train_discrete.py --train_dataset_path "data/train_dataset
 
 The remaining arguments can be left as is. For training a Continuous model, the same command line arguments can be used, and just the script `train_continuous.py` should the executed.
 
-### Running inference
+### Doing inference
 
 To get a quantitative estimate of how good a model is, e.g., replicating the results of Table 1 in the paper, we can do:
 
@@ -101,4 +101,4 @@ Everything is licensed under the [MIT License](https://opensource.org/licenses/M
 
 ## Acknowledgements
 
-We acknowledge funding from the Flemish Government under the Onderzoeksprogramma Artificiele Intelligentie (AI) Vlaanderen programme. This work has also been supported by the CHIST-ERA EU project [MUSTER](http://9www.chistera.eu/projects/muster).
+We acknowledge funding from the Flemish Government under the Onderzoeksprogramma Artificiele Intelligentie (AI) Vlaanderen programme. This work has also been supported by the CHIST-ERA EU project [MUSTER](http://www.chistera.eu/projects/muster).
