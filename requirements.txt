@@ -223,9 +223,9 @@ natsort==7.0.1; python_version >= "3.4" \
 nbclient==0.5.1; python_version >= "3.6" \
     --hash=sha256:4d6b116187c795c99b9dba13d46e764d596574b14c296d60670c8dfe454db364 \
     --hash=sha256:01e2d726d16eaf2cde6db74a87e2451453547e8832d142f73f72fddcd4fe0250
-nbconvert==6.0.7; python_version >= "3.6" \
-    --hash=sha256:39e9f977920b203baea0be67eea59f7b37a761caa542abe80f5897ce3cf6311d \
-    --hash=sha256:cbbc13a86dfbd4d1b5dee106539de0795b4db156c894c2c5dc382062bbc29002
+nbconvert==6.3.0; python_version >= "3.6" \
+    --hash=sha256:5e77d6203854944520105e38f2563a813a4a3708e8563aa598928a3b5ee1081a \
+    --hash=sha256:8f23fbeabda4a500685d788ee091bf22cf34119304314304fb39f16e2fc32f37
 nbformat==5.0.8; python_version >= "3.5" \
     --hash=sha256:aa9450c16d29286dc69b92ea4913c1bffe86488f90184445996ccc03a2f60382 \
     --hash=sha256:f545b22138865bfbcc6b1ffe89ed5a2b8e2dc5d4fe876f2ca60d8e6f702a30f8
